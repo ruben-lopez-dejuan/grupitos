@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignInButton } from "@/components/auth-buttons";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { authOptions } from "@/lib/auth";
 
 export default async function HomePage() {
@@ -9,14 +10,14 @@ export default async function HomePage() {
   return <main className="login-page">
     <nav className="topbar container">
       <Link className="brand" href="/"><span className="brand-symbol">E</span> WCA Easy Groups</Link>
-      <a className="plain-link" href="https://github.com/ruben-lopez-dejuan/wca-easy-groups">Código en GitHub ↗</a>
+      <div className="topbar-actions"><ThemeToggle /><a className="plain-link" href="https://github.com/ruben-lopez-dejuan/wca-easy-groups">GitHub ↗</a></div>
     </nav>
     <section className="login-layout container">
       <div className="login-intro">
-        <p className="kicker">Herramienta para organizadores</p>
-        <h1>Grupos de competición,<br />sin pelearte con una hoja de cálculo.</h1>
-        <p>Importa una competición oficial y construye los grupos sobre los datos reales del WCIF.</p>
-        <ul><li><span>✓</span> Configuración rápida para opens pequeños</li><li><span>✓</span> Control por ronda, sala y estación</li><li><span>✓</span> Reglas avanzadas para campeonatos grandes</li></ul>
+        <p className="kicker">Para equipos organizadores</p>
+        <h1>Grupos claros, sin hojas de cálculo eternas.</h1>
+        <p>Importa la competición desde la WCA y prepara grupos y tareas en un único sitio.</p>
+        <ul><li><span>✓</span> Empieza rápido en un open pequeño</li><li><span>✓</span> Ajusta cada ronda cuando lo necesites</li><li><span>✓</span> Escala a varias salas y escenarios</li></ul>
       </div>
       <div className="login-panel">
         <div className="login-panel-head"><span className="wca-block">WCA</span><div><strong>Accede con tu cuenta WCA</strong><small>Usaremos únicamente los permisos necesarios para consultar y actualizar tus competiciones.</small></div></div>
