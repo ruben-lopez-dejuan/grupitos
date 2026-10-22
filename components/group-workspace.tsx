@@ -6,17 +6,22 @@ import { EventIcon } from "@/components/event-icon";
 import { GroupReview } from "@/components/group-review";
 import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
+import { SortingRuleIcon } from "@/components/rule-icons";
 import { ThemeToggle } from "@/components/theme-toggle";
-import type { GeneratedAssignment } from "@/lib/assignments";
+import { TASK_CODES, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { getCompetition, type StoredCompetition } from "@/lib/competition-store";
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
-import { acceptedPeople, EVENT_NAMES, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, EVENT_NAMES, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
 const DEFAULT_STATIONS = 12;
+
+type Tab = "zone" | "rules" | "people" | "rounds" | "review" | "print";
+const TABS: Tab[] = ["zone", "rules", "people", "rounds", "review", "print"];
+const PHOTOS_KEY = "wca-easy-groups:show-photos";
 
 const ZONE_MODES: Array<{ id: ZoneMode; label: string; help: string }> = [
   { id: "fixed", label: "Puestos fijos", help: "Cada competidor tiene un número de estación y cada grupo cabe en las estaciones." },
@@ -33,13 +38,13 @@ const SORTING_RULES: Array<{ id: SortingRule; label: string; help: string; recom
 ];
 
 type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule">;
-const MAIN_OPTIONS: Array<{ key: OptionKey; label: string; help: string }> = [
-  { key: "assignJudges", label: "Asignar jueces y runners", help: "Un juez por estación ocupada y los runners indicados en cada ronda. Si se desactiva, solo se asignan mezcladores." },
+const MAIN_OPTIONS: Array<{ key: OptionKey; label: string; help: string; codes?: TaskRole[] }> = [
+  { key: "assignJudges", codes: ["judge", "runner"], label: "Asignar jueces y runners", help: "Un juez por estación ocupada y los runners indicados en cada ronda. Si se desactiva, solo se asignan mezcladores." },
   { key: "avoidBeforeOwnGroup", label: "No favorecer trabajar justo antes de competir", help: "Se permite, pero se elige a otra persona cuando hay alternativa con la misma carga." },
   { key: "spreadDelegates", label: "Delegados en grupos distintos", help: "Reparte a delegados y delegados en prácticas para que no compitan todos a la vez." },
   { key: "normalTasksForDelegatesAndOrganizers", label: "Tareas normales a delegados y organizadores", help: "Si está desactivado, no juzgan, mezclan ni hacen de runner." },
-  { key: "assignDelegateDuties", label: "Asignar tareas de delegado", help: "Un delegado de turno por grupo, entre los marcados en Personas y roles." },
-  { key: "assignDataEntry", label: "Asignar data entry", help: "Una persona de data entry por grupo, entre quienes tienen ese rol." },
+  { key: "assignDelegateDuties", codes: ["delegate"], label: "Asignar tareas de delegado", help: "Un delegado de turno por grupo, entre los marcados en Personas y roles." },
+  { key: "assignDataEntry", codes: ["dataentry"], label: "Asignar data entry", help: "Una persona de data entry por grupo, entre quienes tienen ese rol." },
 ];
 const MORE_OPTIONS: Array<{ key: OptionKey; label: string; help: string }> = [
   { key: "noTasksForNewcomers", label: "No asignar tareas a newcomers", help: "Solo se les asignan si no queda nadie más." },
@@ -67,7 +72,9 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   /** Remounts the review (and resets its undo history) only when a new proposal is generated. */
   const [proposalVersion, setProposalVersion] = useState(0);
   const [roundTab, setRoundTab] = useState<"first" | "later">("first");
+  const [tab, setTab] = useState<Tab>("zone");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(false);
 
   useEffect(() => {
     getCompetition(competitionId).then(data => {
@@ -83,6 +90,33 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     }).finally(() => setLoading(false));
   }, [competitionId]);
 
+  // Showing photos is a per-viewer preference, kept in this browser only.
+  useEffect(() => {
+    try { setShowPhotos(localStorage.getItem(PHOTOS_KEY) === "1"); } catch { /* storage blocked: photos stay off */ }
+  }, []);
+
+  const changeShowPhotos = useCallback((show: boolean) => {
+    setShowPhotos(show);
+    try { localStorage.setItem(PHOTOS_KEY, show ? "1" : "0"); } catch { /* storage blocked: the choice lasts this visit */ }
+  }, []);
+
+  // The open tab lives in the URL hash, so reloading keeps it.
+  useEffect(() => {
+    const readHash = () => {
+      const fromHash = location.hash.slice(1) as Tab;
+      if (TABS.includes(fromHash)) setTab(fromHash);
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
+  const changeTab = useCallback((next: Tab) => {
+    setTab(next);
+    history.replaceState(null, "", `#${next}`);
+    window.scrollTo({ top: 0 });
+  }, []);
+
   useEffect(() => {
     if (!competition || !settings) return;
     const draft: Draft = { version: 3, settings, generatedWith, assignments: proposal };
@@ -94,6 +128,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   }, [competition, settings, generatedWith, proposal]);
 
   const people = useMemo(() => competition ? acceptedPeople(competition) : [], [competition]);
+  const photos = useMemo(() => Object.fromEntries((competition?.persons ?? []).map(person => [personKey(person), person.avatar?.thumbUrl])), [competition]);
   const signature = useMemo(() => settings ? generationSignature(settings) : "", [settings]);
   const roundRules = useMemo(() => {
     if (!settings) return {};
@@ -143,21 +178,27 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
-    setTimeout(() => document.getElementById("review")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    changeTab("review");
   }
 
   const shownRounds = roundTab === "first" ? firstRounds : laterRounds;
+  const tabs: Array<{ id: Tab; label: string; done?: boolean; disabled?: boolean }> = [
+    { id: "zone", label: "Zona de competición" },
+    { id: "rules", label: "Reglas de asignación" },
+    { id: "people", label: "Personas y roles" },
+    { id: "rounds", label: "Grupos por ronda" },
+    { id: "review", label: "Revisar y validar", done: proposal.length > 0, disabled: proposal.length === 0 },
+    { id: "print", label: "Hojas de tiempos" },
+  ];
+  const outdatedNote = proposalOutdated && <div className="outdated-note" role="status"><p><strong>La configuración ha cambiado desde que se generó la propuesta.</strong> La matriz se valida con la configuración actual. Vuelve a generar si quieres aplicarla al reparto.</p></div>;
 
   return <main className="workspace-shell">
     <aside className="workspace-sidebar">
       <Link className="product-mark" href="/dashboard"><span>EG</span><strong>Easy Groups</strong></Link>
       <div className="competition-switcher"><small>COMPETICIÓN ACTIVA</small><strong>{competition.shortName ?? competition.name}</strong><span>{competition.id}</span></div>
       <nav className="workspace-nav" aria-label="Secciones de la competición">
-        <a className="done" href="#summary"><span>✓</span> Datos WCA</a>
-        <a className={proposal.length ? "done" : "active"} href="#setup"><span>{proposal.length ? "✓" : "2"}</span> Configurar grupos</a>
-        {proposal.length ? <a className="active" href="#review"><span>3</span> Revisar y validar</a> : <span className="nav-pending"><span>3</span> Revisar y validar</span>}
-        <a href="#print"><span>4</span> Hojas de tiempos</a>
-        <span className="nav-pending" title="Todavía no disponible"><span>5</span> Publicar WCIF <small>Próximamente</small></span>
+        {tabs.map((item, index) => <button key={item.id} type="button" className={tab === item.id ? "active" : item.done ? "done" : ""} disabled={item.disabled} aria-current={tab === item.id ? "page" : undefined} onClick={() => changeTab(item.id)}><span>{item.done && tab !== item.id ? "✓" : index + 1}</span> {item.label}</button>)}
+        <span className="nav-pending" title="Todavía no disponible"><span>{tabs.length + 1}</span> Publicar WCIF <small>Próximamente</small></span>
       </nav>
       <div className="sidebar-help"><strong>¿Algo no encaja?</strong><p>Puedes cambiar cada ronda de forma independiente.</p></div>
       <div className="sidebar-user"><span>{userName.slice(0, 1).toUpperCase()}</span><div><strong>{userName}</strong><small>Cuenta WCA</small></div></div>
@@ -165,56 +206,65 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
     <section className="workspace-main">
       <header className="workspace-topbar"><div><Link href="/dashboard">Competiciones</Link><span>/</span><strong>{competition.name}</strong></div><div className="workspace-topbar-actions"><div className="sync-state"><i /> Guardado en este dispositivo</div><ThemeToggle compact /></div></header>
+      <nav className="workspace-tabs" role="tablist" aria-label="Secciones">
+        {tabs.map(item => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} disabled={item.disabled} title={item.disabled ? "Genera una propuesta primero" : undefined} onClick={() => changeTab(item.id)}>{item.label}</button>)}
+      </nav>
       <div className="workspace-content">
-        <div className="page-title" id="setup"><div><p className="kicker">Paso 2 de 5</p><h1>Configura los grupos</h1><p>Describe la zona de competición, elige cómo repartir y quién hace cada tarea.</p></div></div>
+        {tab === "zone" && <>
+          <section className="data-strip" id="summary">
+            <div><small>Competidores aceptados</small><strong>{people.length}</strong></div><div><small>Pruebas</small><strong>{competition.events?.length ?? 0}</strong></div><div><small>Salas en el WCIF</small><strong>{roomCount}</strong></div><div><small>Rondas activas</small><strong>{activeRounds.length}</strong></div>
+          </section>
+          <section className="setup-panel">
+            <div className="setup-heading"><div><h2>Zona de competición</h2><p>Cambiar estos valores recalcula los grupos sugeridos de cada ronda.</p></div></div>
+            <div className="setup-grid">
+              <label><span>Estaciones</span><div className="number-field"><button aria-label="Quitar una estación" onClick={() => changeZone({ stations: Math.max(1, stations - 1) })}>−</button><strong>{stations}</strong><button aria-label="Añadir una estación" onClick={() => changeZone({ stations: stations + 1 })}>+</button></div><small>Mesas disponibles a la vez</small></label>
+              <div className="preset-field"><span>Entrada de competidores</span><div className="segmented three">{ZONE_MODES.map(mode => <button key={mode.id} className={zoneMode === mode.id ? "selected" : ""} onClick={() => changeZone({ zoneMode: mode.id })}>{mode.label}</button>)}</div><small>{ZONE_MODES.find(mode => mode.id === zoneMode)?.help} Una ronda con tantos competidores como estaciones, o menos, usa siempre puestos fijos.</small></div>
+            </div>
+            {roomCount > 1 && <p className="setup-note">El WCIF tiene {roomCount} salas. Por ahora todos los grupos se generan para una única zona de competición.</p>}
+          </section>
+        </>}
 
-        <section className="data-strip" id="summary">
-          <div><small>Competidores aceptados</small><strong>{people.length}</strong></div><div><small>Pruebas</small><strong>{competition.events?.length ?? 0}</strong></div><div><small>Salas en el WCIF</small><strong>{roomCount}</strong></div><div><small>Rondas activas</small><strong>{activeRounds.length}</strong></div>
-        </section>
-
-        <section className="setup-panel">
-          <div className="setup-heading"><div><h2>Zona de competición</h2><p>Cambiar estos valores recalcula los grupos sugeridos de cada ronda.</p></div></div>
-          <div className="setup-grid">
-            <label><span>Estaciones</span><div className="number-field"><button aria-label="Quitar una estación" onClick={() => changeZone({ stations: Math.max(1, stations - 1) })}>−</button><strong>{stations}</strong><button aria-label="Añadir una estación" onClick={() => changeZone({ stations: stations + 1 })}>+</button></div><small>Mesas disponibles a la vez</small></label>
-            <div className="preset-field"><span>Entrada de competidores</span><div className="segmented three">{ZONE_MODES.map(mode => <button key={mode.id} className={zoneMode === mode.id ? "selected" : ""} onClick={() => changeZone({ zoneMode: mode.id })}>{mode.label}</button>)}</div><small>{ZONE_MODES.find(mode => mode.id === zoneMode)?.help} Una ronda con tantos competidores como estaciones, o menos, usa siempre puestos fijos.</small></div>
-          </div>
-          {roomCount > 1 && <p className="setup-note">El WCIF tiene {roomCount} salas. Por ahora todos los grupos se generan para una única zona de competición.</p>}
-        </section>
-
-        <section className="rules-panel">
+        {tab === "rules" && <section className="rules-panel">
           <div className="setup-heading"><div><h2>Reglas de asignación</h2><p>Basadas en Groupifier. El reparto solo afecta a primeras rondas; las siguientes se ordenan por la ronda anterior.</p></div></div>
-          <div className="sorting-rules" role="radiogroup" aria-label="Reparto de competidores">{SORTING_RULES.map(rule => <button key={rule.id} role="radio" aria-checked={options.sortingRule === rule.id} className={options.sortingRule === rule.id ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule.id } })}><span className="preset-radio" /><span><strong>{rule.label}{rule.recommended && <em className="recommended">Recomendado</em>}</strong><small>{rule.help}</small></span></button>)}</div>
-          <div className="option-list">{MAIN_OPTIONS.map(({ key, label, help }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{label}</strong><small>{help}</small></span></label>)}</div>
+          <h3 className="panel-subheading">Reparto de competidores</h3>
+          <div className="sorting-rules" role="radiogroup" aria-label="Reparto de competidores">{SORTING_RULES.map(rule => <button key={rule.id} role="radio" aria-checked={options.sortingRule === rule.id} className={options.sortingRule === rule.id ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule.id } })}><span className="rule-title"><span className="preset-radio" /><SortingRuleIcon rule={rule.id} /></span><strong>{rule.label}</strong>{rule.recommended && <em className="recommended">Recomendado</em>}<small>{rule.help}</small></button>)}</div>
+          <h3 className="panel-subheading">Tareas</h3>
+          <div className="option-list">{MAIN_OPTIONS.map(({ key, label, help, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{label}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}</strong><small>{help}</small></span></label>)}</div>
           {delegatesWithoutDuties && <p className="setup-note warning-note">No hay ningún delegado marcado para hacer tareas de delegado. Márcalos en Personas y roles.</p>}
           <button className="plain more-toggle" type="button" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions(value => !value)}>{showMoreOptions ? "Menos opciones" : "Más opciones (Groupifier)"}</button>
           {showMoreOptions && <div className="option-list">{MORE_OPTIONS.map(({ key, label, help }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{label}</strong><small>{help}</small></span></label>)}</div>}
-        </section>
+        </section>}
 
-        <PeoplePanel people={people} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} />
+        {tab === "people" && <PeoplePanel people={people} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />}
 
-        <section className="round-section" id="groups">
-          <div className="section-heading"><div><h2>Grupos por ronda</h2><p>{roundTab === "first" ? "Primeras rondas, con los inscritos de cada prueba." : "Previsión según la condición de clasificación. Se pueden generar cuando el WCIF tiene los clasificados."}</p></div><div className="group-total"><small>Total previsto</small><strong>{totalGroups} grupos</strong></div></div>
-          <div className="round-subtabs" role="tablist"><button role="tab" aria-selected={roundTab === "first"} className={roundTab === "first" ? "active" : ""} onClick={() => setRoundTab("first")}>Primeras rondas <span>{firstRounds.length}</span></button><button role="tab" aria-selected={roundTab === "later"} className={roundTab === "later" ? "active" : ""} onClick={() => setRoundTab("later")}>Rondas siguientes <span>{laterRounds.length}</span></button></div>
-          {shownRounds.length === 0 ? <p className="setup-note">No hay rondas siguientes en esta competición.</p> : <div className="round-table"><div className="round-table-head"><span>Ronda</span><span>Competidores</span><span>Entrada</span><span>Grupos</span><span>Mezcladores / grupo</span><span>Runners / grupo</span><span>Incluir</span></div>{shownRounds.map(round => {
-            const fixed = usesFixedStations(round.roundNumber, round.competitors, stations, zoneMode);
-            const canGenerate = round.competitorsKnown && round.competitors > 0;
-            // Planned rounds stay readable: their configuration is used for nameless scorecards.
-            return <div className={`round-row ${round.enabled || !canGenerate ? "" : "disabled"}`} key={round.id}>
-              <div><EventIcon eventId={round.eventId} label={EVENT_NAMES[round.eventId] ?? round.eventId} /><div className="round-name"><strong>{round.label}</strong><small>{round.eventId}</small></div></div>
-              <span>{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}{!round.competitorsKnown && <small> previstos</small>}</span>
-              <span>{fixed ? "Puestos fijos" : "Sala de espera"}</span>
-              <Stepper label="grupos" value={round.groups} min={1} onChange={groups => updateRound(round.id, { groups })} />
-              <Stepper label="mezcladores" value={round.scramblers} min={0} onChange={scramblers => updateRound(round.id, { scramblers })} />
-              <Stepper label="runners" value={round.runners} min={0} disabled={!options.assignJudges} onChange={runners => updateRound(round.id, { runners })} />
-              <label className="switch" title={canGenerate ? undefined : "Se podrá generar cuando el WCIF tenga los clasificados. La configuración se usa ya para las hojas de tiempos sin nombres."}><input type="checkbox" aria-label={`Incluir ${round.label}`} checked={round.enabled && canGenerate} disabled={!canGenerate} onChange={event => updateRound(round.id, { enabled: event.target.checked })} /><i /></label>
-            </div>;
-          })}</div>}
-        </section>
+        {tab === "rounds" && <>
+          {outdatedNote}
+          <section className="round-section" id="groups">
+            <div className="section-heading"><div><h2>Grupos por ronda</h2><p>{roundTab === "first" ? "Primeras rondas, con los inscritos de cada prueba." : "Previsión según la condición de clasificación. Se pueden generar cuando el WCIF tiene los clasificados."}</p></div><div className="group-total"><small>Total previsto</small><strong>{totalGroups} grupos</strong></div></div>
+            <div className="round-subtabs" role="tablist"><button role="tab" aria-selected={roundTab === "first"} className={roundTab === "first" ? "active" : ""} onClick={() => setRoundTab("first")}>Primeras rondas <span>{firstRounds.length}</span></button><button role="tab" aria-selected={roundTab === "later"} className={roundTab === "later" ? "active" : ""} onClick={() => setRoundTab("later")}>Rondas siguientes <span>{laterRounds.length}</span></button></div>
+            {shownRounds.length === 0 ? <p className="setup-note">No hay rondas siguientes en esta competición.</p> : <div className="round-table"><div className="round-table-head"><span>Ronda</span><span>Competidores</span><span>Entrada</span><span>Grupos</span><span>Mezcladores / grupo</span><span>Runners / grupo</span><span>Incluir</span></div>{shownRounds.map(round => {
+              const fixed = usesFixedStations(round.roundNumber, round.competitors, stations, zoneMode);
+              const canGenerate = round.competitorsKnown && round.competitors > 0;
+              // Planned rounds stay readable: their configuration is used for nameless scorecards.
+              return <div className={`round-row ${round.enabled || !canGenerate ? "" : "disabled"}`} key={round.id}>
+                <div><EventIcon eventId={round.eventId} label={EVENT_NAMES[round.eventId] ?? round.eventId} /><div className="round-name"><strong>{round.label}</strong><small>{round.eventId}</small></div></div>
+                <span>{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}{!round.competitorsKnown && <small> previstos</small>}</span>
+                <span>{fixed ? "Puestos fijos" : "Sala de espera"}</span>
+                <Stepper label="grupos" value={round.groups} min={1} onChange={groups => updateRound(round.id, { groups })} />
+                <Stepper label="mezcladores" value={round.scramblers} min={0} onChange={scramblers => updateRound(round.id, { scramblers })} />
+                <Stepper label="runners" value={round.runners} min={0} disabled={!options.assignJudges} onChange={runners => updateRound(round.id, { runners })} />
+                <label className="switch" title={canGenerate ? undefined : "Se podrá generar cuando el WCIF tenga los clasificados. La configuración se usa ya para las hojas de tiempos sin nombres."}><input type="checkbox" aria-label={`Incluir ${round.label}`} checked={round.enabled && canGenerate} disabled={!canGenerate} onChange={event => updateRound(round.id, { enabled: event.target.checked })} /><i /></label>
+              </div>;
+            })}</div>}
+          </section>
+        </>}
 
-        {proposalOutdated && <div className="outdated-note" role="status"><p><strong>La configuración ha cambiado desde que se generó la propuesta.</strong> La matriz se valida con la configuración actual. Vuelve a generar si quieres aplicarla al reparto.</p></div>}
-        {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} eventNames={EVENT_NAMES} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} />}
+        {tab === "review" && <>
+          {outdatedNote}
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} eventNames={EVENT_NAMES} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />}
+        </>}
 
-        <PrintingPanel competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} onChange={printing => update({ printing })} />
+        {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} onChange={printing => update({ printing })} />}
       </div>
       <footer className="workspace-actions"><div><strong>{activeRounds.length} rondas activas</strong><span> · {totalGroups} grupos previstos</span></div><div><Link className="button secondary" href="/dashboard">Cambiar competición</Link><button className="button primary" onClick={createProposal} disabled={!activeRounds.length}>{proposal.length ? "Volver a generar" : "Crear propuesta de grupos"}</button></div></footer>
     </section>

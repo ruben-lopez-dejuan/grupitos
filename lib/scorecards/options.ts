@@ -11,6 +11,8 @@ export type PrintingOptions = {
   scrambleCheckerTopRanked: boolean;
   scrambleCheckerFinalRounds: boolean;
   scrambleCheckerBlank: boolean;
+  /** Groupifier never prints the checker box for 5x5, 6x6, 7x7 and Megaminx; this allows it. */
+  scrambleCheckerBigCubes: boolean;
   backgroundUrl: string;
   language: string;
 };
@@ -24,6 +26,7 @@ export const DEFAULT_PRINTING: PrintingOptions = {
   scrambleCheckerTopRanked: false,
   scrambleCheckerFinalRounds: false,
   scrambleCheckerBlank: false,
+  scrambleCheckerBigCubes: false,
   backgroundUrl: "",
   language: "es",
 };

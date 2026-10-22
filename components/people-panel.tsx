@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import type { WcifPerson } from "@/lib/competition-store";
 import { PERSON_ROLE_LABELS, type PeopleSettings, type PersonRole } from "@/lib/people";
 import { personKey } from "@/lib/rounds";
@@ -18,7 +19,9 @@ const DESCRIPTIONS: Record<ListId, string> = {
 
 const ORDER: ListId[] = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "trusted"];
 
-export function PeoplePanel({ people, settings, onChange, delegateDuties }: {
+export function PeoplePanel({ people, settings, onChange, delegateDuties, showPhotos, onShowPhotosChange }: {
+  showPhotos: boolean;
+  onShowPhotosChange: (show: boolean) => void;
   people: WcifPerson[];
   settings: PeopleSettings;
   onChange: (settings: PeopleSettings) => void;
@@ -50,7 +53,7 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties }: {
   }
 
   return <section className="people-panel" id="people">
-    <div className="setup-heading"><div><h2>Personas y roles</h2><p>Los roles se leen del WCIF. Cámbialos aquí sin tocar la WCA.</p></div></div>
+    <div className="setup-heading"><div><h2>Personas y roles</h2><p>Los roles se leen del WCIF. Cámbialos aquí sin tocar la WCA.</p></div><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Mostrar fotos</label></div>
     <div className="role-grid">{ORDER.map(id => {
       const keys = listOf(id);
       const isDelegateList = id === "delegate" || id === "trainee-delegate";
@@ -61,7 +64,9 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties }: {
           const person = byKey.get(key);
           return <li key={key}>
             {isDelegateList && delegateDuties && <label className="duty-toggle" title="Asignarle tareas de delegado"><input type="checkbox" checked={settings.delegateDutyIds.includes(key)} onChange={event => toggleDuty(key, event.target.checked)} /> Tareas</label>}
+            {showPhotos && <PersonAvatar name={person?.name ?? key} url={person?.avatar?.thumbUrl} size={28} />}
             <span>{person?.name ?? key}</span>
+            {person && !person.wcaId && <NewcomerBadge />}
             <button type="button" onClick={() => remove(id, key)} aria-label={`Quitar a ${person?.name ?? key}`}>×</button>
           </li>;
         })}</ul>}

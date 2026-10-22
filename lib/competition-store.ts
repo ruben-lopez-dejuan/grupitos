@@ -7,6 +7,8 @@ export type WcifPerson = {
   wcaId?: string | null;
   countryIso2?: string;
   birthdate?: string;
+  /** Public WCA profile photo. */
+  avatar?: { url?: string; thumbUrl?: string } | null;
   roles?: string[];
   personalBests?: Array<{
     eventId: string;

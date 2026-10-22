@@ -97,7 +97,10 @@ export function applyCells(assignments: GeneratedAssignment[], cells: CellRef[],
   next.forEach((item, index) => {
     const groups = byId.get(item.id);
     if (!groups) return;
-    let tasks = item.tasks;
+    // One competitor cell in a row means "move here": the other competing cells are cleared.
+    let tasks = value === "competitor" && groups.length === 1 && cellValue(item, groups[0]) !== "competitor"
+      ? item.tasks.filter(task => task.role !== "competitor")
+      : item.tasks;
     for (const group of groups) {
       if (cellValue({ ...item, tasks }, group) === value) continue;
       tasks = tasks.filter(task => task.group !== group);
@@ -105,11 +108,15 @@ export function applyCells(assignments: GeneratedAssignment[], cells: CellRef[],
     }
     if (tasks === item.tasks) return;
 
-    const before = competingGroup(item);
     let updated: GeneratedAssignment = { ...item, tasks };
     const after = competingGroup(updated);
-    if (after === undefined) updated = { ...updated, station: undefined };
-    else if (after !== before) updated = { ...updated, station: options.fixedStations ? firstFreeStation(next.filter(other => other.roundId === item.roundId), after, options.stations, item.id) : undefined };
+    // The station survives intermediate states (no group, two groups) and moves: it is kept
+    // when free in the new group, otherwise the first free one is used in fixed-station rounds.
+    if (after !== undefined && after !== competingGroup(item) && options.fixedStations) {
+      const roundRows = next.filter(other => other.roundId === item.roundId);
+      const taken = item.station !== undefined && roundRows.some(other => other.id !== item.id && competingGroup(other) === after && other.station === item.station);
+      if (item.station === undefined || taken) updated = { ...updated, station: firstFreeStation(roundRows, after, options.stations, item.id) ?? item.station };
+    }
     next[index] = updated;
     changed += 1;
   });
@@ -117,7 +124,16 @@ export function applyCells(assignments: GeneratedAssignment[], cells: CellRef[],
   return { assignments: changed ? next : assignments, changed };
 }
 
-export type GroupTotals = { group: number; counts: Record<TaskRole, number> };
+/** Sets or clears one person's station by hand. Duplicates are left to the validator. */
+export function setStation(assignments: GeneratedAssignment[], id: string, station: number | undefined): GeneratedAssignment[] {
+  const index = assignments.findIndex(item => item.id === id);
+  if (index < 0 || assignments[index].station === station) return assignments;
+  const next = [...assignments];
+  next[index] = { ...next[index], station };
+  return next;
+}
+
+export type GroupTotals ={ group: number; counts: Record<TaskRole, number> };
 
 export function emptyCounts(): Record<TaskRole, number> {
   return { competitor: 0, judge: 0, scrambler: 0, runner: 0, delegate: 0, stagelead: 0, announcer: 0, dataentry: 0, other: 0 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyCells, cellValue, competingGroup, dutyLoads, groupTotals, normalizeAssignments, type GeneratedAssignment, type Task } from "@/lib/assignments";
+import { applyCells, cellValue, competingGroup, dutyLoads, groupTotals, normalizeAssignments, setStation, type GeneratedAssignment, type Task } from "@/lib/assignments";
 import { parseDraft } from "@/lib/draft";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
@@ -33,17 +33,39 @@ describe("applyCells", () => {
     expect(result.assignments[0].tasks).toEqual([{ group: 1, role: "judge" }]);
   });
 
-  it("allows competing in several groups (reported by the validator)", () => {
-    const result = applyCells([person("a", 1)], [{ id: "333-r1:a", group: 2 }], "competitor", options);
+  it("moves the competitor when a single cell of the row gets C", () => {
+    const result = applyCells([person("a", 1, { duties: [{ group: 3, role: "judge" }] })], [{ id: "333-r1:a", group: 2 }], "competitor", options);
+    expect(result.assignments[0].tasks).toEqual([{ group: 2, role: "competitor" }, { group: 3, role: "judge" }]);
+  });
+
+  it("allows competing in several groups when several cells of the row are chosen (reported by the validator)", () => {
+    const result = applyCells([person("a", null)], [{ id: "333-r1:a", group: 1 }, { id: "333-r1:a", group: 2 }], "competitor", options);
     expect(result.assignments[0].tasks.filter(task => task.role === "competitor")).toHaveLength(2);
   });
 
-  it("gives the first free station when someone ends up competing in a new group", () => {
-    const rows = [person("a", 1, { station: 1, duties: [] }), person("b", 2, { station: 1 }), person("c", 2, { station: 3 })];
-    let result = applyCells(rows, [{ id: "333-r1:a", group: 1 }], "", { stations: 3, fixedStations: true }).assignments;
-    expect(result[0].station).toBeUndefined();
-    result = applyCells(result, [{ id: "333-r1:a", group: 2 }], "competitor", { stations: 3, fixedStations: true }).assignments;
+  it("keeps the station when moving, if it is free in the new group", () => {
+    const rows = [person("a", 1, { station: 2 }), person("b", 2, { station: 1 })];
+    const fixed = { stations: 3, fixedStations: true };
+    let result = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "competitor", fixed).assignments;
     expect(result[0].station).toBe(2);
+    result = applyCells(result, [{ id: "333-r1:a", group: 1 }], "", fixed).assignments;
+    expect(result[0].station).toBe(2);
+  });
+
+  it("keeps the station while the person has no group, and takes the first free one if it is taken", () => {
+    const rows = [person("a", 1, { station: 1 }), person("b", 2, { station: 1 }), person("c", 2, { station: 3 })];
+    const fixed = { stations: 3, fixedStations: true };
+    let result = applyCells(rows, [{ id: "333-r1:a", group: 1 }], "", fixed).assignments;
+    expect(result[0].station).toBe(1);
+    result = applyCells(result, [{ id: "333-r1:a", group: 2 }], "competitor", fixed).assignments;
+    expect(result[0].station).toBe(2);
+  });
+
+  it("sets stations by hand", () => {
+    const rows = [person("a", 1, { station: 1 })];
+    expect(setStation(rows, "333-r1:a", 7)[0].station).toBe(7);
+    expect(setStation(rows, "333-r1:a", undefined)[0].station).toBeUndefined();
+    expect(setStation(rows, "333-r1:a", 1)).toBe(rows);
   });
 
   it("returns the same array when nothing changes", () => {

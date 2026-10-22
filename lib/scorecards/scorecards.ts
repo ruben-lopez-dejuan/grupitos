@@ -165,7 +165,7 @@ function isFinal(competition: StoredCompetition, roundId: string) {
 
 function shouldPrintScrambleChecker(competitor: CardCompetitor, roundId: string | undefined, competition: StoredCompetition, printing: PrintingOptions) {
   const eventId = roundId ? parseActivityCode(roundId).eventId : undefined;
-  if (eventId && ["555", "666", "777", "minx"].includes(eventId)) return false;
+  if (eventId && ["555", "666", "777", "minx"].includes(eventId) && !printing.scrambleCheckerBigCubes) return false;
   if (printing.scrambleCheckerTopRanked && eventId) {
     const single = competitor.personalBests?.find(best => best.eventId === eventId && best.type === "single");
     const average = competitor.personalBests?.find(best => best.eventId === eventId && best.type === "average");
@@ -175,12 +175,27 @@ function shouldPrintScrambleChecker(competitor: CardCompetitor, roundId: string 
 }
 
 const noBorder = { border: [false, false, false, false] };
+/** pdfmake's default cell padding (4 + 4) plus one border. */
+const CELL_CHROME = 9;
 
-const columnLabels = (labels: Node[], style: Record<string, unknown> = {}) =>
-  labels.map(label => ({ ...style, ...noBorder, fontSize: 9, ...(Array.isArray(label) ? { columns: label } : { text: label }) }));
+/**
+ * Keeps a text on one line inside `width` points: shrinks the font down to `min`, then cuts
+ * the text. Every card must keep its height, or it pushes the next card off its quarter
+ * of the page (Groupifier lets long texts wrap). Roboto averages ~0.55em per character.
+ */
+export function fitText(text: string, width: number, size: number, { bold = false, min = 6 } = {}) {
+  const factor = bold ? 0.6 : 0.55;
+  if (!text) return { text, fontSize: size };
+  const fontSize = Math.max(min, Math.min(size, Math.floor((width / (text.length * factor)) * 2) / 2));
+  const maxChars = Math.floor(width / (fontSize * factor));
+  return { text: text.length > maxChars ? `${text.slice(0, Math.max(1, maxChars - 3)).trimEnd()}...` : text, fontSize };
+}
+
+const LABEL_SIZE = 9;
+const label = (text: string, width: number, style: Record<string, unknown> = {}) => ({ ...style, ...noBorder, ...fitText(text, width - CELL_CHROME, LABEL_SIZE, { min: 5 }) });
 
 const attemptRow = (attemptNumber: number | string, needsScrambleChecker: boolean) => [
-  { text: attemptNumber, ...noBorder, fontSize: 20, bold: true, alignment: "center" },
+  { text: attemptNumber, ...noBorder, fontSize: 18, bold: true, alignment: "center" },
   {},
   ...(needsScrambleChecker ? [{}] : []),
   {},
@@ -191,7 +206,9 @@ const attemptRow = (attemptNumber: number | string, needsScrambleChecker: boolea
 const attemptsSeparator = (cutoffLine: boolean, scorecardWidth: number, printScrambleChecker: boolean) => [{
   ...noBorder,
   colSpan: 5 + Number(printScrambleChecker),
-  margin: [0, 1],
+  // Separator rows only space the attempts; a tiny font keeps them from adding a text line.
+  fontSize: 3,
+  margin: [0, 0],
   columns: !cutoffLine ? [] : [{ canvas: [{ type: "line", x1: 0, y1: 0, x2: scorecardWidth, y2: 0, dash: { length: 5 } }] }],
 }];
 
@@ -224,18 +241,26 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
   const { pageWidth, scorecardsPerRow, horizontalMargin } = PAPER[printing.paperSize];
   const scorecardWidth = pageWidth / scorecardsPerRow - 2 * horizontalMargin;
   const checker = printScrambleCheckerBox;
+  const smallColumns = printStations ? 3 : 2;
+  const eventWidth = scorecardWidth - 25 - smallColumns * 30 - (smallColumns + 1) * CELL_CHROME;
+  const nameWidth = scorecardWidth - 25 - 30 - 2 * CELL_CHROME;
+  const competitorTag = competitor.wcaId || (competitor.name && competitor.registrantId != null ? t("newCompetitor") : " ");
+  const nameLabelWidth = Math.min(nameWidth / 2, t("name").length * LABEL_SIZE * 0.55 + 4);
+  const resultWidth = scorecardWidth - (16 + 25 * (3 + Number(checker))) - (5 + Number(checker)) * CELL_CHROME;
+  const footerWidth = scorecardWidth / 2 - 4;
+  const limitText = timeLimit ? `${t("timeLimit")}: ${timeLimitToString(timeLimit, t("total"))}` : "";
 
   return [
     { fontSize: 10, columns: [{ text: scorecardNumber ? `${scorecardNumber}` : "", alignment: "left" }, {}] },
-    { text: competitionName, bold: true, fontSize: 15, margin: [0, 0, 0, 10], alignment: "center" },
+    { ...fitText(competitionName, scorecardWidth, 15, { bold: true, min: 9 }), bold: true, margin: [0, 0, 0, 6], alignment: "center" },
     {
       margin: [25, 0, 0, 0],
       table: {
         widths: ["*", 30, 30, ...(printStations ? [30] : [])],
         body: [
-          columnLabels([t("eventLabel"), { text: t("round"), alignment: "center" }, { text: t("group"), alignment: "center" }, ...(printStations ? [{ text: t("station"), alignment: "center" }] : [])]),
+          [label(t("eventLabel"), eventWidth + CELL_CHROME), label(t("round"), 30 + CELL_CHROME, { alignment: "center" }), label(t("group"), 30 + CELL_CHROME, { alignment: "center" }), ...(printStations ? [label(t("station"), 30 + CELL_CHROME, { alignment: "center" })] : [])],
           [
-            eventId ? { text: eventName(eventId) } : " ",
+            eventId ? fitText(eventName(eventId), eventWidth, 12, { min: 7 }) : " ",
             { text: roundNumber ?? "", alignment: "center" },
             { text: groupNumber ?? "", alignment: "center" },
             ...(printStations ? [{ text: stationNumber ?? "", alignment: "center" }] : []),
@@ -248,14 +273,17 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
       table: {
         widths: [30, "*"],
         body: [
-          columnLabels([
-            t("id"),
-            [
-              { text: t("name"), alignment: "left", width: "auto" },
-              // registrantId null means a manually entered name, not a registered new competitor.
-              { text: competitor.wcaId || (competitor.name && competitor.registrantId != null ? t("newCompetitor") : " "), alignment: "right" },
-            ],
-          ]),
+          [
+            label(t("id"), 30 + CELL_CHROME),
+            {
+              ...noBorder,
+              columns: [
+                { ...fitText(t("name"), nameLabelWidth, LABEL_SIZE, { min: 5 }), alignment: "left", width: nameLabelWidth },
+                // registrantId null means a manually entered name, not a registered new competitor.
+                { ...fitText(competitorTag, nameWidth - nameLabelWidth, LABEL_SIZE, { min: 5 }), alignment: "right" },
+              ],
+            },
+          ],
           [
             { text: competitor.registrantId ?? " ", alignment: "center" },
             { text: pdfName(competitor.name || " ", { swapLatinWithLocalNames: printing.localNamesFirst, short: printing.printOneName }), maxHeight: 20 },
@@ -264,28 +292,35 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
       },
     },
     {
-      margin: [0, 10, 0, 0],
+      margin: [0, 6, 0, 0],
       table: {
         /* Note: 16 (width) + 4 + 4 (default left and right padding) + 1 (left border) = 25 */
         widths: [16, 25, ...(checker ? [25] : []), "*", 25, 25],
         body: [
-          columnLabels(["", t("scr"), ...(checker ? [t("check")] : []), t("result"), t("judge"), t("comp")], { alignment: "center" }),
+          [
+            label("", 16 + CELL_CHROME),
+            label(t("scr"), 25 + CELL_CHROME, { alignment: "center" }),
+            ...(checker ? [label(t("check"), 25 + CELL_CHROME, { alignment: "center" })] : []),
+            label(t("result"), resultWidth + CELL_CHROME, { alignment: "center" }),
+            label(t("judge"), 25 + CELL_CHROME, { alignment: "center" }),
+            label(t("comp"), 25 + CELL_CHROME, { alignment: "center" }),
+          ],
           ...attemptRows(cutoff, attemptCount, scorecardWidth, checker),
-          [{ text: `${t("extra")} (${t("delegateInitials")} _______)`, ...noBorder, colSpan: 5 + Number(checker), margin: [0, 1], fontSize: 10 }],
+          [{ ...fitText(`${t("extra")} (${t("delegateInitials")} _______)`, scorecardWidth - CELL_CHROME, 10, { min: 6 }), ...noBorder, colSpan: 5 + Number(checker), margin: [0, 1] }],
           attemptRow("_", checker),
-          [{ text: "", ...noBorder, colSpan: 5 + Number(checker), margin: [0, 1] }],
+          [{ text: "", ...noBorder, colSpan: 5 + Number(checker), fontSize: 3, margin: [0, 0] }],
         ],
       },
     },
     {
       fontSize: 10,
       columns: [
-        cutoff && eventId ? { text: `${t("cutoff")}: ${cutoffToString(cutoff, eventId)}`, alignment: "center" } : {},
+        cutoff && eventId ? { ...fitText(`${t("cutoff")}: ${cutoffToString(cutoff, eventId)}`, footerWidth, 10, { min: 6 }), alignment: "center" } : {},
         timeLimit ? {
           alignment: "center",
           stack: [
-            { text: `${t("timeLimit")}: ${timeLimitToString(timeLimit, t("total"))}` },
-            ...(cumulativeRounds ? [{ text: `(${cumulativeRounds})`, fontSize: 7 }] : []),
+            fitText(limitText, footerWidth, 10, { min: 6 }),
+            ...(cumulativeRounds ? [fitText(`(${cumulativeRounds})`, footerWidth, 7, { min: 5 })] : []),
           ],
         } : {},
       ],

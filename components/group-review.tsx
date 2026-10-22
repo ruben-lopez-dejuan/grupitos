@@ -2,7 +2,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EventIcon } from "@/components/event-icon";
-import { applyCells, cellValue, duties, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, TASK_LABELS, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
+import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
+import { applyCells, cellValue, setStation, duties, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, TASK_LABELS, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { judgesNeeded } from "@/lib/rounds";
 import { countBySeverity, SEVERITY_ORDER, validateRound, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
@@ -77,8 +78,12 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
   return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 }
 
-export function GroupReview({ initialAssignments, rules, eventNames, roomName = "Área de competición", onChange }: {
+export function GroupReview({ initialAssignments, rules, eventNames, roomName = "Área de competición", onChange, photos, showPhotos, onShowPhotosChange }: {
   initialAssignments: GeneratedAssignment[];
+  /** WCA profile thumbnails by person. */
+  photos: Record<string, string | undefined>;
+  showPhotos: boolean;
+  onShowPhotosChange: (show: boolean) => void;
   rules: Record<string, RoundRules>;
   eventNames: Record<string, string>;
   roomName?: string;
@@ -95,6 +100,10 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   const [focusRequest, setFocusRequest] = useState(0);
   const [status, setStatus] = useState("");
   const [showIssues, setShowIssues] = useState(false);
+  /** Station being typed into a competitor cell. */
+  const [stationEdit, setStationEdit] = useState<{ id: string; group: number; value: string }>();
+  // Enter and the blur that follows must not save twice.
+  const stationEditOpen = useRef(false);
   const dragging = useRef(false);
   const finishDrag = useRef(() => {});
   const matrixRef = useRef<HTMLDivElement>(null);
@@ -169,6 +178,34 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
     const result = applyCells(assignments, keys.map(refFromKey), value, { stations: currentRules.stations, fixedStations: currentRules.fixedStations });
     if (result.changed) dispatch({ type: "commit", next: result.assignments });
     setStatus(describeChange(value, result.changed));
+  }
+
+  function startStationEdit(cell: CellRef, initial?: string) {
+    const item = visible.find(row => row.id === cell.id);
+    if (!item || cellValue(item, cell.group) !== "competitor") return false;
+    selectSingle(cell);
+    stationEditOpen.current = true;
+    setStationEdit({ ...cell, value: initial ?? (item.station ? String(item.station) : "") });
+    return true;
+  }
+
+  function finishStationEdit(save: boolean) {
+    if (!stationEdit || !stationEditOpen.current) return;
+    stationEditOpen.current = false;
+    const edit = stationEdit;
+    setStationEdit(undefined);
+    setFocusRequest(request => request + 1);
+    if (!save) return;
+    const station = edit.value.trim() === "" ? undefined : Number(edit.value);
+    if (station !== undefined && (!Number.isInteger(station) || station < 1)) {
+      setStatus("La estación tiene que ser un número entero positivo");
+      return;
+    }
+    const next = setStation(assignments, edit.id, station);
+    if (next === assignments) return;
+    dispatch({ type: "commit", next });
+    const name = assignments.find(item => item.id === edit.id)?.name;
+    setStatus(station ? `Estación ${station} para ${name}` : `Estación quitada a ${name}`);
   }
 
   function undo() {
@@ -247,6 +284,11 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
       clearSelection();
       return;
     }
+    // Typing a number on a competitor cell edits its station; 0 keeps clearing cells.
+    if (/^[1-9]$/.test(key) && cursor && startStationEdit(cursor, key)) {
+      event.preventDefault();
+      return;
+    }
     if (HOTKEYS[key] !== undefined) {
       if (!selection.length) return;
       event.preventDefault();
@@ -284,7 +326,7 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   const tabbable = cursor ?? (visible[0] ? { id: visible[0].id, group: 1 } : undefined);
 
   return <section className="review-panel matrix-review" id="review" onKeyDown={handleKeyDown}>
-    <div className="review-head"><div><p className="kicker">Revisar y validar</p><h2>{currentRound ? `${eventNames[currentRound.eventId] ?? currentRound.eventId} · Ronda ${currentRound.id.split("-r").at(-1)}` : "Revisar asignaciones"}</h2><p>Selecciona celdas y asígnales una tarea con el teclado o con los botones. Puedes cambiar cualquier celda; los problemas aparecen abajo.</p></div></div>
+    <div className="review-head"><div><p className="kicker">Revisar y validar</p><h2>{currentRound ? `${eventNames[currentRound.eventId] ?? currentRound.eventId} · Ronda ${currentRound.id.split("-r").at(-1)}` : "Revisar asignaciones"}</h2><p>Selecciona celdas y asígnales una tarea con el teclado o con los botones. Puedes cambiar cualquier celda; los problemas aparecen abajo.</p></div><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Mostrar fotos</label></div>
 
     <div className="round-tabs" role="tablist" aria-label="Rondas">{rounds.map(round => {
       const roundIssues = issuesByRound.get(round.id) ?? [];
@@ -293,16 +335,20 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
     })}</div>
 
     <div className="matrix-toolbar">
-      <div className="tool-group" role="radiogroup" aria-label="Al hacer clic en una celda"><strong>Al hacer clic</strong>
-        <button role="radio" aria-checked={tool === "select"} className={`select ${tool === "select" ? "active" : ""}`} onClick={() => setTool("select")}>Solo seleccionar</button>
-        {VALUES.map(value => <button key={value || "empty"} role="radio" aria-checked={tool === value} className={`${value || "empty"} ${tool === value ? "active" : ""}`} onClick={() => setTool(value)}><kbd>{HOTKEY_LABELS[value]}</kbd>{value ? TASK_LABELS[value] : "Vaciar"}</button>)}
+      <div className="tool-group" role="radiogroup" aria-label="Al hacer clic en una celda"><strong>Clic</strong>
+        <button role="radio" aria-checked={tool === "select"} className={`select ${tool === "select" ? "active" : ""}`} onClick={() => setTool("select")}>Seleccionar</button>
+        <span className="tool-chips">{VALUES.map(value => {
+          const label = value ? TASK_LABELS[value] : "Vaciar";
+          return <button key={value || "empty"} role="radio" aria-checked={tool === value} aria-label={`${label} (tecla ${HOTKEY_LABELS[value]})`} title={`${label} · tecla ${HOTKEY_LABELS[value]}`} className={`tool-chip cell-chip ${value || "empty"} ${tool === value ? "active" : ""}`} onClick={() => setTool(value)}>{value ? TASK_CODES[value] : "∅"}</button>;
+        })}</span>
+        <span className="tool-current">{tool === "select" ? "Clic para seleccionar" : `Clic para poner: ${tool ? TASK_LABELS[tool] : "vaciar"}`}</span>
       </div>
       <div className="history-actions"><button onClick={undo} disabled={!history.past.length} title="Deshacer (Ctrl+Z)">↶ Deshacer</button><button onClick={redo} disabled={!history.future.length} title="Rehacer (Ctrl+Y o Ctrl+Mayús+Z)">↷ Rehacer</button></div>
     </div>
 
     <div className="selection-bar">{selection.length > 1
       ? <><strong>{selection.length} celdas seleccionadas</strong><span>Asignar:</span>{VALUES.map(value => <button key={value || "empty"} className={`cell-chip ${value || "empty"}`} onClick={() => apply(value)} title={value ? TASK_LABELS[value] : "Vaciar"}>{value ? TASK_CODES[value] : "Vaciar"}</button>)}<button className="plain" onClick={clearSelection}>Quitar selección <kbd>Esc</kbd></button></>
-      : <p>Arrastra o usa <kbd>Mayús</kbd> y <kbd>Ctrl</kbd> para seleccionar varias celdas. Pulsa la letra de una tarea o <kbd>0</kbd> para asignarla a la selección y <kbd>↑↓←→</kbd> para moverte.</p>}
+      : <p>Arrastra o usa <kbd>Mayús</kbd> y <kbd>Ctrl</kbd> para seleccionar varias celdas. Pulsa la letra de una tarea o <kbd>0</kbd> para asignarla a la selección y <kbd>↑↓←→</kbd> para moverte. Sobre una celda C, escribe un número (o haz doble clic) para cambiar su estación.</p>}
     </div>
 
     <div className="issue-bar">
@@ -321,17 +367,22 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
         const groupIssues = issueIndex.groups.get(group);
         const severity = worstSeverity(groupIssues);
         const extra = group > currentRules.groups;
-        const judges = judgesNeeded(groupCounts.competitor, currentRules.stations);
-        const shortClass = (have: number, need: number) => !extra && have < need ? "short" : "";
-        return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={groupIssues?.map(issue => issue.message).join("\n")}>
-          <button type="button" onClick={() => selectColumn(group)} title={`Seleccionar toda la columna G${group}`}>G{group}{extra && " · sobra"}</button>
-          <span className="group-totals">
-            <span title="Competidores">C {groupCounts.competitor}</span>
-            <span className={shortClass(groupCounts.scrambler, currentRules.scramblers)} title="Mezcladores asignados / necesarios">M {groupCounts.scrambler}{!extra && `/${currentRules.scramblers}`}</span>
-            <span className={currentRules.checkJudges ? shortClass(groupCounts.judge, judges) : ""} title="Jueces asignados / necesarios">J {groupCounts.judge}{currentRules.checkJudges && !extra && `/${judges}`}</span>
-            <span className={currentRules.checkJudges ? shortClass(groupCounts.runner, currentRules.runners) : ""} title="Runners asignados / necesarios">R {groupCounts.runner}{currentRules.checkJudges && !extra && `/${currentRules.runners}`}</span>
-            {extraRoles.map(role => <span key={role} className={(role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry) ? shortClass(groupCounts[role], 1) : ""} title={TASK_LABELS[role]}>{TASK_CODES[role]} {groupCounts[role]}</span>)}
-          </span>
+        // Needed staff per role; undefined when the rules expect none, so only the count shows.
+        const needs: Partial<Record<TaskRole, number>> = extra ? {} : {
+          scrambler: currentRules.scramblers,
+          ...(currentRules.checkJudges ? { judge: judgesNeeded(groupCounts.competitor, currentRules.stations), runner: currentRules.runners } : {}),
+          ...(currentRules.checkDelegates ? { delegate: 1 } : {}),
+          ...(currentRules.checkDataEntry ? { dataentry: 1 } : {}),
+        };
+        const roles = (["scrambler", "judge", "runner", ...extraRoles] as TaskRole[]).filter(role => groupCounts[role] > 0 || needs[role]);
+        const summary = [`${groupCounts.competitor} competidores`, ...roles.map(role => `${TASK_LABELS[role]}: ${groupCounts[role]}${needs[role] !== undefined ? ` de ${needs[role]}` : ""}`), ...(groupIssues ?? []).map(issue => issue.message)].join("\n");
+        return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={summary}>
+          <button type="button" onClick={() => selectColumn(group)} title={`Seleccionar toda la columna G${group}\n${summary}`}>G{group}<span className="group-size">{extra ? "sobra" : `· ${groupCounts.competitor}`}</span></button>
+          <span className="group-chips">{roles.map(role => {
+            const need = needs[role];
+            const short = need !== undefined && groupCounts[role] < need;
+            return <span key={role} className={`cell-chip mini ${role} ${short ? "short" : ""}`}>{TASK_CODES[role]}{short ? ` ${groupCounts[role]}/${need}` : groupCounts[role]}</span>;
+          })}</span>
         </th>;
       })}<th /></tr>
     </thead><tbody>{visible.map((item, index) => {
@@ -341,7 +392,7 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
       const rowDuties = duties(item);
       return <tr key={item.id} className={item.inRound ? "" : "staff-row"}>
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
-        <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issue => issue.message).join("\n")} />}<strong>{item.name}</strong><small>{item.wcaId ?? "Sin WCA ID"}</small></td>
+        <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issue => issue.message).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><strong>{item.name}</strong><small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
         <td>{formatSeed(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label="Compite en esta ronda">✓</span> : <span className="muted-mark" aria-label="Solo trabaja en esta ronda">—</span>}</td>
@@ -355,6 +406,22 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
           const isCursor = cursor?.id === item.id && cursor.group === group;
           const classes = [value || "empty", isCursor && "cursor", selected.has(key) && "in-selection", severity && `issue-${severity}`].filter(Boolean).join(" ");
           const description = `${TASK_LABELS[value]} · G${group}${cellIssues ? `\n${cellIssues.map(issue => issue.message).join("\n")}` : ""}`;
+          if (stationEdit?.id === item.id && stationEdit.group === group) {
+            return <td key={group} className="matrix-cell"><input
+              className="station-input"
+              autoFocus
+              inputMode="numeric"
+              aria-label={`Estación de ${item.name} en G${group}`}
+              value={stationEdit.value}
+              onChange={event => setStationEdit({ ...stationEdit, value: event.target.value.replace(/\D/g, "").slice(0, 3) })}
+              onKeyDown={event => {
+                event.stopPropagation();
+                if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); finishStationEdit(true); }
+                else if (event.key === "Escape") { event.preventDefault(); finishStationEdit(false); }
+              }}
+              onBlur={() => finishStationEdit(true)}
+            /></td>;
+          }
           return <td key={group} className="matrix-cell"><button
             data-cell={key}
             className={classes}
@@ -363,9 +430,11 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
             title={description}
             onMouseDown={event => handleMouseDown(event, cell)}
             onMouseEnter={() => handleMouseEnter(cell)}
+            onDoubleClick={() => startStationEdit(cell)}
             onClick={event => {
               // Only keyboard activation (Enter/Space) arrives with detail 0; mouse clicks are handled on mouse down/up.
               if (event.detail !== 0) return;
+              if (tool === "select" && startStationEdit(cell)) return;
               selectSingle(cell);
               if (tool !== "select") apply(tool, [key]);
             }}

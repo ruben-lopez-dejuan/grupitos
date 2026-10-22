@@ -66,6 +66,19 @@ describe("scorecards (Groupifier port)", () => {
     expect(covered - plain).toBe(rounds.find(round => round.id === "333-r1")!.groups);
   });
 
+  it("prints the scramble checker on big cubes only when asked", () => {
+    const large = demoCompetition("large");
+    const largeRounds = initialRounds(large, 12, "waiting");
+    const hasChecker = (scrambleCheckerBigCubes: boolean) => {
+      const printing = { ...DEFAULT_PRINTING, scrambleCheckerFinalRounds: true, scrambleCheckerBigCubes };
+      const card = roundScorecards({ competition: large, assignments: [], rounds: largeRounds, stations: 12, zoneMode: "waiting", printing }, ["555-r2"]).find(Array.isArray)!;
+      // The attempts table gains a "Check" column (5 → 6) when the box is printed.
+      return card[4].table.widths.length === 6;
+    };
+    expect(hasChecker(false)).toBe(false);
+    expect(hasChecker(true)).toBe(true);
+  });
+
   it("prints a page of blank cards per attempt count", () => {
     expect(blankScorecards(source)).toHaveLength(4);
   });
