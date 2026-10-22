@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@cubing/icons/css";
 import "./globals.css";
 import "./product.css";
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { EventIcon } from "@/components/event-icon";
 import { getCompetition, type StoredCompetition } from "@/lib/competition-store";
 
 const EVENT_NAMES: Record<string, string> = {
@@ -140,7 +141,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         <section className="round-section" id="groups">
           <div className="section-heading"><div><h2>Grupos por ronda</h2><p>Las rondas posteriores se activarán cuando haya resultados o cupos definidos.</p></div><div className="group-total"><small>Total previsto</small><strong>{totalGroups} grupos</strong></div></div>
-          <div className="round-table"><div className="round-table-head"><span>Ronda</span><span>Competidores</span><span>Grupos</span><span>Mezcladores</span><span>Incluir</span></div>{rounds.map(round => <div className={`round-row ${round.enabled ? "" : "disabled"}`} key={round.id}><div><span className="event-code">{round.eventId}</span><strong>{round.label}</strong></div><span>{round.competitors || "Por definir"}</span><div className="mini-stepper"><button disabled={!round.enabled} onClick={() => updateGroups(round.id, -1)}>−</button><strong>{round.groups}</strong><button disabled={!round.enabled} onClick={() => updateGroups(round.id, 1)}>+</button></div><span>{round.scramblers} / grupo</span><label className="switch"><input type="checkbox" checked={round.enabled} onChange={event => { setRounds(current => current.map(item => item.id === round.id ? { ...item, enabled: event.target.checked } : item)); setGenerated(false); }} /><i /></label></div>)}</div>
+          <div className="round-table"><div className="round-table-head"><span>Ronda</span><span>Competidores</span><span>Grupos</span><span>Mezcladores</span><span>Incluir</span></div>{rounds.map(round => <div className={`round-row ${round.enabled ? "" : "disabled"}`} key={round.id}><div><EventIcon eventId={round.eventId} label={EVENT_NAMES[round.eventId] ?? round.eventId} /><div className="round-name"><strong>{round.label}</strong><small>{round.eventId}</small></div></div><span>{round.competitors || "Por definir"}</span><div className="mini-stepper"><button disabled={!round.enabled} onClick={() => updateGroups(round.id, -1)}>−</button><strong>{round.groups}</strong><button disabled={!round.enabled} onClick={() => updateGroups(round.id, 1)}>+</button></div><span>{round.scramblers} / grupo</span><label className="switch"><input type="checkbox" checked={round.enabled} onChange={event => { setRounds(current => current.map(item => item.id === round.id ? { ...item, enabled: event.target.checked } : item)); setGenerated(false); }} /><i /></label></div>)}</div>
         </section>
 
         {generated && <section className="generated-summary" id="review"><div><span>✓</span><div><strong>Propuesta creada</strong><p>{people.length} competidores distribuidos en {totalGroups} grupos. El siguiente paso será revisar conflictos y asignar personal.</p></div></div><button className="button text-button">Ver propuesta →</button></section>}
