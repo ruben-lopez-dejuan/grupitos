@@ -270,7 +270,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                 return <Fragment key={round.id}>
                   {firstExcluded && <div className="round-divider">Excluidas</div>}
                   <div className={`round-row ${excluded ? "excluded" : ""}`}>
-                    <div><EventIcon eventId={round.eventId} label={EVENT_NAMES[round.eventId] ?? round.eventId} /><div className="round-name"><strong>{round.label}</strong><small>{round.eventId}</small></div></div>
+                    <div><EventIcon eventId={round.eventId} label={EVENT_NAMES[round.eventId] ?? round.eventId} /><div className="round-name"><strong>{EVENT_NAMES[round.eventId] ?? round.eventId}</strong><small>Ronda {round.roundNumber} · {round.eventId}</small></div></div>
                     <span className="round-number">{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
                     <span>{fixed ? "Fijos" : "Espera"}</span>
                     <div className="group-cell"><Stepper label="grupos" value={round.groups} min={1} big disabled={excluded} onChange={groups => updateRound(round.id, { groups })} /><small>{perGroup}</small></div>
