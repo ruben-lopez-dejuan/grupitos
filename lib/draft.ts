@@ -1,7 +1,7 @@
 import { normalizeAssignments, type GeneratedAssignment } from "@/lib/assignments";
 import type { AssignmentOptions } from "@/lib/group-generator";
 import type { PeopleSettings } from "@/lib/people";
-import type { ProConfig } from "@/lib/pro/schedule";
+import { normalizeProSchedule, type ProConfig } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 
@@ -36,8 +36,8 @@ export function generationSignature(settings: WorkspaceSettings) {
     rounds: settings.rounds.filter(round => round.enabled).map(({ id, groups, scramblers, runners }) => ({ id, groups, scramblers, runners })),
     options: settings.options,
     people: settings.people,
-    // Stage names and colours, and activities without groups, do not change the proposal.
-    pro: settings.pro?.enabled ? { stages: settings.pro.schedule.stages.map(stage => stage.id), blocks: settings.pro.schedule.blocks } : undefined,
+    // Room/stage names and colours, and activities without groups, do not change the proposal.
+    pro: settings.pro?.enabled ? { rooms: settings.pro.schedule.rooms.map(room => ({ id: room.id, stages: room.stages.map(stage => stage.id) })), blocks: settings.pro.schedule.blocks } : undefined,
   });
 }
 
@@ -52,7 +52,11 @@ export function parseDraft(raw: string | null): Draft | undefined {
     if (Array.isArray(data)) return { version: 3, assignments: normalizeAssignments(data) };
     if (data && typeof data === "object") {
       const draft = data as { version?: number; assignments?: unknown[] };
-      if (draft.version === 3) return { ...(data as Draft), assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
+      if (draft.version === 3) {
+        const current = data as Draft;
+        const settings = current.settings?.pro ? { ...current.settings, pro: { ...current.settings.pro, schedule: normalizeProSchedule(current.settings.pro.schedule) } } : current.settings;
+        return { ...current, settings, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
+      }
       if (draft.version === 2) return { version: 3, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
     }
   } catch {

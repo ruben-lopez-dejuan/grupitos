@@ -10,4 +10,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Project handoff
 
-Before starting, read [`HANDOFF.md`](HANDOFF.md) (current state, the user's preferences and next steps, in Spanish) and [`docs/MODO_PRO.md`](docs/MODO_PRO.md) (PRO mode design). Commit and push only when the user asks, to `main`, never including `.claude/`.
+Before starting, read [`HANDOFF.md`](HANDOFF.md) (current state, the user's preferences and next steps, in Spanish) and [`docs/MODO_PRO.md`](docs/MODO_PRO.md) (PRO mode design). The user has asked for every completed work package to be committed and pushed to `main`; never include `.claude/`.

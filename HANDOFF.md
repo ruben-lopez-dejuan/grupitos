@@ -20,7 +20,7 @@ Orden de lectura recomendado:
 
 Preferencias firmes del usuario:
 
-- **Commits y pushes solo cuando lo pide**, siempre a `main` y **sin incluir `.claude/`**. Los mensajes de commit van en inglés, en imperativo, con un cuerpo breve en viñetas.
+- **Al terminar cada paquete de trabajo, hacer commit y push**, siempre a `main` y **sin incluir `.claude/`**, salvo que el usuario diga expresamente que no. Los mensajes de commit van en inglés, en imperativo, con un cuerpo breve en viñetas.
 - **Interfaz sobria y compacta.** Poco texto: las explicaciones van detrás de un «?» (`components/hint.tsx`) o en un `title`. El color solo cuando significa algo, como los colores de tarea S/J/R/D o los de escenario. Nada de decoración.
   - Rechazó unos iconos de puzles dibujados a mano. Hay que mantener los iconos oficiales de `@cubing/icons`.
   - Hay que comprobar que cabeceras y columnas no se solapan ni se cortan a unos 1280 px. Es lo que más le molesta.

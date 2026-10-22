@@ -1,0 +1,67 @@
+{
+  "id": "AnonymousChampionship2026",
+  "name": "Anonymous Championship 2026",
+  "schedule": {
+    "startDate": "2026-12-05",
+    "numberOfDays": 3,
+    "venues": [{
+      "id": 1,
+      "name": "Venue",
+      "timezone": "Europe/Madrid",
+      "rooms": [{
+        "id": 10,
+        "name": "Main hall",
+        "color": "#cc3333",
+        "extensions": [{
+          "id": "org.cubingusa.natshelper.v1.Room",
+          "data": {
+            "stages": [
+              { "id": 0, "name": "North", "color": "#e67e22", "groupNamePrefix": "N" },
+              { "id": 1, "name": "South", "color": "#27864b" }
+            ]
+          }
+        }],
+        "activities": [{
+          "id": 100,
+          "name": "3x3x3 Cube Round 1",
+          "activityCode": "333-r1",
+          "startTime": "2026-12-05T08:00:00Z",
+          "endTime": "2026-12-05T09:00:00Z",
+          "childActivities": [
+            { "id": 101, "name": "3x3 North 1", "activityCode": "333-r1-g1", "startTime": "2026-12-05T08:00:00Z", "endTime": "2026-12-05T08:25:00Z", "extensions": [{ "id": "org.cubingusa.natshelper.v1.Group", "data": { "stageId": 0 } }] },
+            { "id": 102, "name": "3x3 North 2", "activityCode": "333-r1-g2", "startTime": "2026-12-05T08:25:00Z", "endTime": "2026-12-05T09:00:00Z", "extensions": [{ "id": "org.cubingusa.natshelper.v1.Group", "data": { "stageId": 0 } }] },
+            { "id": 103, "name": "3x3 South 1", "activityCode": "333-r1-g1", "startTime": "2026-12-05T08:00:00Z", "endTime": "2026-12-05T08:30:00Z", "extensions": [{ "id": "org.cubingusa.natshelper.v1.Group", "data": { "stageId": 1 } }] },
+            { "id": 104, "name": "3x3 South 2", "activityCode": "333-r1-g2", "startTime": "2026-12-05T08:30:00Z", "endTime": "2026-12-05T09:00:00Z", "extensions": [{ "id": "org.cubingusa.natshelper.v1.Group", "data": { "stageId": 1 } }] }
+          ]
+        }, {
+          "id": 110,
+          "name": "Finals setup",
+          "activityCode": "other-setup",
+          "startTime": "2026-12-05T09:00:00Z",
+          "endTime": "2026-12-05T09:20:00Z"
+        }]
+      }, {
+        "id": 20,
+        "name": "Side room",
+        "color": "#681da8",
+        "activities": [{
+          "id": 200,
+          "name": "4x4x4 Blindfolded Round 1",
+          "activityCode": "444bf-r1",
+          "startTime": "2026-12-05T08:00:00Z",
+          "endTime": "2026-12-05T09:00:00Z",
+          "childActivities": [
+            { "id": 201, "name": "4BLD 1", "activityCode": "444bf-r1-g1", "startTime": "2026-12-05T08:00:00Z", "endTime": "2026-12-05T08:30:00Z" },
+            { "id": 202, "name": "4BLD 2", "activityCode": "444bf-r1-g2", "startTime": "2026-12-05T08:30:00Z", "endTime": "2026-12-05T09:00:00Z" }
+          ]
+        }, {
+          "id": 210,
+          "name": "Multi cube submission",
+          "activityCode": "other-multi",
+          "startTime": "2026-12-05T07:30:00Z",
+          "endTime": "2026-12-05T08:00:00Z"
+        }]
+      }]
+    }]
+  }
+}

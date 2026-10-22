@@ -82,3 +82,32 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .timeline-hours,.timeline-column{margin-top:8px}
 .timeline-item.short .timeline-title{flex:0 1 auto}
 .timeline-item.short small{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Rooms contain stages. A room without stages is one implicit timeline lane. */
+.room-bar{display:flex;align-items:stretch;gap:10px;padding:12px 22px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.room-card{flex:0 0 auto;min-width:190px;padding:8px;background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px}
+.room-row{display:flex;align-items:center;gap:6px}
+.room-row>input{min-width:90px;max-width:180px;padding:3px 4px;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:4px;font:inherit;font-size:14px;font-weight:800}
+.room-row>input:hover,.room-row>input:focus{background:var(--surface);border-color:var(--line);outline:0}
+.room-row>button{width:22px;height:22px;margin-left:auto;color:var(--muted);background:transparent;border:0;border-radius:4px;font-size:16px;cursor:pointer}
+.room-row>button:hover{color:var(--error);background:var(--surface)}
+.room-stages{display:flex;align-items:center;gap:5px;margin-top:7px;padding-left:24px}
+.room-stages:has(.stage-chip){flex-wrap:wrap}
+.room-stages .stage-chip{padding-block:2px;background:var(--surface)}
+.room-stages .stage-add{padding:4px 7px;font-size:12px}
+.room-add{align-self:center;flex:none;padding:7px 11px;color:var(--blue);background:transparent;border:1px dashed var(--line);border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+
+.timeline-room{min-width:0;padding:2px 8px 5px;margin:0 3px;border-bottom:1px solid color-mix(in srgb,var(--line) 80%,transparent);color:var(--muted);font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.timeline-stage{top:25px;margin-bottom:0}
+.schedule-drag-hint{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+.timeline-item{touch-action:none;user-select:none;cursor:grab}
+.timeline-item:active,.pro-schedule.is-dragging .timeline-item.drag-preview{cursor:grabbing}
+.timeline-item.drag-preview{z-index:4;opacity:.88;box-shadow:0 0 0 2px var(--blue),0 8px 20px rgba(0,0,0,.18)}
+.resize-handle{position:absolute;z-index:3;left:0;right:0;height:8px;cursor:ns-resize}
+.resize-handle.top{top:-2px}
+.resize-handle.bottom{bottom:-2px}
+.timeline-item:hover .resize-handle::after,.timeline-item.selected .resize-handle::after{content:"";position:absolute;left:38%;right:38%;top:3px;border-top:2px solid color-mix(in srgb,var(--stage) 70%,var(--ink));border-radius:2px}
+
+@media (max-width:1100px){
+  .schedule-drag-hint{display:none}
+}

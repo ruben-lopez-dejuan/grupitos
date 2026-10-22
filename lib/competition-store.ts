@@ -41,8 +41,9 @@ export type WcifRound = {
   results?: Array<{ personId: number; ranking?: number | null }>;
 };
 export type WcifEvent = { id: string; rounds?: WcifRound[] };
-export type WcifActivity = { id: number; name: string; activityCode: string; startTime: string; endTime: string; childActivities?: WcifActivity[] };
-export type WcifRoom = { id?: number; name?: string; color?: string; activities?: WcifActivity[] };
+export type WcifExtension = { id: string; specUrl?: string; data?: unknown };
+export type WcifActivity = { id: number; name: string; activityCode: string; startTime: string; endTime: string; childActivities?: WcifActivity[]; extensions?: WcifExtension[] };
+export type WcifRoom = { id?: number; name?: string; color?: string; activities?: WcifActivity[]; extensions?: WcifExtension[] };
 export type WcifVenue = { id?: number; name?: string; countryIso2?: string; timezone?: string; rooms?: WcifRoom[] };
 
 export type StoredCompetition = {

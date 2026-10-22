@@ -8,7 +8,7 @@ import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import { applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
-import { clockOf, type GroupSlot, type ProStage } from "@/lib/pro/schedule";
+import { clockOf, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
 import { countBySeverity, SEVERITY_ORDER, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
 type Tool = CellValue | "select";
@@ -72,7 +72,7 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
   return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 }
 
-export function GroupReview({ initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, stages }: {
+export function GroupReview({ initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -84,7 +84,7 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
   roomName?: string;
   /** PRO mode: stage and times of every group, which also enables the time-overlap check. */
   slots?: Map<string, GroupSlot[]>;
-  stages?: ProStage[];
+  rooms?: ProRoom[];
   onChange: (assignments: GeneratedAssignment[]) => void;
 }) {
   const { t, tp } = useI18n();
@@ -127,7 +127,10 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
     }));
   }, [assignments, rounds, rules, slots]);
   const roundSlots = slots?.get(roundId);
-  const stageById = useMemo(() => new Map((stages ?? []).map(stage => [stage.id, stage])), [stages]);
+  const laneByKey = useMemo(() => new Map((rooms ?? []).flatMap(room => [
+    [targetKey(room.id), { name: room.name, color: room.color }] as const,
+    ...room.stages.map(stage => [targetKey(room.id, stage.id), { name: stage.name, color: stage.color }] as const),
+  ])), [rooms]);
 
   // People in the round first, by seed; staff who only work in this round after them, by name.
   const loads = useMemo(() => dutyLoads(assignments), [assignments]);
@@ -439,8 +442,8 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
           <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group })}\n${summary}`}>G{group}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
           {(() => {
             const slot = roundSlots?.find(item => item.group === group);
-            const stage = slot && stageById.get(slot.stageId);
-            return stage && <span className="group-stage" title={`${stage.name} ${slot.number} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: stage.color }} />{stage.name} {slot.number} · {clockOf(slot.windows[0].start)}</span>;
+            const lane = slot && laneByKey.get(targetKey(slot.roomId, slot.stageId));
+            return lane && <span className="group-stage" title={`${lane.name} ${slot.number} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: lane.color }} />{lane.name} {slot.number} · {clockOf(slot.windows[0].start)}</span>;
           })()}
           <span className="group-chips">{roles.map(role => {
             const need = needs[role];

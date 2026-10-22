@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import stagedFixture from "@/tests/fixtures/schedule-with-rooms-and-stages.json";
 import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { demoCompetition } from "@/lib/demo-competition";
@@ -8,9 +9,10 @@ import { groupSlots, importSchedule, isoToLocal, scheduleProblems, splitBlock, w
 import { initialRounds } from "@/lib/rounds";
 import { validateTimes } from "@/lib/validation";
 
-const stages = [{ id: 1, name: "Rojo", color: "#d93636" }, { id: 2, name: "Verde", color: "#2f9e44" }, { id: 3, name: "Sala Blind", color: "#fc00df" }];
-const schedule = (blocks: ProSchedule["blocks"]): ProSchedule => ({ timeZone: "Europe/Madrid", days: ["2026-02-21"], stages, blocks, activities: [] });
-const block = (id: string, activityCode: string, stageId: number, start: string, end: string, groups: number) => ({ id, activityCode, stageId, start: `2026-02-21T${start}`, end: `2026-02-21T${end}`, groups });
+const stages = [{ id: 1, name: "Rojo", color: "#d93636" }, { id: 2, name: "Verde", color: "#2f9e44" }];
+const rooms = [{ id: 1, name: "Pabellón", color: "#2563eb", stages }, { id: 3, name: "Sala Blind", color: "#fc00df", stages: [] }];
+const schedule = (blocks: ProSchedule["blocks"]): ProSchedule => ({ timeZone: "Europe/Madrid", days: ["2026-02-21"], rooms, blocks, activities: [] });
+const block = (id: string, activityCode: string, laneId: number, start: string, end: string, groups: number) => ({ id, activityCode, roomId: laneId === 3 ? 3 : 1, stageId: laneId === 3 ? undefined : laneId, start: `2026-02-21T${start}`, end: `2026-02-21T${end}`, groups });
 
 describe("times", () => {
   it("reads WCIF timestamps as wall-clock time in the venue's zone", () => {
@@ -26,17 +28,33 @@ describe("times", () => {
 });
 
 describe("importSchedule", () => {
-  it("turns rooms into stages and round activities into blocks", () => {
+  it("keeps WCIF rooms separate from their natshelper stages", () => {
     const competition = demoCompetition("large");
     const imported = importSchedule(competition, () => 9);
     expect(imported.timeZone).toBe("Europe/Madrid");
     expect(imported.days).toEqual(["2026-11-14", "2026-11-15"]);
-    expect(imported.stages.map(stage => stage.name)).toEqual(["Rojo", "Verde", "Hall"]);
-    // First rounds run in both stages and share the suggested groups; second rounds in Rojo only, with the groups already in the WCIF.
+    expect(imported.rooms.map(room => room.name)).toEqual(["Pabellón", "Sala auxiliar"]);
+    expect(imported.rooms[0].stages.map(stage => stage.name)).toEqual(["Rojo", "Verde"]);
+    // First rounds are expanded over both stages; final child activities already carry their stage.
     expect(imported.blocks.filter(item => item.activityCode === "333-r1").map(item => item.groups)).toEqual([5, 5]);
-    expect(imported.blocks.filter(item => item.activityCode === "333-r2").map(item => [item.stageId, item.groups])).toEqual([[1, 2]]);
+    expect(imported.blocks.filter(item => item.activityCode === "333-r2").map(item => [item.roomId, item.stageId, item.groups])).toEqual([[1, 0, 2], [1, 1, 2]]);
     expect(imported.blocks[0]).toMatchObject({ start: "2026-11-14T10:00" });
-    expect(imported.activities.map(item => item.kind)).toEqual(["checkin", "lunch", "checkin", "lunch", "awards"]);
+    expect(imported.activities.map(item => item.kind)).toEqual(["checkin", "lunch", "checkin", "lunch", "setup", "awards"]);
+  });
+
+  it("reads exact repeated group codes per stage and a room without stages", () => {
+    const imported = importSchedule(stagedFixture as StoredCompetition, () => 8);
+    expect(imported.rooms).toMatchObject([
+      { id: 10, name: "Main hall", stages: [{ id: 0, name: "North", groupNamePrefix: "N" }, { id: 1, name: "South" }] },
+      { id: 20, name: "Side room", stages: [] },
+    ]);
+    expect(imported.blocks.filter(item => item.activityCode === "333-r1").map(item => [item.stageId, item.groups])).toEqual([[0, 2], [1, 2]]);
+    expect(imported.blocks.find(item => item.stageId === 0)?.groupWindows).toEqual([
+      { start: "2026-12-05T09:00", end: "2026-12-05T09:25" },
+      { start: "2026-12-05T09:25", end: "2026-12-05T10:00" },
+    ]);
+    expect(imported.blocks.find(item => item.activityCode === "444bf-r1")).toMatchObject({ roomId: 20, stageId: undefined, groups: 2 });
+    expect(imported.activities.map(item => item.kind)).toEqual(["multi", "setup"]);
   });
 
   it("keeps the groups already in the WCIF and reads multi-blind attempts", () => {

@@ -1,39 +1,46 @@
 /*
- * PRO mode schedule: stages (WCIF rooms) and the time slots of every round, split into
- * groups the way CompScript's CreateGroups does (https://github.com/cubingusa/compscript, MIT).
- * Times are wall-clock times in the venue's time zone, "YYYY-MM-DDTHH:mm", so they compare as text.
+ * PRO schedule. WCIF rooms are physical spaces; stages are optional subdivisions
+ * declared by natshelper. Times are venue-local wall-clock values, YYYY-MM-DDTHH:mm.
  */
-import type { StoredCompetition, WcifActivity } from "@/lib/competition-store";
+import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
 
 export type LocalTime = string;
 export type TimeWindow = { start: LocalTime; end: LocalTime };
 
-/** A WCIF room; CompScript calls them stages when several run in parallel. */
-export type ProStage = { id: number; name: string; color: string };
+export type ProStage = { id: number; name: string; color: string; groupNamePrefix?: string };
+export type ProRoom = { id: number; name: string; color: string; stages: ProStage[] };
 
-/** One round (or one attempt of it) in one stage, split into `groups` consecutive groups of equal length. */
-export type ProRoundBlock = TimeWindow & { id: string; activityCode: string; stageId: number; groups: number };
+export type ProRoundBlock = TimeWindow & {
+  id: string;
+  activityCode: string;
+  roomId: number;
+  stageId?: number;
+  groups: number;
+  /** Exact imported child-activity windows. Omitted for visually-created equal groups. */
+  groupWindows?: TimeWindow[];
+};
 
-export const OTHER_KINDS = ["checkin", "registration", "tutorial", "lunch", "awards", "multi", "misc"] as const;
+export const OTHER_KINDS = ["checkin", "registration", "tutorial", "lunch", "awards", "multi", "setup", "misc"] as const;
 export type OtherKind = typeof OTHER_KINDS[number];
-/** Activities without groups: check-in, lunch, awards… (CompScript's CreateMiscActivity). */
-export type ProActivity = TimeWindow & { id: string; kind: OtherKind; name: string; stageId: number };
+export type ProActivity = TimeWindow & { id: string; kind: OtherKind; name: string; roomId: number; stageId?: number };
 
 export type ProSchedule = {
   timeZone: string;
   days: string[];
-  stages: ProStage[];
+  rooms: ProRoom[];
   blocks: ProRoundBlock[];
   activities: ProActivity[];
 };
 
 export type ProConfig = { enabled: boolean; schedule: ProSchedule };
 
-/** A group as the matrix sees it: number G1…Gn in time order, with its stage and times. */
-export type GroupSlot = { group: number; stageId: number; number: number; windows: TimeWindow[] };
+export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
+export type GroupSlot = { group: number; roomId: number; stageId?: number; number: number; windows: TimeWindow[] };
 
 export const STAGE_COLORS = ["#d93636", "#2f9e44", "#2563eb", "#e8a317", "#9c36b5", "#0c8599", "#f76707", "#495057"];
 
+export const ROOM_EXTENSION_ID = "org.cubingusa.natshelper.v1.Room";
+export const GROUP_EXTENSION_ID = "org.cubingusa.natshelper.v1.Group";
 const ROUND_CODE = /^([a-z0-9]+-r\d+)(?:-a(\d+))?$/;
 
 export function roundIdOf(activityCode: string) {
@@ -42,6 +49,26 @@ export function roundIdOf(activityCode: string) {
 
 function attemptOf(activityCode: string) {
   return Number(activityCode.match(ROUND_CODE)?.[2] ?? 1);
+}
+
+export function targetKey(roomId: number, stageId?: number) {
+  return `${roomId}:${stageId ?? "room"}`;
+}
+
+/** Timeline columns, in room order and then stage order. */
+export function scheduleLanes(schedule: ProSchedule): ScheduleLane[] {
+  return schedule.rooms.flatMap(room => {
+    const needsRoomLane = room.stages.length === 0 || schedule.blocks.some(block => block.roomId === room.id && block.stageId === undefined);
+    const roomLane: ScheduleLane[] = needsRoomLane ? [{ key: targetKey(room.id), roomId: room.id, name: room.name, color: room.color, roomName: room.name }] : [];
+    return [...roomLane, ...room.stages.map(stage => ({ key: targetKey(room.id, stage.id), roomId: room.id, stageId: stage.id, name: stage.name, color: stage.color, roomName: room.name }))];
+  });
+}
+
+export function laneForItem(schedule: ProSchedule, item: { roomId: number; stageId?: number }) {
+  const lanes = scheduleLanes(schedule);
+  return lanes.find(lane => lane.roomId === item.roomId && lane.stageId === item.stageId)
+    ?? lanes.find(lane => lane.roomId === item.roomId)
+    ?? lanes[0];
 }
 
 /** Minutes since 1970 on the wall clock; only differences and order matter. */
@@ -88,90 +115,138 @@ function otherKind(activityCode: string): OtherKind {
   return (OTHER_KINDS as readonly string[]).includes(kind) ? kind as OtherKind : "misc";
 }
 
-/**
- * Reads the WCIF schedule: every room becomes a stage, every round activity a block (with as
- * many groups as it already has, or `suggestedGroups` shared among its rooms), and every
- * `other-*` activity an activity.
- */
-export function importSchedule(competition: StoredCompetition, suggestedGroups: (roundId: string) => number): ProSchedule {
-  const venues = competition.schedule?.venues ?? [];
-  const timeZone = venues.find(venue => venue.timezone)?.timezone ?? "UTC";
-  const stages: ProStage[] = [];
-  const blocks: ProRoundBlock[] = [];
-  const activities: ProActivity[] = [];
-  const local = (iso: string) => isoToLocal(iso, timeZone);
-  const roomsPerRound = new Map<string, number>();
-  for (const room of venues.flatMap(venue => venue.rooms ?? [])) {
-    for (const code of new Set((room.activities ?? []).map(activity => roundIdOf(activity.activityCode)).filter(Boolean))) {
-      roomsPerRound.set(code!, (roomsPerRound.get(code!) ?? 0) + 1);
-    }
-  }
-  venues.forEach(venue => (venue.rooms ?? []).forEach(room => {
-    const stageId = room.id ?? stages.length + 1;
-    stages.push({ id: stageId, name: room.name ?? `#${stageId}`, color: room.color ?? STAGE_COLORS[stages.length % STAGE_COLORS.length] });
-    for (const activity of room.activities ?? []) {
-      const roundId = roundIdOf(activity.activityCode);
-      const window = { start: local(activity.startTime), end: local(activity.endTime) };
-      if (roundId) {
-        const groups = groupChildren(activity).length || Math.max(1, Math.ceil(suggestedGroups(roundId) / (roomsPerRound.get(roundId) ?? 1)));
-        blocks.push({ id: `b${activity.id}`, activityCode: activity.activityCode, stageId, groups, ...window });
-      } else if (activity.activityCode.startsWith("other-")) {
-        activities.push({ id: `a${activity.id}`, kind: otherKind(activity.activityCode), name: activity.name, stageId, ...window });
-      }
-    }
-  }));
-  const used = [...blocks, ...activities].map(item => dayOf(item.start));
-  const startDate = competition.schedule?.startDate;
-  const days = startDate ? dateRange(startDate, Math.max(1, competition.schedule?.numberOfDays ?? 1)) : [];
-  return { timeZone, days: [...new Set([...days, ...used])].sort(), stages, blocks: sortByTime(blocks), activities: sortByTime(activities) };
+function record(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function extension(extensions: WcifExtension[] | undefined, id: string) {
+  return extensions?.find(item => item.id === id)?.data;
+}
+
+function stagesOf(room: WcifRoom): ProStage[] {
+  const data = extension(room.extensions, ROOM_EXTENSION_ID);
+  const stages = record(data) && Array.isArray(data.stages) ? data.stages : [];
+  return stages.flatMap((value, index): ProStage[] => {
+    if (!record(value) || typeof value.id !== "number") return [];
+    return [{
+      id: value.id,
+      name: typeof value.name === "string" ? value.name : `#${value.id}`,
+      color: typeof value.color === "string" ? value.color : STAGE_COLORS[index % STAGE_COLORS.length],
+      ...(typeof value.groupNamePrefix === "string" ? { groupNamePrefix: value.groupNamePrefix } : {}),
+    }];
+  });
+}
+
+function stageIdOf(activity: WcifActivity) {
+  const data = extension(activity.extensions, GROUP_EXTENSION_ID);
+  return record(data) && typeof data.stageId === "number" ? data.stageId : undefined;
 }
 
 function groupChildren(activity: WcifActivity) {
-  return (activity.childActivities ?? []).filter(child => /-g\d+/.test(child.activityCode));
+  return (activity.childActivities ?? []).filter(child => /-g\d+$/.test(child.activityCode));
+}
+
+function childWindow(activity: WcifActivity, timeZone: string): TimeWindow | undefined {
+  if (!activity.startTime || !activity.endTime || Number.isNaN(Date.parse(activity.startTime)) || Number.isNaN(Date.parse(activity.endTime))) return undefined;
+  return { start: isoToLocal(activity.startTime, timeZone), end: isoToLocal(activity.endTime, timeZone) };
+}
+
+/** Import rooms, their natshelper stages, exact group children, and room-wide activities. */
+export function importSchedule(competition: StoredCompetition, suggestedGroups: (roundId: string) => number): ProSchedule {
+  const venues = competition.schedule?.venues ?? [];
+  const timeZone = venues.find(venue => venue.timezone)?.timezone ?? "UTC";
+  const sourceRooms = venues.flatMap(venue => venue.rooms ?? []);
+  let fallbackRoomId = Math.max(0, ...sourceRooms.map(room => room.id ?? 0)) + 1;
+  const roomPairs = sourceRooms.map((source, index) => {
+    const id = source.id ?? fallbackRoomId++;
+    return { source, room: { id, name: source.name ?? `#${id}`, color: source.color ?? STAGE_COLORS[index % STAGE_COLORS.length], stages: stagesOf(source) } satisfies ProRoom };
+  });
+  const rooms = roomPairs.map(pair => pair.room);
+  const blocks: ProRoundBlock[] = [];
+  const activities: ProActivity[] = [];
+  const local = (iso: string) => isoToLocal(iso, timeZone);
+
+  const targetCountByRound = new Map<string, number>();
+  for (const { source, room } of roomPairs) {
+    for (const roundId of new Set((source.activities ?? []).map(activity => roundIdOf(activity.activityCode)).filter(Boolean))) {
+      targetCountByRound.set(roundId!, (targetCountByRound.get(roundId!) ?? 0) + Math.max(1, room.stages.length));
+    }
+  }
+
+  for (const { source, room } of roomPairs) {
+    for (const activity of source.activities ?? []) {
+      const roundId = roundIdOf(activity.activityCode);
+      const parentWindow = { start: local(activity.startTime), end: local(activity.endTime) };
+      if (roundId) {
+        const children = groupChildren(activity);
+        if (children.length) {
+          const byStage = new Map<number | undefined, WcifActivity[]>();
+          for (const child of children) {
+            const stageId = stageIdOf(child);
+            byStage.set(stageId, [...(byStage.get(stageId) ?? []), child]);
+          }
+          for (const [stageId, ownChildren] of byStage) {
+            const exact = ownChildren.map(child => childWindow(child, timeZone));
+            const groupWindows = exact.every(Boolean) ? sortByTime(exact as TimeWindow[]) : undefined;
+            const window = groupWindows?.length ? { start: groupWindows[0].start, end: groupWindows.at(-1)!.end } : parentWindow;
+            blocks.push({ id: `b${activity.id}-${stageId ?? "room"}`, activityCode: activity.activityCode, roomId: room.id, stageId, groups: ownChildren.length, groupWindows, ...window });
+          }
+        } else {
+          const targets = room.stages.length ? room.stages.map(stage => stage.id) : [undefined];
+          const groups = Math.max(1, Math.ceil(suggestedGroups(roundId) / (targetCountByRound.get(roundId) ?? 1)));
+          for (const stageId of targets) blocks.push({ id: `b${activity.id}-${stageId ?? "room"}`, activityCode: activity.activityCode, roomId: room.id, stageId, groups, ...parentWindow });
+        }
+      } else if (activity.activityCode.startsWith("other-")) {
+        activities.push({ id: `a${activity.id}`, kind: otherKind(activity.activityCode), name: activity.name, roomId: room.id, ...parentWindow });
+      }
+    }
+  }
+  const used = [...blocks, ...activities].map(item => dayOf(item.start));
+  const startDate = competition.schedule?.startDate;
+  const days = startDate ? dateRange(startDate, Math.max(1, competition.schedule?.numberOfDays ?? 1)) : [];
+  return { timeZone, days: [...new Set([...days, ...used])].sort(), rooms, blocks: sortByTime(blocks), activities: sortByTime(activities) };
 }
 
 export function sortByTime<T extends TimeWindow>(items: T[]) {
   return [...items].sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
 }
 
-/** Equal parts of a block, like CreateGroups. */
-export function splitBlock(block: TimeWindow & { groups: number }): TimeWindow[] {
+/** Exact imported windows when present; otherwise equal parts like CompScript CreateGroups. */
+export function splitBlock(block: TimeWindow & { groups: number; groupWindows?: TimeWindow[] }): TimeWindow[] {
+  if (block.groupWindows?.length === block.groups) return sortByTime(block.groupWindows);
   const count = Math.max(1, block.groups);
   const start = toMinutes(block.start);
   const length = (toMinutes(block.end) - start) / count;
   return Array.from({ length: count }, (_, index) => ({ start: fromMinutes(start + index * length), end: fromMinutes(start + (index + 1) * length) }));
 }
 
-/**
- * The groups of every round. Within a stage, groups are numbered in time order (Rojo 1, Rojo 2…);
- * the round's G1…Gn follow start time, then stage order, so parallel groups sit side by side.
- * Later attempts (multi-blind) add time windows to the groups with the same stage and number.
- */
+/** Global G numbers follow time then room/stage order; `number` remains local to the lane. */
 export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
-  const stageOrder = new Map(schedule.stages.map((stage, index) => [stage.id, index]));
+  const lanes = scheduleLanes(schedule);
+  const laneOrder = new Map(lanes.map((lane, index) => [lane.key, index]));
   const byRound = new Map<string, ProRoundBlock[]>();
   for (const block of schedule.blocks) {
     const roundId = roundIdOf(block.activityCode);
-    if (roundId && stageOrder.has(block.stageId)) byRound.set(roundId, [...(byRound.get(roundId) ?? []), block]);
+    if (roundId && laneOrder.has(targetKey(block.roomId, block.stageId))) byRound.set(roundId, [...(byRound.get(roundId) ?? []), block]);
   }
   const result = new Map<string, GroupSlot[]>();
   for (const [roundId, blocks] of byRound) {
     const parts = (attempt: number) => {
-      const numbered: Array<{ stageId: number; number: number; window: TimeWindow }> = [];
-      for (const stage of schedule.stages) {
+      const numbered: Array<{ roomId: number; stageId?: number; number: number; window: TimeWindow }> = [];
+      for (const lane of lanes) {
         let number = 0;
-        for (const block of sortByTime(blocks.filter(item => item.stageId === stage.id && attemptOf(item.activityCode) === attempt))) {
-          for (const window of splitBlock(block)) numbered.push({ stageId: stage.id, number: ++number, window });
+        for (const block of sortByTime(blocks.filter(item => targetKey(item.roomId, item.stageId) === lane.key && attemptOf(item.activityCode) === attempt))) {
+          for (const window of splitBlock(block)) numbered.push({ roomId: lane.roomId, stageId: lane.stageId, number: ++number, window });
         }
       }
       return numbered;
     };
     const slots = parts(1)
-      .sort((a, b) => a.window.start.localeCompare(b.window.start) || stageOrder.get(a.stageId)! - stageOrder.get(b.stageId)! || a.number - b.number)
-      .map((part, index): GroupSlot => ({ group: index + 1, stageId: part.stageId, number: part.number, windows: [part.window] }));
+      .sort((a, b) => a.window.start.localeCompare(b.window.start) || laneOrder.get(targetKey(a.roomId, a.stageId))! - laneOrder.get(targetKey(b.roomId, b.stageId))! || a.number - b.number)
+      .map((part, index): GroupSlot => ({ group: index + 1, roomId: part.roomId, stageId: part.stageId, number: part.number, windows: [part.window] }));
     const attempts = [...new Set(blocks.map(block => attemptOf(block.activityCode)))].filter(attempt => attempt > 1).sort();
     for (const attempt of attempts) {
-      for (const part of parts(attempt)) slots.find(slot => slot.stageId === part.stageId && slot.number === part.number)?.windows.push(part.window);
+      for (const part of parts(attempt)) slots.find(slot => slot.roomId === part.roomId && slot.stageId === part.stageId && slot.number === part.number)?.windows.push(part.window);
     }
     result.set(roundId, slots);
   }
@@ -185,25 +260,24 @@ export function slotsOverlap(a: GroupSlot, b: GroupSlot) {
 export type ScheduleProblemCode = "bad-times" | "unknown-stage" | "unscheduled" | "stage-overlap" | "before-previous-round";
 export type ScheduleProblem = { code: ScheduleProblemCode; severity: "error" | "warning"; itemId?: string; roundId?: string; otherRoundId?: string };
 
-/** What is wrong with the schedule itself, before anyone is assigned. */
 export function scheduleProblems(schedule: ProSchedule, roundIds: string[]): ScheduleProblem[] {
   const problems: ScheduleProblem[] = [];
-  const stageIds = new Set(schedule.stages.map(stage => stage.id));
+  const validTargets = new Set(scheduleLanes(schedule).map(lane => lane.key));
   for (const item of [...schedule.blocks, ...schedule.activities]) {
     if (item.end <= item.start) problems.push({ code: "bad-times", severity: "error", itemId: item.id, roundId: "activityCode" in item ? roundIdOf(item.activityCode) : undefined });
-    if (!stageIds.has(item.stageId)) problems.push({ code: "unknown-stage", severity: "error", itemId: item.id });
+    const room = schedule.rooms.find(candidate => candidate.id === item.roomId);
+    const valid = room && (item.stageId === undefined || room.stages.some(stage => stage.id === item.stageId));
+    if (!valid || ("activityCode" in item && !validTargets.has(targetKey(item.roomId, item.stageId)))) problems.push({ code: "unknown-stage", severity: "error", itemId: item.id });
   }
   const scheduled = new Set(schedule.blocks.map(block => roundIdOf(block.activityCode)));
   for (const roundId of roundIds) if (!scheduled.has(roundId)) problems.push({ code: "unscheduled", severity: "warning", roundId });
-  // Different rounds sharing a stage at the same time (blind events often do, on purpose).
   const blocks = sortByTime(schedule.blocks);
   for (let i = 0; i < blocks.length; i += 1) {
     for (let j = i + 1; j < blocks.length && blocks[j].start < blocks[i].end; j += 1) {
       const [a, b] = [blocks[i], blocks[j]];
-      if (a.stageId === b.stageId && roundIdOf(a.activityCode) !== roundIdOf(b.activityCode)) problems.push({ code: "stage-overlap", severity: "warning", itemId: b.id, roundId: roundIdOf(b.activityCode), otherRoundId: roundIdOf(a.activityCode) });
+      if (targetKey(a.roomId, a.stageId) === targetKey(b.roomId, b.stageId) && roundIdOf(a.activityCode) !== roundIdOf(b.activityCode)) problems.push({ code: "stage-overlap", severity: "warning", itemId: b.id, roundId: roundIdOf(b.activityCode), otherRoundId: roundIdOf(a.activityCode) });
     }
   }
-  // A round cannot start before the previous round of its event has finished.
   const span = new Map<string, TimeWindow>();
   for (const block of blocks) {
     const roundId = roundIdOf(block.activityCode)!;
@@ -218,18 +292,36 @@ export function scheduleProblems(schedule: ProSchedule, roundIds: string[]): Sch
   return problems;
 }
 
-/** A fresh id that does not clash with imported ones (`b123`, `a45`). */
 export function newItemId(prefix: "b" | "a", existing: Array<{ id: string }>) {
   let index = existing.length + 1;
   while (existing.some(item => item.id === `${prefix}n${index}`)) index += 1;
   return `${prefix}n${index}`;
 }
 
-export function newStageId(stages: ProStage[]) {
-  return Math.max(0, ...stages.map(stage => stage.id)) + 1;
+export function newRoomId(rooms: ProRoom[]) {
+  return Math.max(0, ...rooms.map(room => room.id)) + 1;
 }
 
-/** Rounds with the number of groups the schedule gives them; unscheduled rounds keep theirs. */
+export function newStageId(rooms: ProRoom[]) {
+  return Math.max(0, ...rooms.flatMap(room => room.stages.map(stage => stage.id))) + 1;
+}
+
+/** Convert phase-1 drafts where every room was incorrectly stored as a stage. */
+export function normalizeProSchedule(value: unknown): ProSchedule {
+  const schedule = record(value) ? value : {};
+  const blocks = Array.isArray(schedule.blocks) ? schedule.blocks as Array<Record<string, unknown>> : [];
+  const activities = Array.isArray(schedule.activities) ? schedule.activities as Array<Record<string, unknown>> : [];
+  if (Array.isArray(schedule.rooms)) return schedule as unknown as ProSchedule;
+  const legacyStages = Array.isArray(schedule.stages) ? schedule.stages as ProStage[] : [];
+  return {
+    timeZone: typeof schedule.timeZone === "string" ? schedule.timeZone : "UTC",
+    days: Array.isArray(schedule.days) ? schedule.days.filter((day): day is string => typeof day === "string") : [],
+    rooms: legacyStages.map(stage => ({ id: stage.id, name: stage.name, color: stage.color, stages: [] })),
+    blocks: blocks.map(block => ({ ...block, roomId: Number(block.stageId), stageId: undefined })) as ProRoundBlock[],
+    activities: activities.map(activity => ({ ...activity, roomId: Number(activity.stageId), stageId: undefined })) as ProActivity[],
+  };
+}
+
 export function withScheduledGroups<T extends { id: string; groups: number }>(rounds: T[], slots: Map<string, GroupSlot[]>): T[] {
   return rounds.map(round => slots.has(round.id) ? { ...round, groups: slots.get(round.id)!.length } : round);
 }
