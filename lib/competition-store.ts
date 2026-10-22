@@ -41,8 +41,9 @@ export type WcifRound = {
   results?: Array<{ personId: number; ranking?: number | null }>;
 };
 export type WcifEvent = { id: string; rounds?: WcifRound[] };
-export type WcifRoom = { id?: number; name?: string; activities?: unknown[] };
-export type WcifVenue = { id?: number; name?: string; countryIso2?: string; rooms?: WcifRoom[] };
+export type WcifActivity = { id: number; name: string; activityCode: string; startTime: string; endTime: string; childActivities?: WcifActivity[] };
+export type WcifRoom = { id?: number; name?: string; color?: string; activities?: WcifActivity[] };
+export type WcifVenue = { id?: number; name?: string; countryIso2?: string; timezone?: string; rooms?: WcifRoom[] };
 
 export type StoredCompetition = {
   id: string;
@@ -50,7 +51,7 @@ export type StoredCompetition = {
   shortName?: string;
   persons?: WcifPerson[];
   events?: WcifEvent[];
-  schedule?: { venues?: WcifVenue[] };
+  schedule?: { startDate?: string; numberOfDays?: number; venues?: WcifVenue[] };
   importedAt?: string;
 };
 

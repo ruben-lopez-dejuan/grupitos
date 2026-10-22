@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Project handoff
+
+Before starting, read [`HANDOFF.md`](HANDOFF.md) (current state, the user's preferences and next steps, in Spanish) and [`docs/MODO_PRO.md`](docs/MODO_PRO.md) (PRO mode design). Commit and push only when the user asks, to `main`, never including `.claude/`.

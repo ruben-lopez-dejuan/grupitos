@@ -1,6 +1,7 @@
 import { normalizeAssignments, type GeneratedAssignment } from "@/lib/assignments";
 import type { AssignmentOptions } from "@/lib/group-generator";
 import type { PeopleSettings } from "@/lib/people";
+import type { ProConfig } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 
@@ -11,6 +12,8 @@ export type WorkspaceSettings = {
   options: AssignmentOptions;
   people: PeopleSettings;
   printing: PrintingOptions;
+  /** PRO mode for large competitions; absent until it is first switched on. */
+  pro?: ProConfig;
 };
 
 export type Draft = {
@@ -33,6 +36,8 @@ export function generationSignature(settings: WorkspaceSettings) {
     rounds: settings.rounds.filter(round => round.enabled).map(({ id, groups, scramblers, runners }) => ({ id, groups, scramblers, runners })),
     options: settings.options,
     people: settings.people,
+    // Stage names and colours, and activities without groups, do not change the proposal.
+    pro: settings.pro?.enabled ? { stages: settings.pro.schedule.stages.map(stage => stage.id), blocks: settings.pro.schedule.blocks } : undefined,
   });
 }
 

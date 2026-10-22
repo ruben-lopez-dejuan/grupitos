@@ -8,6 +8,7 @@ import { GroupReview } from "@/components/group-review";
 import { Hint } from "@/components/hint";
 import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
+import { ProSchedulePanel } from "@/components/pro-schedule-panel";
 import { SortingRuleIcon } from "@/components/rule-icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TASK_CODES, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
@@ -16,14 +17,17 @@ import { getCompetition, type StoredCompetition } from "@/lib/competition-store"
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
+import { groupSlots, importSchedule, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
 const DEFAULT_STATIONS = 12;
 
-type Tab = "zone" | "rules" | "people" | "rounds" | "review" | "print";
-const TABS: Tab[] = ["zone", "rules", "people", "rounds", "review", "print"];
+type Tab = "zone" | "schedule" | "rules" | "people" | "rounds" | "review" | "print";
+const TABS: Tab[] = ["zone", "schedule", "rules", "people", "rounds", "review", "print"];
+/** Only in PRO mode. */
+const PRO_TABS: Tab[] = ["schedule"];
 const PHOTOS_KEY = "wca-easy-groups:show-photos";
 
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
@@ -107,6 +111,11 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
+  // A PRO tab in the URL while PRO is off shows the first tab.
+  useEffect(() => {
+    if (settings && !settings.pro?.enabled && PRO_TABS.includes(tab)) setTab("zone");
+  }, [settings, tab]);
+
   const changeTab = useCallback((next: Tab) => {
     setTab(next);
     history.replaceState(null, "", `#${next}`);
@@ -138,11 +147,15 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   }, [settings, t]);
   const photos = useMemo(() => Object.fromEntries((competition?.persons ?? []).map(person => [personKey(person), person.avatar?.thumbUrl])), [competition]);
   const signature = useMemo(() => settings ? generationSignature(settings) : "", [settings]);
+  const pro = settings?.pro?.enabled ? settings.pro : undefined;
+  const slots = useMemo(() => pro ? groupSlots(pro.schedule) : undefined, [pro]);
+  /** Rounds as generated: in PRO mode, scheduled rounds take their groups from the schedule. */
+  const effectiveRounds = useMemo(() => settings ? slots ? withScheduledGroups(settings.rounds, slots) : settings.rounds : [], [settings, slots]);
   const roundRules = useMemo(() => {
     if (!settings) return {};
     const { people: roles, options, stations, zoneMode } = settings;
     const noNormalTasks = new Set([...(roles.roles.dataentry ?? []), ...(options.normalTasksForDelegatesAndOrganizers ? [] : [...(roles.roles.delegate ?? []), ...(roles.roles["trainee-delegate"] ?? []), ...(roles.roles.organizer ?? [])])]);
-    return Object.fromEntries(settings.rounds.map(round => {
+    return Object.fromEntries(effectiveRounds.map(round => {
       const competitors = proposal.filter(item => item.roundId === round.id && item.inRound).length || round.competitors;
       return [round.id, {
         groups: round.groups,
@@ -156,21 +169,28 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         noNormalTasks,
       } satisfies RoundRules];
     }));
-  }, [settings, proposal]);
+  }, [settings, proposal, effectiveRounds]);
   const handleReviewChange = useCallback((next: GeneratedAssignment[]) => setProposal(next), []);
 
   if (loading) return <main className="workspace-loading"><div /><p>{t("workspace.loading")}</p></main>;
   if (!competition || !settings) return <main className="missing-competition"><div><p className="kicker">{t("workspace.missingKicker")}</p><h1>{t("workspace.missingTitle")}</h1><p>{t("workspace.missingText")}</p><Link className="button primary" href="/dashboard">{t("workspace.backToList")}</Link></div></main>;
 
-  const { stations, zoneMode, rounds, options } = settings;
+  const { stations, zoneMode, options } = settings;
+  const rounds = effectiveRounds;
   const update = (change: Partial<WorkspaceSettings>) => setSettings(current => current && { ...current, ...change });
   const setOption = (key: OptionKey, value: boolean) => update({ options: { ...options, [key]: value } });
   const changeZone = (next: { stations?: number; zoneMode?: ZoneMode }) => {
     const nextStations = next.stations ?? stations;
     const nextMode = next.zoneMode ?? zoneMode;
-    update({ stations: nextStations, zoneMode: nextMode, rounds: resuggestRounds(rounds, nextStations, nextMode) });
+    update({ stations: nextStations, zoneMode: nextMode, rounds: resuggestRounds(settings.rounds, nextStations, nextMode) });
   };
-  const updateRound = (id: string, change: Partial<RoundConfig>) => update({ rounds: rounds.map(round => round.id === id ? { ...round, ...change } : round) });
+  const updateRound = (id: string, change: Partial<RoundConfig>) => update({ rounds: settings.rounds.map(round => round.id === id ? { ...round, ...change } : round) });
+  const freshSchedule = (): ProSchedule => importSchedule(competition, roundId => settings.rounds.find(round => round.id === roundId)?.groups ?? 1);
+  const setPro = (enabled: boolean) => {
+    update({ pro: { enabled, schedule: settings.pro?.schedule ?? freshSchedule() } });
+    if (!enabled && PRO_TABS.includes(tab)) changeTab("zone");
+  };
+  const setSchedule = (schedule: ProSchedule) => update({ pro: { enabled: true, schedule } });
 
   const activeRounds = rounds.filter(round => round.enabled);
   const firstRounds = rounds.filter(round => round.roundNumber === 1);
@@ -183,7 +203,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -193,7 +213,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   // Excluded rounds (known competitors, switched off) go to the bottom, greyed out.
   const isExcluded = (round: RoundConfig) => round.competitorsKnown && round.competitors > 0 && !round.enabled;
   const orderedRounds = [...shownRounds.filter(round => !isExcluded(round)), ...shownRounds.filter(isExcluded)];
-  const tabs: Array<{ id: Tab; label: string; done?: boolean; disabled?: boolean }> = TABS.map(id => ({
+  const tabs: Array<{ id: Tab; label: string; done?: boolean; disabled?: boolean }> = TABS.filter(id => pro || !PRO_TABS.includes(id)).map(id => ({
     id,
     label: t(keyOf("tabs", id)),
     ...(id === "review" ? { done: proposal.length > 0, disabled: proposal.length === 0 } : {}),
@@ -213,7 +233,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     </aside>
 
     <section className="workspace-main">
-      <header className="workspace-topbar"><div><Link href="/dashboard">{t("workspace.breadcrumb")}</Link><span>/</span><strong>{competition.name}</strong></div><div className="workspace-topbar-actions"><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /></div></header>
+      <header className="workspace-topbar"><div><Link href="/dashboard">{t("workspace.breadcrumb")}</Link><span>/</span><strong>{competition.name}</strong></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
         {tabs.map(item => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}>{item.label}</button>)}
       </nav>
@@ -231,6 +251,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
             {roomCount > 1 && <p className="setup-note">{t("zone.rooms", { count: roomCount })}</p>}
           </section>
         </>}
+
+        {tab === "schedule" && pro && <ProSchedulePanel schedule={pro.schedule} rounds={settings.rounds} onChange={setSchedule} onReimport={() => setSchedule(freshSchedule())} />}
 
         {tab === "rules" && <section className="rules-panel">
           <div className="setup-heading"><h2>{t("rules.title")}</h2></div>
@@ -266,7 +288,9 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                     <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })} · {round.eventId}</small></div></div>
                     <span className="round-number">{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
                     <span>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
-                    <div className="group-cell"><Stepper label={t("rounds.stepperGroups")} value={round.groups} min={1} big disabled={excluded} onChange={groups => updateRound(round.id, { groups })} /><small>{perGroup}</small></div>
+                    <div className="group-cell">{slots?.has(round.id)
+                      ? <button type="button" className="scheduled-groups" title={t("rounds.fromSchedule")} onClick={() => changeTab("schedule")}><strong>{round.groups}</strong><span>{pro!.schedule.stages.filter(stage => slots.get(round.id)!.some(slot => slot.stageId === stage.id)).map(stage => <i key={stage.id} style={{ background: stage.color }} title={`${stage.name}: ${slots.get(round.id)!.filter(slot => slot.stageId === stage.id).length}`} />)}</span></button>
+                      : <Stepper label={t("rounds.stepperGroups")} value={round.groups} min={1} big disabled={excluded} onChange={groups => updateRound(round.id, { groups })} />}<small>{perGroup}</small></div>
                     <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={round.scramblers} min={0} disabled={excluded} onChange={scramblers => updateRound(round.id, { scramblers })} />
                     <Stepper label={t("rounds.stepperRunners")} variant="runner" value={round.runners} min={0} disabled={excluded || !options.assignJudges} onChange={runners => updateRound(round.id, { runners })} />
                     {!canGenerate
@@ -283,7 +307,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         {tab === "review" && <>
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} />}
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} stages={pro?.schedule.stages} />}
         </>}
 
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} onChange={printing => update({ printing })} />}

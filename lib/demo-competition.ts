@@ -1,4 +1,4 @@
-import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
+import type { StoredCompetition, WcifActivity, WcifPerson, WcifRoom } from "@/lib/competition-store";
 
 const FIRST_NAMES = ["Lucía", "Hugo", "Martina", "Mateo", "Sofía", "Leo", "Julia", "Daniel", "Paula", "Pablo", "Valeria", "Álvaro", "Emma", "Adrián", "Carla", "Mario", "Sara", "Diego", "Noa", "Marcos", "Irene", "Javier", "Elena", "Bruno", "Claudia", "Iker", "Alba", "Nicolás", "Laia", "Gonzalo"];
 const LAST_NAMES = ["García", "Martínez", "López", "Sánchez", "Pérez", "Gómez", "Ruiz", "Díaz", "Moreno", "Muñoz", "Álvarez", "Romero", "Navarro", "Torres", "Domínguez", "Vázquez", "Ramos", "Gil", "Serrano", "Blanco", "Molina", "Ortega", "Castro", "Rubio", "Marín", "Sanz", "Iglesias", "Medina", "Garrido", "Cortés"];
@@ -66,8 +66,53 @@ export function buildDemoCompetition({ id, name, people, events, newcomerShare =
         results: [],
       })),
     })),
-    schedule: { venues: [{ id: 1, name: "Recinto de prueba", countryIso2: "ES", rooms: [{ id: 1, name: "Sala principal", activities: [] }] }] },
+    schedule: demoSchedule(events, people > 100),
   };
+}
+
+const DEMO_START = "2026-11-14";
+/** Minutes per first round, roughly proportional to how slow the event is. */
+const ROUND_MINUTES: Record<string, number> = { "333": 110, "222": 70, "444": 90, "555": 80, "333oh": 70, pyram: 70, skewb: 55, clock: 50, minx: 70, sq1: 40 };
+
+/**
+ * A two-day WCIF schedule in Madrid time: first rounds in every main stage (two in large
+ * competitions), second rounds in the first stage only, plus check-in, lunch and awards.
+ * First rounds have no groups yet, as in a schedule before groups are made; second rounds do.
+ */
+function demoSchedule(events: string[], twoStages: boolean): StoredCompetition["schedule"] {
+  let nextId = 1;
+  const stages: WcifRoom[] = (twoStages ? [{ name: "Rojo", color: "#d93636" }, { name: "Verde", color: "#2f9e44" }] : [{ name: "Sala principal", color: "#2563eb" }]).map((room, index) => ({ id: index + 1, ...room, activities: [] }));
+  const hall: WcifRoom = { id: stages.length + 1, name: "Hall", color: "#495057", activities: [] };
+  // 14 November is in winter time (UTC+1).
+  const iso = (day: number, minutes: number) => new Date(Date.parse(`2026-11-${14 + day}T00:00:00+01:00`) + minutes * 60000).toISOString().replace(".000", "");
+  const add = (room: WcifRoom, activityCode: string, name: string, day: number, from: number, length: number, groups = 0) => {
+    const id = nextId++;
+    const childActivities = Array.from({ length: groups }, (_, index) => ({ id: nextId++, name: `${name} G${index + 1}`, activityCode: `${activityCode}-g${index + 1}`, startTime: iso(day, from + (index * length) / groups), endTime: iso(day, from + ((index + 1) * length) / groups) }));
+    room.activities!.push({ id, name, activityCode, startTime: iso(day, from), endTime: iso(day, from + length), childActivities } satisfies WcifActivity);
+  };
+  const half = Math.ceil(events.length / 2);
+  const firstRounds = [events.slice(0, half), events.slice(half)];
+  let finalsAt = 0;
+  firstRounds.forEach((dayEvents, day) => {
+    add(hall, "other-checkin", "Check-in", day, 9 * 60 + 30, 30);
+    let at = 10 * 60;
+    dayEvents.forEach((eventId, index) => {
+      const length = Math.round((ROUND_MINUTES[eventId] ?? 60) * (twoStages ? 1 : 0.5) / 5) * 5;
+      for (const room of stages) add(room, `${eventId}-r1`, `${eventId} R1`, day, at, length);
+      at += length;
+      if (index === Math.floor(dayEvents.length / 2) - 1) {
+        add(hall, "other-lunch", "Comida", day, at, 60);
+        at += 60;
+      }
+    });
+    finalsAt = at;
+  });
+  for (const eventId of events) {
+    add(stages[0], `${eventId}-r2`, `${eventId} R2`, 1, finalsAt, 25, eventId === "333" ? 2 : 1);
+    finalsAt += 25;
+  }
+  add(hall, "other-awards", "Entrega de premios", 1, finalsAt, 30);
+  return { startDate: DEMO_START, numberOfDays: 2, venues: [{ id: 1, name: "Recinto de prueba", countryIso2: "ES", timezone: "Europe/Madrid", rooms: [...stages, hall] }] };
 }
 
 export function demoCompetition(size: DemoSize) {

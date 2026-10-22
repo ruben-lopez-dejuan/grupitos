@@ -1,0 +1,84 @@
+/* PRO mode: switch, schedule tab and stage labels in the matrix. */
+
+.pro-switch{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 6px;color:var(--muted);border:1px solid var(--line);border-radius:999px;font-size:13px;font-weight:800;letter-spacing:.06em;cursor:pointer;user-select:none}
+.pro-switch input{appearance:none;width:28px;height:16px;margin:0;background:var(--line);border-radius:999px;position:relative;cursor:pointer;transition:background .15s}
+.pro-switch input::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--surface);border-radius:50%;transition:transform .15s}
+.pro-switch input:checked{background:var(--blue)}
+.pro-switch input:checked::after{transform:translateX(12px)}
+.pro-switch input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.pro-switch.on{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 45%,var(--line))}
+
+.pro-schedule{margin-bottom:18px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.pro-heading h2{display:flex;align-items:center;gap:6px}
+
+.stage-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:14px 22px;border-bottom:1px solid var(--line)}
+.stage-chip{display:flex;align-items:center;gap:6px;padding:3px 4px 3px 6px;background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px}
+.stage-color{position:relative;width:18px;height:18px;border-radius:4px;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.stage-color input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.stage-chip input:not([type]){min-width:0;padding:3px 4px;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:4px;font:inherit;font-size:14px;font-weight:700}
+.stage-chip input:not([type]):hover,.stage-chip input:not([type]):focus{background:var(--surface);border-color:var(--line);outline:0}
+.stage-chip button{width:22px;height:22px;color:var(--muted);background:transparent;border:0;border-radius:4px;font-size:16px;cursor:pointer}
+.stage-chip button:hover{color:var(--error);background:var(--surface)}
+.stage-add{padding:6px 10px;color:var(--blue);background:transparent;border:1px dashed var(--line);border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+
+.schedule-problems{display:grid;gap:4px;margin:0;padding:12px 22px;list-style:none;border-bottom:1px solid var(--line)}
+.schedule-problems button{display:block;width:100%;padding:6px 10px;text-align:left;background:transparent;border:0;border-left:3px solid currentColor;border-radius:0 4px 4px 0;font-size:14px;cursor:pointer}
+.schedule-problems button:disabled{cursor:default}
+.schedule-problems .issue-error button{color:var(--error);background:color-mix(in srgb,var(--error) 8%,var(--surface))}
+.schedule-problems .issue-warning button{color:var(--warning);background:color-mix(in srgb,var(--warning) 9%,var(--surface))}
+
+.schedule-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
+.schedule-toolbar .round-subtabs{border-bottom:0;flex-wrap:wrap}
+.schedule-add{display:flex;gap:8px;padding:8px 22px 8px 0}
+.schedule-add .button{padding:7px 12px;font-size:14px}
+
+.schedule-body{display:grid;grid-template-columns:minmax(0,1fr) 260px;align-items:start}
+.timeline{position:relative;display:grid;padding:14px 12px 18px 8px;overflow-x:auto}
+.timeline-corner{position:sticky;left:0;background:var(--surface);z-index:2}
+.timeline-stage{position:sticky;top:0;padding:4px 8px 6px;margin:0 3px 6px;border-bottom:3px solid;font-size:14px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timeline-hours{position:relative}
+.timeline-hours span{position:absolute;right:6px;transform:translateY(-50%);color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.timeline-column{position:relative;margin:0 3px;background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);background-repeat:repeat-y;border-left:1px solid var(--line)}
+.timeline-item{position:absolute;display:flex;flex-direction:column;gap:1px;min-width:0;padding:4px 6px;overflow:hidden;text-align:left;color:var(--ink);background:color-mix(in srgb,var(--stage) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--stage) 45%,var(--line));border-left:4px solid var(--stage);border-radius:4px;cursor:pointer}
+.timeline-item:hover{background:color-mix(in srgb,var(--stage) 22%,var(--surface))}
+.timeline-item.selected{z-index:1;box-shadow:0 0 0 2px var(--blue)}
+.timeline-item.activity{background:repeating-linear-gradient(-45deg,var(--surface-subtle) 0 6px,var(--surface) 6px 12px);border-color:var(--line);border-left-color:var(--muted)}
+.timeline-item.short{flex-direction:row;align-items:center;gap:6px;padding-block:0}
+.timeline-title{display:flex;align-items:center;gap:5px;min-width:0;font-size:13px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timeline-title .cubing-icon,.timeline-title i{flex:none;font-size:15px}
+.timeline-item small{color:var(--muted);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.timeline-item .group-line{position:absolute;left:0;right:0;border-top:1px dashed color-mix(in srgb,var(--stage) 55%,transparent);pointer-events:none}
+.timeline-empty{position:absolute;top:60px;left:0;right:0;margin:0;color:var(--muted);text-align:center;font-size:14px}
+
+.schedule-editor{position:sticky;top:12px;display:grid;gap:12px;margin:14px 16px 18px 0;padding:14px;background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px}
+.schedule-editor h3{margin:0;font-size:15px}
+.schedule-editor label{display:grid;gap:4px}
+.schedule-editor label>span{color:var(--muted);font-size:13px;font-weight:700}
+.schedule-editor select,.schedule-editor input{width:100%;min-width:0;padding:7px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.schedule-editor .number-field{width:100%;background:var(--surface)}
+.schedule-editor .setup-note{margin:0}
+.editor-times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.editor-note{margin-top:-6px;color:var(--muted);font-size:13px}
+.schedule-editor .button{padding:7px 10px;font-size:14px}
+button.plain.danger{justify-self:start;color:var(--error)}
+
+.scheduled-groups{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;color:var(--ink);background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.scheduled-groups strong{font-size:18px}
+.scheduled-groups span{display:flex;gap:3px}
+.scheduled-groups i{width:9px;height:9px;border-radius:50%}
+.scheduled-groups:hover{border-color:var(--blue)}
+
+.group-stage{display:flex;align-items:center;justify-content:center;gap:4px;margin:-2px 0 3px;color:var(--muted);font-size:11px;font-weight:650;white-space:nowrap;text-transform:none}
+.group-stage i{width:7px;height:7px;flex:none;border-radius:50%}
+
+@media (max-width:900px){
+  .schedule-body{grid-template-columns:1fr}
+  .schedule-editor{position:static;margin:0 12px 16px}
+  .schedule-toolbar{flex-direction:column;align-items:stretch}
+  .schedule-add{padding:0 16px 10px}
+}
+
+.timeline-title .event-icon{width:auto;height:auto;padding:0;color:inherit;background:none;border:0;font-size:14px}
+.timeline-hours,.timeline-column{margin-top:8px}
+.timeline-item.short .timeline-title{flex:0 1 auto}
+.timeline-item.short small{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}

@@ -1,10 +1,12 @@
 /*
  * Group and staff assignment. The competitor split and the staff selection criteria follow
  * Groupifier (https://github.com/jonatanklosko/groupifier, Apache-2.0), src/logic/groups.js,
- * adapted to this app's data model, which has no schedule times. See THIRD_PARTY_NOTICES.md.
+ * adapted to this app's data model. See THIRD_PARTY_NOTICES.md. In PRO mode, groups have real times
+ * (lib/pro/schedule.ts) and nobody gets a task while busy elsewhere.
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type Task, type TaskRole } from "@/lib/assignments";
+import { overlaps, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
@@ -41,13 +43,15 @@ const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "sk
 
 type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number };
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
   zoneMode: ZoneMode;
   people: PeopleSettings;
   options: AssignmentOptions;
+  /** PRO mode: times of every group of every round. */
+  slots?: Map<string, GroupSlot[]>;
 }): GeneratedAssignment[] {
   const accepted = acceptedPeople(competition);
   const country = competitionCountry(competition);
@@ -65,6 +69,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   let othersTotalLoad = 0;
   const eventLoad = new Map<string, number>();
   const output: GeneratedAssignment[] = [];
+  /** PRO mode: when each person is already competing or working, across rounds. */
+  const busyTimes = new Map<string, TimeWindow[]>();
 
   const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0);
   const normalTasksAllowed = (key: string) => !dataEntry.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
@@ -78,12 +84,17 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const groups = splitIntoGroups(competitors, round.groups, firstRound ? options.sortingRule : "ranks", round.eventId);
     if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)));
 
+    const roundSlots = slots?.get(round.id);
+    const windowsOf = (group: number) => roundSlots?.find(slot => slot.group === group)?.windows ?? [];
+    const markBusy = (key: string, group: number) => busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windowsOf(group)]);
+    const busyDuring = (key: string, group: number) => windowsOf(group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
     const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     groups.forEach((members, groupIndex) => {
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
         rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stations ? index + 1 : undefined });
+        markBusy(key, groupIndex + 1);
       });
     });
     const rowFor = (person: WcifPerson) => {
@@ -92,11 +103,20 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       return rows.get(key)!;
     };
     const ownGroup = (key: string) => rows.get(key)?.tasks.find(task => task.role === "competitor")?.group;
-    const freeIn = (key: string, group: number) => !rows.get(key)?.tasks.some(task => task.group === group);
+    const freeIn = (key: string, group: number) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group);
     const roundLoad = (key: string) => rows.get(key)?.tasks.filter(task => task.role !== "competitor").length ?? 0;
     const load = (key: string) => globalLoad.get(key) ?? 0;
     const loadInEvent = (key: string) => eventLoad.get(`${key}|${round.eventId}`) ?? 0;
-    const beforeOwn = (key: string, group: number) => options.avoidBeforeOwnGroup && ownGroup(key) === group + 1 ? 1 : 0;
+    // With times, "right before" means the own group starts within ten minutes of this one ending.
+    const rightBefore = (own: number, group: number) => {
+      const [ownStart, end] = [windowsOf(own)[0]?.start, windowsOf(group)[0]?.end];
+      if (!roundSlots) return own === group + 1;
+      return !!ownStart && !!end && toMinutes(ownStart) >= toMinutes(end) && toMinutes(ownStart) - toMinutes(end) <= 10;
+    };
+    const beforeOwn = (key: string, group: number) => {
+      const own = ownGroup(key);
+      return options.avoidBeforeOwnGroup && own !== undefined && rightBefore(own, group) ? 1 : 0;
+    };
     const registeredForEvent = (person: WcifPerson) => !!person.registration?.eventIds?.includes(round.eventId);
     const hasResult = (person: WcifPerson) => seedResult(person, round.eventId) !== undefined;
     const youngerThan10 = (person: WcifPerson) => (ageOf(person) ?? 99) < 10 ? 1 : 0;
@@ -105,6 +125,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const assign = (person: WcifPerson, group: number, role: TaskRole) => {
       const row = rowFor(person);
       row.tasks = sortTasks([...row.tasks, { group, role }]);
+      markBusy(row.key, group);
       globalLoad.set(row.key, load(row.key) + 1);
       if (!staff.has(row.key) && (role === "judge" || role === "scrambler" || role === "runner")) othersTotalLoad += 1;
       eventLoad.set(`${row.key}|${round.eventId}`, loadInEvent(row.key) + 1);

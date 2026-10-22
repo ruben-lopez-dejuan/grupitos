@@ -1,4 +1,5 @@
 import { competingGroup, competingGroups, duties, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
+import { slotsOverlap, type GroupSlot } from "@/lib/pro/schedule";
 import { judgesNeeded } from "@/lib/rounds";
 
 /**
@@ -23,7 +24,8 @@ export type IssueCode =
   | "missing-delegate"
   | "missing-dataentry"
   | "scrambler-without-result"
-  | "role-with-normal-task";
+  | "role-with-normal-task"
+  | "time-overlap";
 
 export type Issue = {
   key: string;
@@ -38,7 +40,7 @@ export type Issue = {
 };
 
 /** `task` is a task role id and `names` a list of people; the interface translates both. */
-export type IssueParams = { name?: string; group?: number; groups?: number[]; total?: number; count?: number; need?: number; station?: number; task?: string; names?: string[] };
+export type IssueParams = { name?: string; group?: number; groups?: number[]; total?: number; count?: number; need?: number; station?: number; task?: string; names?: string[]; otherRound?: string; otherGroup?: number; otherTask?: string };
 
 export type RoundRules = {
   groups: number;
@@ -130,6 +132,38 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
   }
 
   return issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0));
+}
+
+/**
+ * PRO mode: tasks of one person whose groups overlap in time, in this round or across rounds
+ * (parallel stages, an event in another room). Each clash is reported on both tasks.
+ */
+export function validateTimes(assignments: GeneratedAssignment[], slots: Map<string, GroupSlot[]>): Issue[] {
+  type Busy = { item: GeneratedAssignment; group: number; role: string; slot: GroupSlot };
+  const byPerson = new Map<string, Busy[]>();
+  for (const item of assignments) {
+    for (const task of item.tasks) {
+      const slot = slots.get(item.roundId)?.find(candidate => candidate.group === task.group);
+      if (slot) byPerson.set(item.personId, [...(byPerson.get(item.personId) ?? []), { item, group: task.group, role: task.role, slot }]);
+    }
+  }
+  const issues = new Map<string, Issue>();
+  const add = (busy: Busy, other: Busy) => {
+    const key = `${busy.item.roundId}:time-overlap:${busy.item.id}:${busy.group}`;
+    if (!issues.has(key)) issues.set(key, { key, severity: "error", code: "time-overlap", roundId: busy.item.roundId, group: busy.group, assignmentId: busy.item.id, params: { name: busy.item.name, task: busy.role, group: busy.group, otherRound: other.item.roundId, otherGroup: other.group, otherTask: other.role } });
+  };
+  for (const tasks of byPerson.values()) {
+    for (let i = 0; i < tasks.length; i += 1) {
+      for (let j = i + 1; j < tasks.length; j += 1) {
+        if (tasks[i].item.roundId === tasks[j].item.roundId && tasks[i].group === tasks[j].group) continue;
+        if (slotsOverlap(tasks[i].slot, tasks[j].slot)) {
+          add(tasks[i], tasks[j]);
+          add(tasks[j], tasks[i]);
+        }
+      }
+    }
+  }
+  return [...issues.values()];
 }
 
 export function countBySeverity(issues: Issue[]) {

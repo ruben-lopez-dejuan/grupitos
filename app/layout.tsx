@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "@cubing/icons/css";
 import "./globals.css";
 import "./product.css";
+import "./pro.css";
 import { I18nProvider } from "@/components/i18n";
 import { getI18n } from "@/lib/i18n/server";
 

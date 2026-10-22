@@ -8,7 +8,8 @@ import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import { applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
-import { countBySeverity, SEVERITY_ORDER, validateRound, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
+import { clockOf, type GroupSlot, type ProStage } from "@/lib/pro/schedule";
+import { countBySeverity, SEVERITY_ORDER, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
 type Tool = CellValue | "select";
 type History = { past: GeneratedAssignment[][]; present: GeneratedAssignment[]; future: GeneratedAssignment[][] };
@@ -71,7 +72,7 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
   return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 }
 
-export function GroupReview({ initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels }: {
+export function GroupReview({ initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, stages }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -81,6 +82,9 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
   roleLabels: Record<string, string[]>;
   rules: Record<string, RoundRules>;
   roomName?: string;
+  /** PRO mode: stage and times of every group, which also enables the time-overlap check. */
+  slots?: Map<string, GroupSlot[]>;
+  stages?: ProStage[];
   onChange: (assignments: GeneratedAssignment[]) => void;
 }) {
   const { t, tp } = useI18n();
@@ -114,10 +118,16 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
 
   useEffect(() => { onChange(assignments); }, [assignments]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const issuesByRound = useMemo(() => new Map(rounds.map(round => {
-    const rows = assignments.filter(item => item.roundId === round.id);
-    return [round.id, validateRound(round.id, rows, rules[round.id] ?? fallbackRules(rows))];
-  })), [assignments, rounds, rules]);
+  const issuesByRound = useMemo(() => {
+    const timeIssues = slots ? validateTimes(assignments, slots) : [];
+    return new Map(rounds.map(round => {
+      const rows = assignments.filter(item => item.roundId === round.id);
+      const issues = [...validateRound(round.id, rows, rules[round.id] ?? fallbackRules(rows)), ...timeIssues.filter(issue => issue.roundId === round.id)];
+      return [round.id, issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0))];
+    }));
+  }, [assignments, rounds, rules, slots]);
+  const roundSlots = slots?.get(roundId);
+  const stageById = useMemo(() => new Map((stages ?? []).map(stage => [stage.id, stage])), [stages]);
 
   // People in the round first, by seed; staff who only work in this round after them, by name.
   const loads = useMemo(() => dutyLoads(assignments), [assignments]);
@@ -411,7 +421,7 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
     {showIssues && issues.length > 0 && <ul className="issue-items">{issues.map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{issue.severity === "error" ? t("review.severityError") : t("review.severityWarning")}</span>{issueText(issue)}</button></li>)}</ul>}
 
     <div className="assignment-matrix-wrap" ref={matrixRef}><table className="assignment-matrix" aria-label={t("review.matrix")}><thead>
-      <tr><th className="rank-column">#</th><th className="name-column">{t("review.columnPerson")}</th><th>{t("review.columnAge")}</th><th>{t("review.columnSeed")}</th><th>{t("review.columnInRound")}</th><th className="groups-heading" colSpan={groupCount}>{roomName ?? t("review.area")}</th><th className="tasks-column">{t("review.columnTotals")}</th></tr>
+      <tr><th className="rank-column">#</th><th className="name-column">{t("review.columnPerson")}</th><th>{t("review.columnAge")}</th><th>{t("review.columnSeed")}</th><th>{t("review.columnInRound")}</th><th className="groups-heading" colSpan={groupCount}>{roundSlots ? "" : roomName ?? t("review.area")}</th><th className="tasks-column">{t("review.columnTotals")}</th></tr>
       <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{totals.map(({ group, counts: groupCounts }) => {
         const groupIssues = issueIndex.groups.get(group);
         const severity = worstSeverity(groupIssues);
@@ -427,6 +437,11 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
         const summary = [tp("review.groupCompetitors", groupCounts.competitor), ...roles.map(role => needs[role] !== undefined ? t("review.roleCountOf", { role: taskLabel(role), count: groupCounts[role], need: needs[role]! }) : t("review.roleCount", { role: taskLabel(role), count: groupCounts[role] })), ...(groupIssues ?? []).map(issueText)].join("\n");
         return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={summary}>
           <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group })}\n${summary}`}>G{group}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
+          {(() => {
+            const slot = roundSlots?.find(item => item.group === group);
+            const stage = slot && stageById.get(slot.stageId);
+            return stage && <span className="group-stage" title={`${stage.name} ${slot.number} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: stage.color }} />{stage.name} {slot.number} · {clockOf(slot.windows[0].start)}</span>;
+          })()}
           <span className="group-chips">{roles.map(role => {
             const need = needs[role];
             const short = need !== undefined && groupCounts[role] < need;
