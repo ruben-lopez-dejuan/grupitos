@@ -6,30 +6,25 @@ import { authOptions } from "@/lib/auth";
 
 export default async function HomePage() {
   if (await getServerSession(authOptions)) redirect("/dashboard");
-  return <main className="landing">
+  return <main className="login-page">
     <nav className="topbar container">
       <Link className="brand" href="/"><span className="brand-symbol">E</span> WCA Easy Groups</Link>
-      <span className="status"><i /> Conectado con la WCA</span>
+      <a className="plain-link" href="https://github.com/ruben-lopez-dejuan/wca-easy-groups">Código en GitHub ↗</a>
     </nav>
-    <section className="hero container">
-      <div className="hero-copy">
-        <p className="eyebrow">GRUPOS SIN DOLORES DE CABEZA</p>
-        <h1>Tu competición,<br /><em>bien organizada.</em></h1>
-        <p className="lead">Importa los datos oficiales, crea grupos equilibrados y adapta cada detalle. Fácil para un Open. Potente para un campeonato nacional.</p>
-        <SignInButton />
-        <p className="privacy">Inicio seguro mediante tu cuenta oficial · No guardamos tu contraseña</p>
+    <section className="login-layout container">
+      <div className="login-intro">
+        <p className="kicker">Herramienta para organizadores</p>
+        <h1>Grupos de competición,<br />sin pelearte con una hoja de cálculo.</h1>
+        <p>Importa una competición oficial y construye los grupos sobre los datos reales del WCIF.</p>
+        <ul><li><span>✓</span> Configuración rápida para opens pequeños</li><li><span>✓</span> Control por ronda, sala y estación</li><li><span>✓</span> Reglas avanzadas para campeonatos grandes</li></ul>
       </div>
-      <div className="preview-wrap"><div className="blob" /><div className="preview">
-        <header><div><small>MADRID OPEN 2026</small><strong>Resumen de grupos</strong></div><span>Todo listo</span></header>
-        <div className="stats"><div><b>128</b><small>Competidores</small></div><div><b>12</b><small>Pruebas</small></div><div><b>36</b><small>Grupos</small></div></div>
-        <div className="round"><b>3×3</b><div><strong>3×3 Cube · Primera ronda</strong><small>4 grupos · 32 competidores por grupo</small></div><i>›</i></div>
-        <div className="round faded"><b>2×2</b><div><strong>2×2 Cube · Primera ronda</strong><small>3 grupos · 28 competidores por grupo</small></div><i>›</i></div>
-      </div></div>
+      <div className="login-panel">
+        <div className="login-panel-head"><span className="wca-block">WCA</span><div><strong>Accede con tu cuenta WCA</strong><small>Usaremos únicamente los permisos necesarios para consultar y actualizar tus competiciones.</small></div></div>
+        <SignInButton />
+        <div className="login-detail"><span>Datos que importaremos</span><p>Competidores aceptados, pruebas, rondas, horario y salas de las competiciones que administras.</p></div>
+        <p className="privacy">La contraseña se introduce siempre en la web oficial de la WCA.</p>
+      </div>
     </section>
-    <section className="benefits container">
-      <article><span>01</span><div><h2>Importa</h2><p>Datos oficiales y actualizados directamente desde la WCA.</p></div></article>
-      <article><span>02</span><div><h2>Organiza</h2><p>Un flujo guiado con opciones avanzadas cuando las necesitas.</p></div></article>
-      <article><span>03</span><div><h2>Publica</h2><p>Asignaciones compatibles con WCIF y el ecosistema WCA.</p></div></article>
-    </section>
+    <footer className="login-footer container"><span>Proyecto independiente para competiciones WCA</span><span>WCIF 1.2 · Datos guardados en tu dispositivo</span></footer>
   </main>;
 }
