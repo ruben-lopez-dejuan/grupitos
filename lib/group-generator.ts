@@ -1,6 +1,7 @@
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 
 export type DutyRole = "judge" | "scrambler" | "runner" | "";
+export type AssignedDuty = { group: number; role: Exclude<DutyRole, ""> };
 
 export type GeneratedAssignment = {
   id: string;
@@ -9,8 +10,12 @@ export type GeneratedAssignment = {
   personId: string;
   name: string;
   wcaId?: string | null;
+  birthdate?: string;
+  seedResult?: number;
   group: number;
   station?: number;
+  duties: AssignedDuty[];
+  /** Kept while older local drafts are migrated to the matrix format. */
   dutyGroup?: number;
   dutyRole: DutyRole;
 };
@@ -62,7 +67,10 @@ export function generateAssignments({ competition, rounds, stations, fixedStatio
       personId: personId(person),
       name: person.name,
       wcaId: person.wcaId,
+      birthdate: person.birthdate,
+      seedResult: eventBest(person, round.eventId) === Number.MAX_SAFE_INTEGER ? undefined : eventBest(person, round.eventId),
       group: symmetricGroup(index, round.groups),
+      duties: [],
       dutyRole: "" as DutyRole,
       source: person,
     }));
@@ -89,6 +97,7 @@ export function generateAssignments({ competition, rounds, stations, fixedStatio
       candidates.slice(0, round.scramblers).forEach(item => {
         item.dutyGroup = dutyGroup;
         item.dutyRole = "scrambler";
+        item.duties.push({ group: dutyGroup, role: "scrambler" });
         used.add(item.id);
       });
     }
@@ -107,6 +116,7 @@ export function generateAssignments({ competition, rounds, stations, fixedStatio
       if (dutyGroup) {
         item.dutyGroup = dutyGroup;
         item.dutyRole = dutyCounts[dutyGroup - 1] === round.scramblers ? "runner" : "judge";
+        item.duties.push({ group: dutyGroup, role: item.dutyRole as Exclude<DutyRole, ""> });
         dutyCounts[dutyGroup - 1] += 1;
       }
     }

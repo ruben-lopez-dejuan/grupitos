@@ -4,6 +4,7 @@ export type WcifPerson = {
   registrantId?: number | null;
   name: string;
   wcaId?: string | null;
+  birthdate?: string;
   roles?: string[];
   personalBests?: Array<{
     eventId: string;
