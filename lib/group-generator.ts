@@ -1,42 +1,12 @@
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
+import type { DutyRole, GeneratedAssignment } from "@/lib/assignments";
+import { acceptedPeople, judgesNeeded, personKey, type GenerationRound } from "@/lib/rounds";
 
-export type DutyRole = "judge" | "scrambler" | "runner" | "";
-export type AssignedDuty = { group: number; role: Exclude<DutyRole, ""> };
-
-export type GeneratedAssignment = {
-  id: string;
-  roundId: string;
-  eventId: string;
-  personId: string;
-  name: string;
-  wcaId?: string | null;
-  birthdate?: string;
-  seedResult?: number;
-  group: number;
-  station?: number;
-  duties: AssignedDuty[];
-  /** Kept while older local drafts are migrated to the matrix format. */
-  dutyGroup?: number;
-  dutyRole: DutyRole;
-};
-
-export type GenerationRound = {
-  id: string;
-  eventId: string;
-  groups: number;
-  scramblers: number;
-  enabled: boolean;
-};
-
-type WorkingAssignment = GeneratedAssignment & { source: WcifPerson };
-
-function personId(person: WcifPerson) {
-  return String(person.registrantId ?? person.wcaId ?? person.name);
-}
+type WorkingAssignment = GeneratedAssignment & { trusted: boolean; seedRank: number };
 
 function eventBest(person: WcifPerson, eventId: string) {
   const results = person.personalBests?.filter(best => best.eventId === eventId) ?? [];
-  return results.find(best => best.type === "average")?.best ?? results.find(best => best.type === "single")?.best ?? Number.MAX_SAFE_INTEGER;
+  return results.find(best => best.type === "average")?.best ?? results.find(best => best.type === "single")?.best;
 }
 
 function symmetricGroup(index: number, groupCount: number) {
@@ -45,84 +15,98 @@ function symmetricGroup(index: number, groupCount: number) {
   return cycle % 2 === 0 ? offset + 1 : groupCount - offset;
 }
 
-export function generateAssignments({ competition, rounds, stations, fixedStations, trustedIds }: {
+/**
+ * Greedy first proposal. Competitors are spread symmetrically by seed; then every
+ * group is staffed slot by slot (scramblers first, as they are the scarcest), always
+ * picking the candidate with the lowest cost. Preferences only break ties between
+ * candidates who are equally loaded, so a group is never left short to honour one.
+ */
+export function generateAssignments({ competition, rounds, stations, fixedStations, trustedIds, avoidBeforeOwnGroup = true, assignJudges = true }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
   fixedStations: boolean;
   trustedIds: string[];
+  avoidBeforeOwnGroup?: boolean;
+  assignJudges?: boolean;
 }) {
-  const accepted = (competition.persons ?? []).filter(person => person.registration?.status === "accepted" && person.registration.isCompeting !== false);
+  const accepted = acceptedPeople(competition);
+  const trusted = new Set(trustedIds);
+  const globalLoad = new Map<string, number>();
   const output: GeneratedAssignment[] = [];
 
   for (const round of rounds.filter(item => item.enabled && item.groups > 0)) {
     const competitors = accepted
       .filter(person => person.registration?.eventIds?.includes(round.eventId))
-      .sort((a, b) => eventBest(a, round.eventId) - eventBest(b, round.eventId) || a.name.localeCompare(b.name));
+      .map(person => ({ person, best: eventBest(person, round.eventId) }))
+      .sort((a, b) => (a.best ?? Number.MAX_SAFE_INTEGER) - (b.best ?? Number.MAX_SAFE_INTEGER) || a.person.name.localeCompare(b.person.name));
 
-    const roundAssignments: WorkingAssignment[] = competitors.map((person, index) => ({
-      id: `${round.id}:${personId(person)}`,
+    const roundAssignments: WorkingAssignment[] = competitors.map(({ person, best }, index) => ({
+      id: `${round.id}:${personKey(person)}`,
       roundId: round.id,
       eventId: round.eventId,
-      personId: personId(person),
+      personId: personKey(person),
       name: person.name,
       wcaId: person.wcaId,
       birthdate: person.birthdate,
-      seedResult: eventBest(person, round.eventId) === Number.MAX_SAFE_INTEGER ? undefined : eventBest(person, round.eventId),
+      seedResult: best,
       group: symmetricGroup(index, round.groups),
       duties: [],
-      dutyRole: "" as DutyRole,
-      source: person,
+      trusted: trusted.has(personKey(person)),
+      seedRank: index,
     }));
+
+    const groupSizes = Array.from({ length: round.groups }, (_, index) => roundAssignments.filter(item => item.group === index + 1).length);
 
     if (fixedStations) {
       for (let group = 1; group <= round.groups; group += 1) {
         roundAssignments.filter(item => item.group === group).forEach((item, index) => {
-          item.station = (index % Math.max(stations, 1)) + 1;
+          item.station = index < stations ? index + 1 : undefined;
         });
       }
     }
 
-    const used = new Set<string>();
-    for (let dutyGroup = 1; dutyGroup <= round.groups; dutyGroup += 1) {
-      const candidates = roundAssignments
-        .filter(item => item.group !== dutyGroup && !used.has(item.id))
-        .sort((a, b) => {
-          const aTrusted = trustedIds.includes(a.personId) ? 0 : 1;
-          const bTrusted = trustedIds.includes(b.personId) ? 0 : 1;
-          const aImmediatelyBefore = dutyGroup === a.group - 1 ? 1 : 0;
-          const bImmediatelyBefore = dutyGroup === b.group - 1 ? 1 : 0;
-          return aTrusted - bTrusted || aImmediatelyBefore - bImmediatelyBefore || eventBest(a.source, round.eventId) - eventBest(b.source, round.eventId);
-        });
-      candidates.slice(0, round.scramblers).forEach(item => {
-        item.dutyGroup = dutyGroup;
-        item.dutyRole = "scrambler";
-        item.duties.push({ group: dutyGroup, role: "scrambler" });
-        used.add(item.id);
-      });
-    }
-
-    const dutyCounts = Array.from({ length: round.groups }, () => 0);
-    roundAssignments.filter(item => item.dutyGroup).forEach(item => dutyCounts[(item.dutyGroup ?? 1) - 1] += 1);
-    for (const item of roundAssignments.filter(candidate => !used.has(candidate.id))) {
-      const choices = Array.from({ length: round.groups }, (_, index) => index + 1)
-        .filter(group => group !== item.group)
-        .sort((a, b) => {
-          const aImmediatelyBefore = a === item.group - 1 ? 1 : 0;
-          const bImmediatelyBefore = b === item.group - 1 ? 1 : 0;
-          return aImmediatelyBefore - bImmediatelyBefore || dutyCounts[a - 1] - dutyCounts[b - 1];
-        });
-      const dutyGroup = choices[0];
-      if (dutyGroup) {
-        item.dutyGroup = dutyGroup;
-        item.dutyRole = dutyCounts[dutyGroup - 1] === round.scramblers ? "runner" : "judge";
-        item.duties.push({ group: dutyGroup, role: item.dutyRole as Exclude<DutyRole, ""> });
-        dutyCounts[dutyGroup - 1] += 1;
+    const roles: DutyRole[] = assignJudges ? ["scrambler", "judge", "runner"] : ["scrambler"];
+    for (const role of roles) {
+      const needs = groupSizes.map(size => size === 0 ? 0 : role === "scrambler" ? round.scramblers : role === "judge" ? judgesNeeded(size, stations) : round.runners);
+      // Round-robin across groups so the best candidates are not all used by G1.
+      for (let slot = 0; slot < Math.max(0, ...needs); slot += 1) {
+        for (let group = 1; group <= round.groups; group += 1) {
+          if (slot >= needs[group - 1]) continue;
+          const best = pickCandidate(roundAssignments, group, role, avoidBeforeOwnGroup, globalLoad);
+          if (!best) continue;
+          best.duties.push({ group, role });
+          globalLoad.set(best.personId, (globalLoad.get(best.personId) ?? 0) + 1);
+        }
       }
     }
 
-    output.push(...roundAssignments.map(({ source: _source, ...assignment }) => assignment));
+    for (const { trusted: _trusted, seedRank: _seedRank, ...assignment } of roundAssignments) {
+      output.push({ ...assignment, duties: assignment.duties.sort((a, b) => a.group - b.group) });
+    }
   }
 
   return output;
+}
+
+function pickCandidate(roundAssignments: WorkingAssignment[], group: number, role: DutyRole, avoidBeforeOwnGroup: boolean, globalLoad: Map<string, number>) {
+  let best: WorkingAssignment | undefined;
+  let bestKey: number[] = [];
+  for (const item of roundAssignments) {
+    if (item.group === group || item.duties.some(duty => duty.group === group)) continue;
+    const beforeOwn = avoidBeforeOwnGroup && group === item.group - 1 ? 1 : 0;
+    const key = role === "scrambler"
+      ? [item.duties.length, item.trusted ? 0 : 1, item.seedResult === undefined ? 1 : 0, beforeOwn, item.seedRank]
+      : [item.duties.length, beforeOwn, globalLoad.get(item.personId) ?? 0];
+    if (!best || compareKeys(key, bestKey) < 0) {
+      best = item;
+      bestKey = key;
+    }
+  }
+  return best;
+}
+
+function compareKeys(a: number[], b: number[]) {
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
+  return 0;
 }
