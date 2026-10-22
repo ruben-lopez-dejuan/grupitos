@@ -6,10 +6,6 @@ export type CellValue = TaskRole | "";
 export type Task = { group: number; role: TaskRole };
 export type CellRef = { id: string; group: number };
 
-export const TASK_LABELS: Record<CellValue, string> = {
-  "": "Vacío", competitor: "Compite", judge: "Juez", scrambler: "Mezclador", runner: "Runner",
-  delegate: "Delegado", stagelead: "Jefe de escenario", announcer: "Locutor", dataentry: "Data entry", other: "Otra tarea",
-};
 export const TASK_CODES: Record<CellValue, string> = {
   "": "", competitor: "C", judge: "J", scrambler: "S", runner: "R", delegate: "D", stagelead: "L", announcer: "A", dataentry: "E", other: "O",
 };

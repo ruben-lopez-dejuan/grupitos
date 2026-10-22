@@ -1,4 +1,7 @@
+"use client";
+
 /* eslint-disable @next/next/no-img-element -- WCA avatars are external thumbnails; next/image would need remote host config. */
+import { useI18n } from "@/components/i18n";
 
 function initials(name: string) {
   const words = name.replace(/\(.*\)/, "").trim().split(/\s+/);
@@ -14,12 +17,13 @@ export function PersonAvatar({ name, url, size = 34 }: { name: string; url?: str
 
 /** Marks people without a WCA ID: their first competition. */
 export function NewcomerBadge({ withLabel = false }: { withLabel?: boolean }) {
-  return <span className="newcomer-badge" title="Nuevo competidor: todavía no tiene WCA ID" aria-label="Nuevo competidor">
+  const { t } = useI18n();
+  return <span className="newcomer-badge" title={t("people.newcomerHelp")} aria-label={t("people.newcomerHelp")}>
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
       <path d="M8 15V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
       <path d="M8 9C8 5.5 5.5 3.5 2 3.5 2 7 4.5 9 8 9Z" fill="currentColor" />
       <path d="M8 7.5C8 4.5 10.2 2.5 14 2.5 14 5.5 11.8 7.5 8 7.5Z" fill="currentColor" opacity="0.7" />
     </svg>
-    {withLabel && <span>Nuevo</span>}
+    {withLabel && <span>{t("people.newcomer")}</span>}
   </span>;
 }

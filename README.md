@@ -18,3 +18,15 @@ Una herramienta clara y flexible para crear grupos y asignaciones de personal en
 5. Inicia la aplicación con `npm run dev`.
 
 El token OAuth permanece en la sesión cifrada del servidor. El WCIF importado se guarda en IndexedDB dentro del navegador.
+
+## Idiomas
+
+La interfaz está en español e inglés. Los textos viven en `lib/i18n/messages/`, un archivo por idioma; `es.ts` es la referencia.
+
+Para añadir un idioma:
+
+1. Copia `lib/i18n/messages/es.ts` a `lib/i18n/messages/<código>.ts`, cambia `export const es` por `export const <código>: Messages` y traduce los textos. Respeta los marcadores (`{name}`, `{count}`…) y los sufijos de plural (`_one`, `_other`; puedes añadir `_few`, `_many`… si el idioma los usa).
+2. Regístralo en `LOCALES` dentro de `lib/i18n/index.ts`.
+3. Ejecuta `npm run typecheck` y `npm test`: fallan si falta una clave o si un texto no tiene los mismos marcadores que el español.
+
+El idioma se elige con el selector de la cabecera y se guarda en una cookie; sin elección, se usa el idioma del navegador.

@@ -4,14 +4,6 @@ import { acceptedPeople, personKey } from "@/lib/rounds";
 export const PERSON_ROLES = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry"] as const;
 export type PersonRole = typeof PERSON_ROLES[number];
 
-export const PERSON_ROLE_LABELS: Record<PersonRole, string> = {
-  delegate: "Delegados",
-  "trainee-delegate": "Delegados en prácticas",
-  organizer: "Organizadores",
-  staff: "Staff",
-  dataentry: "Data entry",
-};
-
 export type PeopleSettings = {
   roles: Partial<Record<PersonRole, string[]>>;
   /** Preferred scramblers. */

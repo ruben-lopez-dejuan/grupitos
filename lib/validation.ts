@@ -1,4 +1,4 @@
-import { competingGroup, competingGroups, duties, groupTotals, TASK_LABELS, type GeneratedAssignment } from "@/lib/assignments";
+import { competingGroup, competingGroups, duties, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
 import { judgesNeeded } from "@/lib/rounds";
 
 /**
@@ -33,8 +33,12 @@ export type Issue = {
   group?: number;
   /** Assignment row the issue points at, when it concerns one person. */
   assignmentId?: string;
-  message: string;
+  /** Values for the issue's text, which the interface writes in the current language. */
+  params: IssueParams;
 };
+
+/** `task` is a task role id and `names` a list of people; the interface translates both. */
+export type IssueParams = { name?: string; group?: number; groups?: number[]; total?: number; count?: number; need?: number; station?: number; task?: string; names?: string[] };
 
 export type RoundRules = {
   groups: number;
@@ -60,25 +64,25 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
   for (const item of roundAssignments) {
     const competing = competingGroups(item);
     if (item.inRound && competing.length === 0) {
-      add({ severity: "error", code: "no-group", assignmentId: item.id, message: `${item.name} está en la ronda y no compite en ningún grupo.` });
+      add({ severity: "error", code: "no-group", assignmentId: item.id, params: { name: item.name } });
     }
     if (competing.length > 1) {
-      add({ severity: "error", code: "several-groups", group: competing[1], assignmentId: item.id, message: `${item.name} compite en varios grupos (${competing.map(group => `G${group}`).join(", ")}).` });
+      add({ severity: "error", code: "several-groups", group: competing[1], assignmentId: item.id, params: { name: item.name, groups: competing } });
     }
     if (!item.inRound && competing.length > 0) {
-      add({ severity: "warning", code: "not-registered", group: competing[0], assignmentId: item.id, message: `${item.name} compite en G${competing[0]}, pero no está en esta ronda.` });
+      add({ severity: "warning", code: "not-registered", group: competing[0], assignmentId: item.id, params: { name: item.name, group: competing[0] } });
     }
     for (const task of item.tasks) {
       if (task.group < 1 || task.group > rules.groups) {
-        add({ severity: "error", code: "group-out-of-range", group: task.group, assignmentId: item.id, message: `${item.name} tiene «${TASK_LABELS[task.role]}» en G${task.group}, pero la ronda tiene ${rules.groups} grupos.` });
+        add({ severity: "error", code: "group-out-of-range", group: task.group, assignmentId: item.id, params: { name: item.name, task: task.role, group: task.group, total: rules.groups } });
       }
     }
     for (const duty of duties(item)) {
       if (duty.role === "scrambler" && item.seedResult === undefined) {
-        add({ severity: "warning", code: "scrambler-without-result", group: duty.group, assignmentId: item.id, message: `${item.name} mezcla en G${duty.group} sin resultados oficiales en esta prueba.` });
+        add({ severity: "warning", code: "scrambler-without-result", group: duty.group, assignmentId: item.id, params: { name: item.name, group: duty.group } });
       }
       if (NORMAL_DUTIES.has(duty.role) && rules.noNormalTasks.has(item.personId)) {
-        add({ severity: "warning", code: "role-with-normal-task", group: duty.group, assignmentId: item.id, message: `${item.name} tiene un rol que no hace tareas normales y es ${TASK_LABELS[duty.role].toLowerCase()} en G${duty.group}.` });
+        add({ severity: "warning", code: "role-with-normal-task", group: duty.group, assignmentId: item.id, params: { name: item.name, task: duty.role, group: duty.group } });
       }
     }
   }
@@ -89,9 +93,9 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       const byStation = new Map<number, GeneratedAssignment[]>();
       for (const item of members) {
         if (item.station === undefined) {
-          add({ severity: "error", code: "missing-station", group, assignmentId: item.id, message: `${item.name} no tiene estación en G${group}.` });
+          add({ severity: "error", code: "missing-station", group, assignmentId: item.id, params: { name: item.name, group } });
         } else if (item.station < 1 || item.station > rules.stations) {
-          add({ severity: "error", code: "station-out-of-range", group, assignmentId: item.id, message: `${item.name} tiene la estación ${item.station}, pero solo hay ${rules.stations}.` });
+          add({ severity: "error", code: "station-out-of-range", group, assignmentId: item.id, params: { name: item.name, station: item.station, total: rules.stations } });
         } else {
           byStation.set(item.station, [...(byStation.get(item.station) ?? []), item]);
         }
@@ -99,30 +103,30 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       for (const [station, holders] of byStation) {
         if (holders.length < 2) continue;
         for (const item of holders) {
-          add({ severity: "error", code: "duplicate-station", group, assignmentId: item.id, message: `La estación ${station} de G${group} está asignada a ${holders.map(holder => holder.name).join(" y ")}.` });
+          add({ severity: "error", code: "duplicate-station", group, assignmentId: item.id, params: { station, group, names: holders.map(holder => holder.name) } });
         }
       }
       if (members.length > rules.stations) {
-        add({ severity: "error", code: "over-capacity", group, message: `G${group} tiene ${members.length} competidores y solo ${rules.stations} estaciones.` });
+        add({ severity: "error", code: "over-capacity", group, params: { group, count: members.length, total: rules.stations } });
       }
     }
   }
 
   for (const { group, counts } of groupTotals(roundAssignments, rules.groups)) {
     if (counts.competitor === 0) {
-      add({ severity: "warning", code: "empty-group", group, message: `G${group} no tiene competidores.` });
+      add({ severity: "warning", code: "empty-group", group, params: { group } });
       continue;
     }
     if (counts.scrambler < rules.scramblers) {
-      add({ severity: "warning", code: "missing-scramblers", group, message: `G${group} tiene ${counts.scrambler} de ${rules.scramblers} mezcladores.` });
+      add({ severity: "warning", code: "missing-scramblers", group, params: { group, count: counts.scrambler, need: rules.scramblers } });
     }
     if (rules.checkJudges) {
       const judges = judgesNeeded(counts.competitor, rules.stations);
-      if (counts.judge < judges) add({ severity: "warning", code: "missing-judges", group, message: `G${group} tiene ${counts.judge} de ${judges} jueces.` });
-      if (counts.runner < rules.runners) add({ severity: "warning", code: "missing-runners", group, message: `G${group} tiene ${counts.runner} de ${rules.runners} runners.` });
+      if (counts.judge < judges) add({ severity: "warning", code: "missing-judges", group, params: { group, count: counts.judge, need: judges } });
+      if (counts.runner < rules.runners) add({ severity: "warning", code: "missing-runners", group, params: { group, count: counts.runner, need: rules.runners } });
     }
-    if (rules.checkDelegates && counts.delegate === 0) add({ severity: "warning", code: "missing-delegate", group, message: `G${group} no tiene delegado de turno.` });
-    if (rules.checkDataEntry && counts.dataentry === 0) add({ severity: "warning", code: "missing-dataentry", group, message: `G${group} no tiene data entry.` });
+    if (rules.checkDelegates && counts.delegate === 0) add({ severity: "warning", code: "missing-delegate", group, params: { group } });
+    if (rules.checkDataEntry && counts.dataentry === 0) add({ severity: "warning", code: "missing-dataentry", group, params: { group } });
   }
 
   return issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0));

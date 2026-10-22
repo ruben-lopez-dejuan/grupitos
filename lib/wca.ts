@@ -5,10 +5,17 @@ export type WcaCompetition = {
   start_date: string; end_date: string; venue_address?: string;
 };
 
+/** A non-OK answer from the WCA API; the interface writes the message. */
+export class WcaError extends Error {
+  constructor(readonly status: number) {
+    super(`WCA API status ${status}`);
+  }
+}
+
 export async function wcaFetch<T>(path: string, accessToken: string): Promise<T> {
   const response = await fetch(`${WCA_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }, cache: "no-store"
   });
-  if (!response.ok) throw new Error(`La WCA respondió con el estado ${response.status}`);
+  if (!response.ok) throw new WcaError(response.status);
   return response.json() as Promise<T>;
 }

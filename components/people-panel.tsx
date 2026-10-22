@@ -2,21 +2,14 @@
 
 import { useState } from "react";
 import { Hint } from "@/components/hint";
+import { useI18n } from "@/components/i18n";
+import { keyOf } from "@/lib/i18n";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import type { WcifPerson } from "@/lib/competition-store";
-import { PERSON_ROLE_LABELS, type PeopleSettings, type PersonRole } from "@/lib/people";
+import type { PeopleSettings, PersonRole } from "@/lib/people";
 import { personKey } from "@/lib/rounds";
 
 type ListId = PersonRole | "trusted";
-
-const DESCRIPTIONS: Record<ListId, string> = {
-  delegate: "Marca quién hace tareas de delegado de turno.",
-  "trainee-delegate": "Se tratan como delegados. Marca quién hace tareas de delegado.",
-  organizer: "Sin tareas normales salvo que lo actives en las reglas.",
-  staff: "Se eligen antes que nadie para juzgar y hacer de runner, así que hacen más tareas. Para mezclar se prefieren entre quienes son igual de aptos.",
-  dataentry: "No hacen tareas normales. Pueden recibir la tarea de data entry.",
-  trusted: "Prioridad para mezclar.",
-};
 
 const ORDER: ListId[] = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "trusted"];
 
@@ -29,6 +22,7 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties, showPh
   /** Whether the delegate-duty checkboxes matter (the option is on). */
   delegateDuties: boolean;
 }) {
+  const { t } = useI18n();
   const byKey = new Map(people.map(person => [personKey(person), person]));
   const listOf = (id: ListId) => id === "trusted" ? settings.trustedIds : settings.roles[id] ?? [];
 
@@ -54,35 +48,36 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties, showPh
   }
 
   return <section className="people-panel" id="people">
-    <div className="setup-heading"><h2>Personas y roles <Hint align="start" text="Los roles se leen del WCIF. Los cambios se guardan aquí, sin tocar la WCA." /></h2><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Mostrar fotos</label></div>
+    <div className="setup-heading"><h2>{t("people.title")} <Hint align="start" text={t("people.hint")} /></h2><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> {t("people.showPhotos")}</label></div>
     <div className="role-grid">{ORDER.map(id => {
       const keys = listOf(id);
       const isDelegateList = id === "delegate" || id === "trainee-delegate";
       return <div className="role-card" key={id}>
-        <div className="role-card-head"><h3>{id === "trusted" ? "Personal de confianza" : PERSON_ROLE_LABELS[id]} <Hint text={DESCRIPTIONS[id]} /></h3><span>{keys.length}</span></div>
+        <div className="role-card-head"><h3>{t(keyOf("people.lists", id))} <Hint text={t(keyOf("people.descriptions", id))} /></h3><span>{keys.length}</span></div>
         {keys.length > 0 && <ul className="role-people">{keys.map(key => {
           const person = byKey.get(key);
           return <li key={key}>
-            {isDelegateList && delegateDuties && <label className="duty-toggle" title="Asignarle tareas de delegado"><input type="checkbox" checked={settings.delegateDutyIds.includes(key)} onChange={event => toggleDuty(key, event.target.checked)} /> Tareas</label>}
+            {isDelegateList && delegateDuties && <label className="duty-toggle" title={t("people.dutyToggleHelp")}><input type="checkbox" checked={settings.delegateDutyIds.includes(key)} onChange={event => toggleDuty(key, event.target.checked)} /> {t("people.dutyToggle")}</label>}
             {showPhotos && <PersonAvatar name={person?.name ?? key} url={person?.avatar?.thumbUrl} size={28} />}
             <span>{person?.name ?? key}</span>
             {person && !person.wcaId && <NewcomerBadge />}
-            <button type="button" onClick={() => remove(id, key)} aria-label={`Quitar a ${person?.name ?? key}`}>×</button>
+            <button type="button" onClick={() => remove(id, key)} aria-label={t("people.remove", { name: person?.name ?? key })}>×</button>
           </li>;
         })}</ul>}
-        <PersonPicker people={people} exclude={keys} label={id === "trusted" ? "Añadir persona de confianza" : `Añadir a ${PERSON_ROLE_LABELS[id].toLowerCase()}`} onAdd={key => add(id, key)} />
+        <PersonPicker people={people} exclude={keys} label={id === "trusted" ? t("people.addTrusted") : t("people.addTo", { role: t(keyOf("people.lists", id)).toLowerCase() })} onAdd={key => add(id, key)} />
       </div>;
     })}</div>
   </section>;
 }
 
 function PersonPicker({ people, exclude, label, onAdd }: { people: WcifPerson[]; exclude: string[]; label: string; onAdd: (key: string) => void }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   return <div className="person-picker">
     <select value={value} onChange={event => setValue(event.target.value)} aria-label={label}>
-      <option value="">Selecciona una persona…</option>
+      <option value="">{t("people.choose")}</option>
       {people.filter(person => !exclude.includes(personKey(person))).map(person => <option key={personKey(person)} value={personKey(person)}>{person.name}{person.wcaId ? ` · ${person.wcaId}` : ""}</option>)}
     </select>
-    <button className="button secondary" type="button" disabled={!value} onClick={() => { onAdd(value); setValue(""); }}>Añadir</button>
+    <button className="button secondary" type="button" disabled={!value} onClick={() => { onAdd(value); setValue(""); }}>{t("people.add")}</button>
   </div>;
 }

@@ -1,9 +1,12 @@
 "use client";
 import { signIn, signOut } from "next-auth/react";
+import { useI18n } from "@/components/i18n";
 
 export function SignInButton() {
-  return <button className="button primary large" onClick={() => signIn("wca", { callbackUrl: "/dashboard" })}><span>◆</span> Entrar con la WCA</button>;
+  const { t } = useI18n();
+  return <button className="button primary large" onClick={() => signIn("wca", { callbackUrl: "/dashboard" })}><span>◆</span> {t("auth.signIn")}</button>;
 }
 export function SignOutButton() {
-  return <button className="button quiet" onClick={() => signOut({ callbackUrl: "/" })}>Cerrar sesión</button>;
+  const { t } = useI18n();
+  return <button className="button quiet" onClick={() => signOut({ callbackUrl: "/" })}>{t("auth.signOut")}</button>;
 }

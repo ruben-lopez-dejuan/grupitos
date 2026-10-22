@@ -1,10 +1,5 @@
 import type { StoredCompetition, WcifPerson, WcifRound } from "@/lib/competition-store";
 
-export const EVENT_NAMES: Record<string, string> = {
-  "222": "2×2×2", "333": "3×3×3", "444": "4×4×4", "555": "5×5×5", "666": "6×6×6", "777": "7×7×7",
-  "333bf": "3×3 a ciegas", "333fm": "3×3 FMC", "333oh": "3×3 una mano", "333ft": "3×3 con los pies", clock: "Clock", minx: "Megaminx",
-  pyram: "Pyraminx", skewb: "Skewb", sq1: "Square-1", "444bf": "4×4 a ciegas", "555bf": "5×5 a ciegas", "333mbf": "3×3 multi-ciegas"
-};
 
 /** fixed: numbered stations · waiting: waiting room · mixed: waiting room in first rounds, stations afterwards. */
 export type ZoneMode = "fixed" | "waiting" | "mixed";
@@ -176,7 +171,7 @@ export function initialRounds(competition: StoredCompetition, stations: number, 
     return shapeRound({
       id: round.id,
       eventId: event.id,
-      label: `${EVENT_NAMES[event.id] ?? event.id} · Ronda ${roundNumber}`,
+      label: round.id,
       roundNumber,
       competitors,
       competitorsKnown,
