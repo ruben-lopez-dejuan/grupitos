@@ -419,7 +419,7 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
     {showIssues && issues.length > 0 && <ul className="issue-items">{issues.map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{SEVERITY_LABELS[issue.severity]}</span>{issue.message}</button></li>)}</ul>}
 
     <div className="assignment-matrix-wrap" ref={matrixRef}><table className="assignment-matrix" aria-label="Matriz de asignaciones"><thead>
-      <tr><th className="rank-column">#</th><th className="name-column">Persona</th><th>Edad</th><th>Seed</th><th>En la ronda</th><th className="groups-heading" colSpan={groupCount}>{roomName}</th><th className="tasks-column">Tareas</th></tr>
+      <tr><th className="rank-column">#</th><th className="name-column">Persona</th><th>Edad</th><th>Seed</th><th>En la ronda</th><th className="groups-heading" colSpan={groupCount}>{roomName}</th><th className="tasks-column">Total tareas</th></tr>
       <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{totals.map(({ group, counts: groupCounts }) => {
         const groupIssues = issueIndex.groups.get(group);
         const severity = worstSeverity(groupIssues);
@@ -446,7 +446,6 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
       const rowIssues = issueIndex.rows.get(item.id);
       const rowSeverity = worstSeverity(rowIssues);
       const load = loads.get(item.personId) ?? 0;
-      const rowDuties = duties(item);
       return <tr key={item.id} className={item.inRound ? "" : "staff-row"}>
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
         <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issue => issue.message).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title="Ver ficha">{item.name}</button><small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
@@ -498,10 +497,9 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
           ><strong>{TASK_CODES[value]}</strong>{value === "competitor" && item.station && <small>P{item.station}</small>}</button></td>;
         })}
         <td className="tasks-column">
-          <span className="task-chips">{rowDuties.length ? rowDuties.map(duty => <span key={`${duty.role}${duty.group}`} className={`cell-chip mini ${duty.role}`} title={`${TASK_LABELS[duty.role]} en G${duty.group}`}>{TASK_CODES[duty.role]}·G{duty.group}</span>) : <span className="muted-mark">—</span>}</span>
-          {load > 0 && (() => {
+          {load === 0 ? <span className="muted-mark">—</span> : (() => {
             const roles = DUTY_ROLES.filter(role => (roleTotals.get(item.personId)?.[role] ?? 0) > 0);
-            return <span className="task-totals" title={`${load} tareas en todas las rondas`}><b>Total</b>{roles.map(role => <span key={role} className={`cell-chip mini ${role}`}>{TASK_CODES[role]}{roleTotals.get(item.personId)![role]}</span>)}{roles.length > 1 && <b>· {load}</b>}</span>;
+            return <span className="task-totals" title={`${load} tareas en todas las rondas`}>{roles.map(role => <span key={role} className={`cell-chip mini ${role}`}>{TASK_CODES[role]}{roleTotals.get(item.personId)![role]}</span>)}{roles.length > 1 && <b>· {load}</b>}</span>;
           })()}
         </td>
       </tr>;
