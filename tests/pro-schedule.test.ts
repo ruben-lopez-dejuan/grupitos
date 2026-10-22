@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import stagedFixture from "@/tests/fixtures/schedule-with-rooms-and-stages.json";
 import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
-import { demoCompetition } from "@/lib/demo-competition";
+import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { groupSlots, importSchedule, isoToLocal, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
@@ -114,16 +114,37 @@ describe("validateTimes", () => {
 
   it("flags a task in a parallel group or another room at the same time, on both sides", () => {
     const issues = validateTimes([row("444-r1", "ana", [{ group: 1, role: "competitor" }, { group: 2, role: "judge" }]), row("444bf-r1", "ana", [{ group: 1, role: "competitor" }])], slots);
-    expect(issues.map(issue => [issue.roundId, issue.group, issue.params.otherRound])).toEqual([["444-r1", 1, "444-r1"], ["444-r1", 2, "444-r1"], ["444bf-r1", 1, "444-r1"]]);
-    expect(issues.every(issue => issue.severity === "error" && issue.code === "time-overlap")).toBe(true);
+    expect(issues.map(issue => [issue.roundId, issue.group, issue.params.otherRound])).toEqual([["444-r1", 1, "444bf-r1"], ["444-r1", 2, "444-r1"], ["444bf-r1", 1, "444-r1"]]);
+    expect(issues.map(issue => issue.code)).toEqual(["unavoidable-time-overlap", "time-overlap", "unavoidable-time-overlap"]);
   });
 
   it("accepts tasks one after the other", () => {
     expect(validateTimes([row("444-r1", "ana", [{ group: 1, role: "competitor" }, { group: 3, role: "judge" }])], slots)).toEqual([]);
   });
+
+  it("distinguishes a schedule with no possible non-overlapping groups", () => {
+    const impossible = groupSlots(schedule([
+      block("a", "333-r1", 1, "10:00", "11:00", 1), block("b", "333-r1", 2, "10:00", "11:00", 1),
+      block("c", "555-r1", 1, "10:00", "11:00", 1), block("d", "555-r1", 2, "10:00", "11:00", 1),
+    ]));
+    const issues = validateTimes([row("333-r1", "ana", [{ group: 1, role: "competitor" }]), row("555-r1", "ana", [{ group: 2, role: "competitor" }])], impossible);
+    expect(issues.map(issue => issue.code)).toEqual(["unavoidable-time-overlap", "unavoidable-time-overlap"]);
+  });
 });
 
 describe("generator with a schedule", () => {
+  it("globally swaps competitor groups to avoid cross-event clashes", () => {
+    const source = buildDemoCompetition({ id: "Global", name: "Global", people: 12, events: ["333", "555"], newcomerShare: 0, seed: 4 });
+    const competition: StoredCompetition = { ...source, persons: source.persons?.map(person => ({ ...person, registration: { ...person.registration, eventIds: ["333", "555"] } })) };
+    const slots = groupSlots(schedule([block("a", "333-r1", 1, "10:00", "12:00", 2), block("b", "555-r1", 2, "10:00", "12:00", 2)]));
+    const rounds = withScheduledGroups(initialRounds(competition, 6, "fixed"), slots).map(round => ({ ...round, scramblers: 0, runners: 0 }));
+    const assignments = generateAssignments({ competition, rounds, stations: 6, zoneMode: "fixed", people: peopleFromWcif(competition), options: { ...DEFAULT_OPTIONS, assignJudges: false }, slots });
+    expect(validateTimes(assignments, slots)).toEqual([]);
+    const groupsByPerson = new Map<string, number[]>();
+    for (const assignment of assignments.filter(item => item.inRound)) groupsByPerson.set(assignment.personId, [...(groupsByPerson.get(assignment.personId) ?? []), assignment.tasks.find(task => task.role === "competitor")!.group]);
+    expect([...groupsByPerson.values()].every(groups => groups.length === 2 && groups[0] !== groups[1])).toBe(true);
+  });
+
   it("never gives anyone two things at once", () => {
     const competition = demoCompetition("large");
     const imported = importSchedule(competition, () => 8);

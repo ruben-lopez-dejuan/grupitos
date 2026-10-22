@@ -422,6 +422,7 @@ export const es = {
     "missing-delegate": "G{group} no tiene delegado de turno.",
     "missing-dataentry": "G{group} no tiene data entry.",
     "time-overlap": "{name} tiene «{task}» en G{group} a la vez que «{otherTask}» en {otherRound} G{otherGroup}.",
+    "unavoidable-time-overlap": "El horario no deja una combinación posible: {name} compite en G{group} a la vez que en {otherRound} G{otherGroup}.",
     and: " y ",
   },
   printing: {

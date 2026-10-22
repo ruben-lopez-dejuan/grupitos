@@ -420,6 +420,7 @@ export const en: Messages = {
     "missing-delegate": "G{group} has no delegate on duty.",
     "missing-dataentry": "G{group} has no data entry.",
     "time-overlap": "{name} has “{task}” in G{group} at the same time as “{otherTask}” in {otherRound} G{otherGroup}.",
+    "unavoidable-time-overlap": "The schedule leaves no possible combination: {name} competes in G{group} at the same time as {otherRound} G{otherGroup}.",
     and: " and ",
   },
   printing: {

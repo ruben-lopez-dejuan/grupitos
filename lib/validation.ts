@@ -25,7 +25,8 @@ export type IssueCode =
   | "missing-dataentry"
   | "scrambler-without-result"
   | "role-with-normal-task"
-  | "time-overlap";
+  | "time-overlap"
+  | "unavoidable-time-overlap";
 
 export type Issue = {
   key: string;
@@ -148,17 +149,22 @@ export function validateTimes(assignments: GeneratedAssignment[], slots: Map<str
     }
   }
   const issues = new Map<string, Issue>();
-  const add = (busy: Busy, other: Busy) => {
+  const add = (busy: Busy, other: Busy, unavoidable: boolean) => {
+    const code = unavoidable ? "unavoidable-time-overlap" : "time-overlap";
     const key = `${busy.item.roundId}:time-overlap:${busy.item.id}:${busy.group}`;
-    if (!issues.has(key)) issues.set(key, { key, severity: "error", code: "time-overlap", roundId: busy.item.roundId, group: busy.group, assignmentId: busy.item.id, params: { name: busy.item.name, task: busy.role, group: busy.group, otherRound: other.item.roundId, otherGroup: other.group, otherTask: other.role } });
+    if (!issues.has(key) || (unavoidable && issues.get(key)?.code !== "unavoidable-time-overlap")) issues.set(key, { key, severity: "error", code, roundId: busy.item.roundId, group: busy.group, assignmentId: busy.item.id, params: { name: busy.item.name, task: busy.role, group: busy.group, otherRound: other.item.roundId, otherGroup: other.group, otherTask: other.role } });
   };
   for (const tasks of byPerson.values()) {
     for (let i = 0; i < tasks.length; i += 1) {
       for (let j = i + 1; j < tasks.length; j += 1) {
         if (tasks[i].item.roundId === tasks[j].item.roundId && tasks[i].group === tasks[j].group) continue;
         if (slotsOverlap(tasks[i].slot, tasks[j].slot)) {
-          add(tasks[i], tasks[j]);
-          add(tasks[j], tasks[i]);
+          const bothCompete = tasks[i].role === "competitor" && tasks[j].role === "competitor";
+          const firstCanMove = slots.get(tasks[i].item.roundId)?.some(candidate => !slotsOverlap(candidate, tasks[j].slot)) ?? false;
+          const secondCanMove = slots.get(tasks[j].item.roundId)?.some(candidate => !slotsOverlap(candidate, tasks[i].slot)) ?? false;
+          const unavoidable = bothCompete && !firstCanMove && !secondCanMove;
+          add(tasks[i], tasks[j], unavoidable);
+          add(tasks[j], tasks[i], unavoidable);
         }
       }
     }

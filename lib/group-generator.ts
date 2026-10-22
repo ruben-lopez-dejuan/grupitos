@@ -6,7 +6,7 @@
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type Task, type TaskRole } from "@/lib/assignments";
-import { overlaps, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
+import { overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
@@ -42,6 +42,99 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
 const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "skewb", "clock", "sq1"];
 
 type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number };
+type CompetitorPlan = {
+  round: GenerationRound;
+  competitors: WcifPerson[];
+  groups: WcifPerson[][];
+  fixed: boolean;
+  seedIndex: Map<string, number>;
+  preferredGroup: Map<string, number>;
+};
+
+type Placement = { plan: CompetitorPlan; planIndex: number; group: number; person: WcifPerson };
+
+/**
+ * Repairs the independent Groupifier splits as one global schedule. It swaps or moves people
+ * between equally-sized groups until nobody competes in overlapping slots, when such a repair
+ * exists. This runs before any staff duties are assigned.
+ */
+export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<string, GroupSlot[]>) {
+  const placements = () => {
+    const byPerson = new Map<string, Placement[]>();
+    plans.forEach((plan, planIndex) => plan.groups.forEach((members, groupIndex) => members.forEach(person => {
+      const key = personKey(person);
+      byPerson.set(key, [...(byPerson.get(key) ?? []), { plan, planIndex, group: groupIndex + 1, person }]);
+    })));
+    return byPerson;
+  };
+  const slotOf = (placement: Pick<Placement, "plan" | "group">) => slots.get(placement.plan.round.id)?.find(slot => slot.group === placement.group);
+  const clashes = (byPerson: Map<string, Placement[]>) => [...byPerson.values()].flatMap(personPlacements => {
+    const result: Array<[Placement, Placement]> = [];
+    for (let first = 0; first < personPlacements.length; first += 1) {
+      for (let second = first + 1; second < personPlacements.length; second += 1) {
+        const a = slotOf(personPlacements[first]);
+        const b = slotOf(personPlacements[second]);
+        if (a && b && slotsOverlap(a, b)) result.push([personPlacements[first], personPlacements[second]]);
+      }
+    }
+    return result;
+  });
+  const canUse = (byPerson: Map<string, Placement[]>, person: WcifPerson, planIndex: number, group: number) => {
+    const candidate = slots.get(plans[planIndex].round.id)?.find(slot => slot.group === group);
+    if (!candidate) return true;
+    return (byPerson.get(personKey(person)) ?? []).every(other => {
+      if (other.planIndex === planIndex) return true;
+      const occupied = slotOf(other);
+      return !occupied || !slotsOverlap(candidate, occupied);
+    });
+  };
+  const flexibility = (byPerson: Map<string, Placement[]>, placement: Placement) => placement.plan.groups.reduce((count, _, index) => count + (canUse(byPerson, placement.person, placement.planIndex, index + 1) ? 1 : 0), 0);
+  const moveCost = (plan: CompetitorPlan, person: WcifPerson, group: number) => Math.abs((plan.preferredGroup.get(personKey(person)) ?? group) - group);
+
+  const tryRelocate = (byPerson: Map<string, Placement[]>, placement: Placement) => {
+    const { plan, planIndex, group: fromGroup, person } = placement;
+    const source = plan.groups[fromGroup - 1];
+    const sourceIndex = source.findIndex(candidate => personKey(candidate) === personKey(person));
+    const targets = plan.groups.map((_, index) => index + 1)
+      .filter(group => group !== fromGroup && canUse(byPerson, person, planIndex, group))
+      .sort((a, b) => moveCost(plan, person, a) - moveCost(plan, person, b) || a - b);
+    for (const targetGroup of targets) {
+      const target = plan.groups[targetGroup - 1];
+      const nextSizes = plan.groups.map((members, index) => members.length + (index === fromGroup - 1 ? -1 : index === targetGroup - 1 ? 1 : 0));
+      if (Math.max(...nextSizes) - Math.min(...nextSizes) <= 1) {
+        source.splice(sourceIndex, 1);
+        target.push(person);
+        return true;
+      }
+      const swappers = [...target].sort((a, b) => {
+        const aCost = moveCost(plan, person, targetGroup) + moveCost(plan, a, fromGroup);
+        const bCost = moveCost(plan, person, targetGroup) + moveCost(plan, b, fromGroup);
+        return aCost - bCost || (plan.seedIndex.get(personKey(a)) ?? 0) - (plan.seedIndex.get(personKey(b)) ?? 0);
+      });
+      for (const swapper of swappers) {
+        if (!canUse(byPerson, swapper, planIndex, fromGroup)) continue;
+        const targetIndex = target.findIndex(candidate => personKey(candidate) === personKey(swapper));
+        source[sourceIndex] = swapper;
+        target[targetIndex] = person;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const limit = Math.max(1, plans.reduce((sum, plan) => sum + plan.competitors.length, 0) * 4);
+  for (let iteration = 0; iteration < limit; iteration += 1) {
+    const byPerson = placements();
+    const conflicts = clashes(byPerson);
+    if (!conflicts.length) return;
+    let repaired = false;
+    for (const conflict of conflicts) {
+      const choices = [...conflict].sort((a, b) => flexibility(byPerson, b) - flexibility(byPerson, a) || b.plan.groups.length - a.plan.groups.length || a.planIndex - b.planIndex);
+      if (choices.some(choice => tryRelocate(byPerson, choice))) { repaired = true; break; }
+    }
+    if (!repaired) return;
+  }
+}
 
 export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots }: {
   competition: StoredCompetition;
@@ -76,25 +169,46 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const normalTasksAllowed = (key: string) => !dataEntry.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
   const othersCount = Math.max(1, accepted.filter(person => normalTasksAllowed(personKey(person)) && !staff.has(personKey(person))).length);
 
-  for (const round of rounds.filter(item => item.enabled && item.groups > 0)) {
+  // Build every competitor split first. In PRO mode they are then repaired together, so the
+  // order in which rounds happen to appear in the WCIF cannot create avoidable clashes.
+  const plans: CompetitorPlan[] = rounds.filter(item => item.enabled && item.groups > 0).flatMap(round => {
     const { people: competitors, known } = roundCompetitors(competition, round.id);
-    if (!known || competitors.length === 0) continue;
+    if (!known || competitors.length === 0) return [];
     const firstRound = round.roundNumber === 1;
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
     const groups = splitIntoGroups(competitors, round.groups, firstRound ? options.sortingRule : "ranks", round.eventId);
     if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)));
+    const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
+    const preferredGroup = new Map<string, number>();
+    groups.forEach((members, groupIndex) => members.forEach(person => preferredGroup.set(personKey(person), groupIndex + 1)));
+    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup }];
+  });
+  if (slots) resolveCompetitorOverlaps(plans, slots);
+
+  // Every competition slot is occupied before staff allocation starts. Staff selection therefore
+  // sees future rounds as well as earlier ones and cannot hide a competitor clash through ordering.
+  if (slots) {
+    for (const plan of plans) plan.groups.forEach((members, groupIndex) => {
+      const windows = slots.get(plan.round.id)?.find(slot => slot.group === groupIndex + 1)?.windows ?? [];
+      for (const person of members) {
+        const key = personKey(person);
+        busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
+      }
+    });
+  }
+
+  for (const plan of plans) {
+    const { round, competitors, groups, fixed, seedIndex } = plan;
 
     const roundSlots = slots?.get(round.id);
     const windowsOf = (group: number) => roundSlots?.find(slot => slot.group === group)?.windows ?? [];
     const markBusy = (key: string, group: number) => busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windowsOf(group)]);
     const busyDuring = (key: string, group: number) => windowsOf(group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
-    const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     groups.forEach((members, groupIndex) => {
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
         rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stations ? index + 1 : undefined });
-        markBusy(key, groupIndex + 1);
       });
     });
     const rowFor = (person: WcifPerson) => {
