@@ -59,11 +59,16 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const trusted = set(people.trustedIds);
   const delegateDuty = set(people.delegateDutyIds);
   const globalLoad = new Map<string, number>();
+  // Staff do more than everyone else, but not everything: they keep priority while below
+  // twice the average load of the other people who can take normal tasks.
+  const STAFF_LOAD_FACTOR = 2;
+  let othersTotalLoad = 0;
   const eventLoad = new Map<string, number>();
   const output: GeneratedAssignment[] = [];
 
   const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0);
   const normalTasksAllowed = (key: string) => !dataEntry.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
+  const othersCount = Math.max(1, accepted.filter(person => normalTasksAllowed(personKey(person)) && !staff.has(personKey(person))).length);
 
   for (const round of rounds.filter(item => item.enabled && item.groups > 0)) {
     const { people: competitors, known } = roundCompetitors(competition, round.id);
@@ -101,6 +106,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const row = rowFor(person);
       row.tasks = sortTasks([...row.tasks, { group, role }]);
       globalLoad.set(row.key, load(row.key) + 1);
+      if (!staff.has(row.key) && (role === "judge" || role === "scrambler" || role === "runner")) othersTotalLoad += 1;
       eventLoad.set(`${row.key}|${round.eventId}`, loadInEvent(row.key) + 1);
     };
 
@@ -119,16 +125,19 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
 
     const strictScramblers = options.sortingRule === "scrambler-safe";
     const inRoundKeys = new Set(competitors.map(personKey));
+    // Strict: trusted people, or people with a result in the faster half of the round
+    // (never fewer than the slots to fill), so scrambling is spread among good people.
+    const fastEnough = Math.max(Math.ceil(competitors.length / 2), round.scramblers * groups.length);
     const scramblerPool = accepted.filter(person => {
       const key = personKey(person);
       if (!normalTasksAllowed(key)) return false;
       if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
-      return !strictScramblers || trusted.has(key) || hasResult(person);
+      return !strictScramblers || trusted.has(key) || (hasResult(person) && (seedIndex.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
     fill("scrambler", () => round.scramblers, scramblerPool, (person, group) => {
       const key = personKey(person);
-      // Strict: the fastest available people, at most about two groups each per round.
-      if (strictScramblers) return [Math.floor(roundLoad(key) / 2), loadInEvent(key) >= 3 ? 1 : 0, trusted.has(key) ? 0 : 1, staff.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
+      // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
+      if (strictScramblers) return [roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
       // Groupifier's criteria. Staff are generic here (not scrambling specialists), so they only
       // win among equally suitable people, like trusted people do.
       return [
@@ -158,10 +167,10 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
 
     if (options.assignJudges) {
       const normalPool = accepted.filter(person => normalTasksAllowed(personKey(person)));
-      const staffKey = (person: WcifPerson, group: number) => [0, load(personKey(person)), beforeOwn(personKey(person), group)];
+      const staffPreferred = (key: string) => staff.has(key) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
       const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
         const key = personKey(person);
-        if (staff.has(key)) return staffKey(person, group);
+        if (staffPreferred(key)) return [0, load(key), beforeOwn(key, group)];
         return [1,
           role === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country ? 1 : 0,
           options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
@@ -169,6 +178,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           youngerThan10(person),
           busyRoles(key),
           loadInEvent(key) >= 2 ? 1 : 0,
+          // Coarse load first, so people in many events do not end up with most of the work.
+          Math.floor(load(key) / 4),
           inRoundKeys.has(key) ? 0 : 1,
           load(key),
           beforeOwn(key, group),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Hint } from "@/components/hint";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import type { WcifPerson } from "@/lib/competition-store";
 import { PERSON_ROLE_LABELS, type PeopleSettings, type PersonRole } from "@/lib/people";
@@ -53,13 +54,12 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties, showPh
   }
 
   return <section className="people-panel" id="people">
-    <div className="setup-heading"><div><h2>Personas y roles</h2><p>Los roles se leen del WCIF. Cámbialos aquí sin tocar la WCA.</p></div><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Mostrar fotos</label></div>
+    <div className="setup-heading"><h2>Personas y roles <Hint align="start" text="Los roles se leen del WCIF. Los cambios se guardan aquí, sin tocar la WCA." /></h2><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Mostrar fotos</label></div>
     <div className="role-grid">{ORDER.map(id => {
       const keys = listOf(id);
       const isDelegateList = id === "delegate" || id === "trainee-delegate";
       return <div className="role-card" key={id}>
-        <div className="role-card-head"><h3>{id === "trusted" ? "Personal de confianza" : PERSON_ROLE_LABELS[id]}</h3><span>{keys.length}</span></div>
-        <p>{DESCRIPTIONS[id]}</p>
+        <div className="role-card-head"><h3>{id === "trusted" ? "Personal de confianza" : PERSON_ROLE_LABELS[id]} <Hint text={DESCRIPTIONS[id]} /></h3><span>{keys.length}</span></div>
         {keys.length > 0 && <ul className="role-people">{keys.map(key => {
           const person = byKey.get(key);
           return <li key={key}>

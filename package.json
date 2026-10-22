@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@cubing/icons": "^3.0.5",
+    "flag-icons": "7.5.0",
     "next": "16.4.2",
     "next-auth": "4.24.15",
     "pdfmake": "0.3.11",

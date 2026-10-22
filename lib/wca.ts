@@ -1,7 +1,7 @@
 export const WCA_BASE_URL = process.env.WCA_BASE_URL ?? "https://www.worldcubeassociation.org";
 
 export type WcaCompetition = {
-  id: string; name: string; city_name?: string; country_iso2?: string;
+  id: string; name: string; city?: string; country_iso2?: string;
   start_date: string; end_date: string; venue_address?: string;
 };
 

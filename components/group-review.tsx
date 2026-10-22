@@ -2,8 +2,9 @@
 
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EventIcon } from "@/components/event-icon";
+import { PersonCard } from "@/components/person-card";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
-import { applyCells, cellValue, setStation, duties, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, TASK_LABELS, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
+import { applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, TASK_LABELS, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { judgesNeeded } from "@/lib/rounds";
 import { countBySeverity, SEVERITY_ORDER, validateRound, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
@@ -12,8 +13,13 @@ type History = { past: GeneratedAssignment[][]; present: GeneratedAssignment[]; 
 type HistoryAction = { type: "commit"; next: GeneratedAssignment[] } | { type: "undo" } | { type: "redo" };
 
 const HISTORY_LIMIT = 200;
+
+type RowFilter = "all" | "issues" | "scramblers" | "newcomers" | "staff-only";
+type RowSort = "seed" | "name" | "group" | "load";
+const FILTER_LABELS: Record<RowFilter, string> = { all: "Todas las personas", issues: "Con problemas", scramblers: "Mezclan", newcomers: "Newcomers", "staff-only": "Solo trabajan" };
+const SORT_LABELS: Record<RowSort, string> = { seed: "Por seed", name: "Por nombre", group: "Por grupo", load: "Por carga de tareas" };
 const VALUES: CellValue[] = ["competitor", "judge", "scrambler", "runner", "delegate", "stagelead", "announcer", "dataentry", "other", ""];
-const HOTKEY_LABELS: Record<CellValue, string> = { "": "0", competitor: "C", judge: "J", scrambler: "M", runner: "R", delegate: "D", stagelead: "L", announcer: "A", dataentry: "E", other: "O" };
+const HOTKEY_LABELS: Record<CellValue, string> = { "": "0", competitor: "C", judge: "J", scrambler: "S", runner: "R", delegate: "D", stagelead: "L", announcer: "A", dataentry: "E", other: "O" };
 const HOTKEYS: Record<string, CellValue> = { c: "competitor", j: "judge", m: "scrambler", s: "scrambler", r: "runner", d: "delegate", l: "stagelead", a: "announcer", e: "dataentry", o: "other", "0": "", delete: "", backspace: "" };
 /** Extra roles only appear in the group totals when someone has them or the rules require them. */
 const EXTRA_ROLES: TaskRole[] = ["delegate", "stagelead", "announcer", "dataentry", "other"];
@@ -78,12 +84,14 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
   return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 }
 
-export function GroupReview({ initialAssignments, rules, eventNames, roomName = "Área de competición", onChange, photos, showPhotos, onShowPhotosChange }: {
+export function GroupReview({ initialAssignments, rules, eventNames, roomName = "Área de competición", onChange, photos, showPhotos, onShowPhotosChange, roleLabels }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
   showPhotos: boolean;
   onShowPhotosChange: (show: boolean) => void;
+  /** Role names per person, for the person card. */
+  roleLabels: Record<string, string[]>;
   rules: Record<string, RoundRules>;
   eventNames: Record<string, string>;
   roomName?: string;
@@ -100,6 +108,11 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   const [focusRequest, setFocusRequest] = useState(0);
   const [status, setStatus] = useState("");
   const [showIssues, setShowIssues] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<RowFilter>("all");
+  const [sortBy, setSortBy] = useState<RowSort>("seed");
+  const [cardPersonId, setCardPersonId] = useState<string>();
   /** Station being typed into a competitor cell. */
   const [stationEdit, setStationEdit] = useState<{ id: string; group: number; value: string }>();
   // Enter and the blur that follows must not save twice.
@@ -116,16 +129,44 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   })), [assignments, rounds, rules]);
 
   // People in the round first, by seed; staff who only work in this round after them, by name.
-  const visible = useMemo(() => assignments.filter(item => item.roundId === roundId).sort((a, b) =>
-    Number(b.inRound) - Number(a.inRound)
-    || (a.inRound ? (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER) : 0)
-    || a.name.localeCompare(b.name)), [assignments, roundId]);
+  const loads = useMemo(() => dutyLoads(assignments), [assignments]);
+  /** Duties per person and role across every round, for the totals column. */
+  const roleTotals = useMemo(() => {
+    const totals = new Map<string, Partial<Record<DutyRole, number>>>();
+    for (const item of assignments) {
+      const counts = totals.get(item.personId) ?? {};
+      for (const duty of duties(item)) counts[duty.role] = (counts[duty.role] ?? 0) + 1;
+      totals.set(item.personId, counts);
+    }
+    return totals;
+  }, [assignments]);
+  const roundRows = useMemo(() => assignments.filter(item => item.roundId === roundId), [assignments, roundId]);
+  // People in the round first; staff who only work in this round after them.
+  const visible = useMemo(() => {
+    const withIssues = new Set((issuesByRound.get(roundId) ?? []).map(issue => issue.assignmentId));
+    const needle = query.trim().toLowerCase();
+    const keep = (item: GeneratedAssignment) => {
+      if (needle && !`${item.name} ${item.wcaId ?? ""}`.toLowerCase().includes(needle)) return false;
+      if (filter === "issues") return withIssues.has(item.id);
+      if (filter === "scramblers") return duties(item).some(duty => duty.role === "scrambler");
+      if (filter === "newcomers") return !item.wcaId;
+      if (filter === "staff-only") return !item.inRound;
+      return true;
+    };
+    const bySeed = (a: GeneratedAssignment, b: GeneratedAssignment) => (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER);
+    const order: Record<RowSort, (a: GeneratedAssignment, b: GeneratedAssignment) => number> = {
+      seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : 0),
+      name: () => 0,
+      group: (a, b) => (competingGroup(a) ?? Number.MAX_SAFE_INTEGER) - (competingGroup(b) ?? Number.MAX_SAFE_INTEGER) || bySeed(a, b),
+      load: (a, b) => (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
+    };
+    return roundRows.filter(keep).sort((a, b) => order[sortBy](a, b) || a.name.localeCompare(b.name));
+  }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);
   const groupCount = Math.max(currentRules.groups, usedGroupCount(visible), 1);
   const totals = groupTotals(visible, groupCount);
   const extraRoles = EXTRA_ROLES.filter(role => totals.some(total => total.counts[role] > 0) || (role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry));
-  const loads = useMemo(() => dutyLoads(assignments), [assignments]);
   const selected = useMemo(() => new Set(selection), [selection]);
   const currentRound = rounds.find(round => round.id === roundId);
   const issues = issuesByRound.get(roundId) ?? [];
@@ -326,7 +367,6 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   const tabbable = cursor ?? (visible[0] ? { id: visible[0].id, group: 1 } : undefined);
 
   return <section className="review-panel matrix-review" id="review" onKeyDown={handleKeyDown}>
-    <div className="review-head"><div><p className="kicker">Revisar y validar</p><h2>{currentRound ? `${eventNames[currentRound.eventId] ?? currentRound.eventId} · Ronda ${currentRound.id.split("-r").at(-1)}` : "Revisar asignaciones"}</h2><p>Selecciona celdas y asígnales una tarea con el teclado o con los botones. Puedes cambiar cualquier celda; los problemas aparecen abajo.</p></div><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Mostrar fotos</label></div>
 
     <div className="round-tabs" role="tablist" aria-label="Rondas">{rounds.map(round => {
       const roundIssues = issuesByRound.get(round.id) ?? [];
@@ -341,15 +381,27 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
           const label = value ? TASK_LABELS[value] : "Vaciar";
           return <button key={value || "empty"} role="radio" aria-checked={tool === value} aria-label={`${label} (tecla ${HOTKEY_LABELS[value]})`} title={`${label} · tecla ${HOTKEY_LABELS[value]}`} className={`tool-chip cell-chip ${value || "empty"} ${tool === value ? "active" : ""}`} onClick={() => setTool(value)}>{value ? TASK_CODES[value] : "∅"}</button>;
         })}</span>
-        <span className="tool-current">{tool === "select" ? "Clic para seleccionar" : `Clic para poner: ${tool ? TASK_LABELS[tool] : "vaciar"}`}</span>
+        <span className="tool-current">{tool === "select" ? "" : tool ? TASK_LABELS[tool] : "Vaciar"}</span>
       </div>
-      <div className="history-actions"><button onClick={undo} disabled={!history.past.length} title="Deshacer (Ctrl+Z)">↶ Deshacer</button><button onClick={redo} disabled={!history.future.length} title="Rehacer (Ctrl+Y o Ctrl+Mayús+Z)">↷ Rehacer</button></div>
+      <div className="history-actions">
+        <label className="photo-toggle compact" title="Mostrar las fotos de la WCA"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> Fotos</label>
+        <span className="help-anchor">
+          <button type="button" aria-expanded={showHelp} onClick={() => setShowHelp(value => !value)}>? Ayuda</button>
+          {showHelp && <div className="help-pop" role="dialog" aria-label="Atajos de la matriz">
+            <dl>
+              <dt>Seleccionar varias</dt><dd>Arrastra, o <kbd>Mayús</kbd>/<kbd>Ctrl</kbd> + clic</dd>
+              <dt>Asignar</dt><dd>La letra de la tarea (la de su botón); <kbd>0</kbd> vacía</dd>
+              <dt>Mover</dt><dd><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>, con <kbd>Mayús</kbd> amplía la selección</dd>
+              <dt>Cambiar de grupo</dt><dd><kbd>C</kbd> en otra celda de la fila</dd>
+              <dt>Estación</dt><dd>Escribe un número sobre una celda C, o doble clic</dd>
+              <dt>Deshacer</dt><dd><kbd>Ctrl</kbd>+<kbd>Z</kbd> · rehacer <kbd>Ctrl</kbd>+<kbd>Y</kbd></dd>
+            </dl>
+            <button type="button" className="plain" onClick={() => setShowHelp(false)}>Cerrar</button>
+          </div>}
+        </span>
+        <button onClick={undo} disabled={!history.past.length} title="Deshacer (Ctrl+Z)">↶ Deshacer</button><button onClick={redo} disabled={!history.future.length} title="Rehacer (Ctrl+Y o Ctrl+Mayús+Z)">↷ Rehacer</button></div>
     </div>
 
-    <div className="selection-bar">{selection.length > 1
-      ? <><strong>{selection.length} celdas seleccionadas</strong><span>Asignar:</span>{VALUES.map(value => <button key={value || "empty"} className={`cell-chip ${value || "empty"}`} onClick={() => apply(value)} title={value ? TASK_LABELS[value] : "Vaciar"}>{value ? TASK_CODES[value] : "Vaciar"}</button>)}<button className="plain" onClick={clearSelection}>Quitar selección <kbd>Esc</kbd></button></>
-      : <p>Arrastra o usa <kbd>Mayús</kbd> y <kbd>Ctrl</kbd> para seleccionar varias celdas. Pulsa la letra de una tarea o <kbd>0</kbd> para asignarla a la selección y <kbd>↑↓←→</kbd> para moverte. Sobre una celda C, escribe un número (o haz doble clic) para cambiar su estación.</p>}
-    </div>
 
     <div className="issue-bar">
       <div className="issue-counts">{issues.length === 0
@@ -357,6 +409,11 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
         : (["error", "warning"] as IssueSeverity[]).filter(severity => counts[severity]).map(severity => <span key={severity} className={severity} title={SEVERITY_HELP[severity]}>{countLabel(counts[severity], SEVERITY_COUNTS[severity])}</span>)}
       </div>
       <span className="review-status" role="status">{status}</span>
+      <div className="row-controls">
+        <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar persona" aria-label="Buscar persona" />
+        <select value={filter} onChange={event => setFilter(event.target.value as RowFilter)} aria-label="Filtrar">{(Object.keys(FILTER_LABELS) as RowFilter[]).map(key => <option key={key} value={key}>{FILTER_LABELS[key]}</option>)}</select>
+        <select value={sortBy} onChange={event => setSortBy(event.target.value as RowSort)} aria-label="Ordenar">{(Object.keys(SORT_LABELS) as RowSort[]).map(key => <option key={key} value={key}>{SORT_LABELS[key]}</option>)}</select>
+      </div>
       {issues.length > 0 && <button className="plain" aria-expanded={showIssues} onClick={() => setShowIssues(value => !value)}>{showIssues ? "Ocultar lista" : "Ver lista"}</button>}
     </div>
     {showIssues && issues.length > 0 && <ul className="issue-items">{issues.map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{SEVERITY_LABELS[issue.severity]}</span>{issue.message}</button></li>)}</ul>}
@@ -392,7 +449,7 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
       const rowDuties = duties(item);
       return <tr key={item.id} className={item.inRound ? "" : "staff-row"}>
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
-        <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issue => issue.message).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><strong>{item.name}</strong><small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
+        <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issue => issue.message).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title="Ver ficha">{item.name}</button><small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
         <td>{formatSeed(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label="Compite en esta ronda">✓</span> : <span className="muted-mark" aria-label="Solo trabaja en esta ronda">—</span>}</td>
@@ -440,9 +497,41 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
             }}
           ><strong>{TASK_CODES[value]}</strong>{value === "competitor" && item.station && <small>P{item.station}</small>}</button></td>;
         })}
-        <td className="tasks-column">{rowDuties.length ? rowDuties.map(duty => `G${duty.group} ${TASK_CODES[duty.role]}`).join(" · ") : "—"}{load > 0 && <small>{load === 1 ? "1 tarea" : `${load} tareas`} en total</small>}</td>
+        <td className="tasks-column">
+          <span className="task-chips">{rowDuties.length ? rowDuties.map(duty => <span key={`${duty.role}${duty.group}`} className={`cell-chip mini ${duty.role}`} title={`${TASK_LABELS[duty.role]} en G${duty.group}`}>{TASK_CODES[duty.role]}·G{duty.group}</span>) : <span className="muted-mark">—</span>}</span>
+          {load > 0 && (() => {
+            const roles = DUTY_ROLES.filter(role => (roleTotals.get(item.personId)?.[role] ?? 0) > 0);
+            return <span className="task-totals" title={`${load} tareas en todas las rondas`}><b>Total</b>{roles.map(role => <span key={role} className={`cell-chip mini ${role}`}>{TASK_CODES[role]}{roleTotals.get(item.personId)![role]}</span>)}{roles.length > 1 && <b>· {load}</b>}</span>;
+          })()}
+        </td>
       </tr>;
     })}</tbody></table></div>
+
+    {selection.length > 1 && <div className="selection-float" role="toolbar" aria-label="Asignar a la selección">
+      <strong>{selection.length} celdas</strong>
+      {VALUES.map(value => <button key={value || "empty"} className={`cell-chip ${value || "empty"}`} onClick={() => apply(value)} title={value ? TASK_LABELS[value] : "Vaciar"}>{value ? TASK_CODES[value] : "∅"}</button>)}
+      <button className="plain" onClick={clearSelection}>Quitar <kbd>Esc</kbd></button>
+    </div>}
+
+    {cardPersonId && <PersonCard
+      rows={assignments.filter(item => item.personId === cardPersonId)}
+      roundOrder={rounds.map(round => round.id)}
+      eventNames={eventNames}
+      photo={showPhotos ? photos[cardPersonId] : undefined}
+      roles={roleLabels[cardPersonId] ?? []}
+      issues={[...issuesByRound.values()].flat()}
+      onClose={() => setCardPersonId(undefined)}
+      onGoTo={(targetRound, group) => {
+        if (targetRound !== roundId) changeRound(targetRound);
+        setQuery("");
+        setFilter("all");
+        const row = assignments.find(item => item.roundId === targetRound && item.personId === cardPersonId);
+        if (row) {
+          selectSingle({ id: row.id, group });
+          setFocusRequest(request => request + 1);
+        }
+      }}
+    />}
 
     <div className="review-footer"><span><strong>{visible.filter(item => item.inRound).length} competidores</strong>{visible.some(item => !item.inRound) && ` · ${visible.filter(item => !item.inRound).length} personas solo con tareas`} · {issues.length ? (["error", "warning"] as IssueSeverity[]).map(severity => countLabel(counts[severity], SEVERITY_COUNTS[severity])).join(" · ") : "sin problemas"}</span><span className="review-saved">Guardado en este dispositivo · sin publicar</span></div>
   </section>;

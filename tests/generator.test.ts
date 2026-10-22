@@ -185,3 +185,40 @@ describe("generateAssignments — reglas concretas", () => {
     expect(generateAssignments({ competition, rounds: [later], stations: 10, zoneMode: "waiting", people, options: DEFAULT_OPTIONS })).toEqual([]);
   });
 });
+
+describe("generateAssignments — reparto justo en un campeonato grande", () => {
+  const competition = demoCompetition("large");
+  const people = peopleFromWcif(competition);
+  const rounds = initialRounds(competition, 16, "fixed");
+  const rows = generateAssignments({ competition, rounds, stations: 16, zoneMode: "fixed", people, options: DEFAULT_OPTIONS });
+  const staff = new Set(people.roles.staff ?? []);
+  const busy = new Set([...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? []), ...(people.roles.organizer ?? []), ...(people.roles.dataentry ?? [])]);
+  const load = new Map<string, number>();
+  for (const row of rows) load.set(row.personId, (load.get(row.personId) ?? 0) + duties(row).length);
+  const others = acceptedPeople(competition).map(personKey).filter(key => !staff.has(key) && !busy.has(key)).map(key => load.get(key) ?? 0);
+  const average = others.reduce((sum, value) => sum + value, 0) / others.length;
+
+  it("keeps everyone's load close to the average", () => {
+    expect(Math.max(...others)).toBeLessThanOrEqual(Math.ceil(average * 1.5));
+    expect(Math.min(...others)).toBeGreaterThanOrEqual(Math.floor(average * 0.5));
+  });
+
+  it("gives staff more work, but only about twice the average", () => {
+    for (const key of staff) {
+      expect(load.get(key) ?? 0).toBeGreaterThan(average);
+      expect(load.get(key) ?? 0).toBeLessThanOrEqual(2 * average + 4);
+    }
+  });
+
+  it("strict mode never repeats a scrambler in a round when there are enough good people", () => {
+    expect(rows.filter(row => duties(row).filter(duty => duty.role === "scrambler").length > 1)).toEqual([]);
+  });
+
+  it("strict mode takes scramblers from the faster half of each round", () => {
+    for (const round of rounds.filter(item => item.enabled)) {
+      const competitors = rows.filter(row => row.roundId === round.id && row.inRound).sort((a, b) => (a.seedResult ?? 1e12) - (b.seedResult ?? 1e12));
+      const scramblers = competitors.filter(row => duties(row).some(duty => duty.role === "scrambler"));
+      for (const row of scramblers) expect(competitors.indexOf(row)).toBeLessThan(Math.max(Math.ceil(competitors.length / 2), round.scramblers * round.groups));
+    }
+  });
+});

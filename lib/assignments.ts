@@ -11,7 +11,7 @@ export const TASK_LABELS: Record<CellValue, string> = {
   delegate: "Delegado", stagelead: "Jefe de escenario", announcer: "Locutor", dataentry: "Data entry", other: "Otra tarea",
 };
 export const TASK_CODES: Record<CellValue, string> = {
-  "": "", competitor: "C", judge: "J", scrambler: "M", runner: "R", delegate: "D", stagelead: "L", announcer: "A", dataentry: "E", other: "O",
+  "": "", competitor: "C", judge: "J", scrambler: "S", runner: "R", delegate: "D", stagelead: "L", announcer: "A", dataentry: "E", other: "O",
 };
 
 export function wcifAssignmentCode(role: TaskRole) {
