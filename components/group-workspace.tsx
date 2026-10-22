@@ -55,6 +55,12 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         const roomCount = data.schedule?.venues?.reduce((sum, venue) => sum + (venue.rooms?.length ?? 0), 0) ?? 1;
         setRooms(Math.max(roomCount, 1));
         setRounds(initialRounds(data, stations));
+        try {
+          const savedDraft = localStorage.getItem(`wca-easy-groups:draft:${data.id}`);
+          if (savedDraft) setProposal(JSON.parse(savedDraft) as GeneratedAssignment[]);
+        } catch {
+          localStorage.removeItem(`wca-easy-groups:draft:${data.id}`);
+        }
       }
     }).finally(() => setLoading(false));
   }, [competitionId]);
