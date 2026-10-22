@@ -10,8 +10,9 @@ const EVENT_NAMES: Record<string, string> = {
   pyram: "Pyraminx", skewb: "Skewb", sq1: "Square-1", "444bf": "4×4 a ciegas", "555bf": "5×5 a ciegas", "333mbf": "3×3 multi-ciegas"
 };
 
-type RoundConfig = { id: string; eventId: string; label: string; competitors: number; groups: number; enabled: boolean };
-type Preset = "simple" | "balanced" | "large";
+type RoundConfig = { id: string; eventId: string; label: string; competitors: number; groups: number; scramblers: number; enabled: boolean };
+type Preset = "simple" | "scrambler-safe" | "custom";
+type FlowMode = "fixed" | "waiting";
 
 function acceptedPeople(competition: StoredCompetition) {
   return (competition.persons ?? []).filter(person => person.registration?.status === "accepted" && person.registration.isCompeting !== false);
@@ -21,7 +22,10 @@ function initialRounds(competition: StoredCompetition, stations: number): RoundC
   const people = acceptedPeople(competition);
   return (competition.events ?? []).flatMap(event => (event.rounds ?? []).map((round, index) => {
     const competitors = people.filter(person => person.registration?.eventIds?.includes(event.id)).length;
-    return { id: round.id, eventId: event.id, label: `${EVENT_NAMES[event.id] ?? event.id} · Ronda ${index + 1}`, competitors: index === 0 ? competitors : 0, groups: Math.max(1, Math.ceil(Math.max(competitors, 1) / Math.max(stations * 2, 1))), enabled: index === 0 };
+    const groups = Math.max(1, Math.ceil(Math.max(competitors, 1) / Math.max(stations * 1.7, 1)));
+    const groupSize = Math.ceil(competitors / groups);
+    const scramblers = Math.max(1, Math.floor(1 + (Math.min(groupSize, stations) - 1) / 5));
+    return { id: round.id, eventId: event.id, label: `${EVENT_NAMES[event.id] ?? event.id} · Ronda ${index + 1}`, competitors: index === 0 ? competitors : 0, groups, scramblers, enabled: index === 0 };
   }));
 }
 
@@ -30,7 +34,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const [loading, setLoading] = useState(true);
   const [stations, setStations] = useState(12);
   const [rooms, setRooms] = useState(1);
-  const [preset, setPreset] = useState<Preset>("balanced");
+  const [preset, setPreset] = useState<Preset>("scrambler-safe");
+  const [flowMode, setFlowMode] = useState<FlowMode>("waiting");
+  const [trustedIds, setTrustedIds] = useState<string[]>([]);
+  const [trustedCandidate, setTrustedCandidate] = useState("");
   const [rounds, setRounds] = useState<RoundConfig[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [avoidConsecutive, setAvoidConsecutive] = useState(true);
@@ -51,6 +58,11 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const people = useMemo(() => competition ? acceptedPeople(competition) : [], [competition]);
   const activeRounds = rounds.filter(round => round.enabled);
   const totalGroups = activeRounds.reduce((sum, round) => sum + round.groups, 0);
+  const trustedPeople = people.filter(person => trustedIds.includes(String(person.registrantId ?? person.wcaId ?? person.name)));
+  const coverageWarnings = activeRounds.filter(round => {
+    const experienced = people.filter(person => person.personalBests?.some(best => best.eventId === round.eventId)).length;
+    return experienced < round.scramblers * Math.min(round.groups, 2);
+  });
 
   function updateGroups(id: string, delta: number) {
     setGenerated(false);
@@ -59,9 +71,19 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
   function applyPreset(nextPreset: Preset) {
     setPreset(nextPreset);
-    const multiplier = nextPreset === "simple" ? 2.5 : nextPreset === "large" ? 1.35 : 2;
-    setRounds(current => current.map(round => ({ ...round, groups: Math.max(1, Math.ceil(Math.max(round.competitors, 1) / Math.max(Math.floor(stations * multiplier), 1))) })));
+    const multiplier = nextPreset === "simple" ? 2.4 : nextPreset === "scrambler-safe" ? 1.7 : 2;
+    setRounds(current => current.map(round => {
+      const groups = Math.max(1, Math.ceil(Math.max(round.competitors, 1) / Math.max(Math.floor(stations * multiplier), 1)));
+      const groupSize = Math.ceil(round.competitors / groups);
+      return { ...round, groups, scramblers: Math.max(1, Math.floor(1 + (Math.min(groupSize, stations) - 1) / 5)) };
+    }));
     setGenerated(false);
+  }
+
+  function addTrustedPerson() {
+    if (!trustedCandidate || trustedIds.includes(trustedCandidate)) return;
+    setTrustedIds(current => [...current, trustedCandidate]);
+    setTrustedCandidate("");
   }
 
   if (loading) return <main className="workspace-loading"><div /><p>Cargando datos de la competición…</p></main>;
@@ -85,25 +107,40 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     <section className="workspace-main">
       <header className="workspace-topbar"><div><Link href="/dashboard">Competiciones</Link><span>/</span><strong>{competition.name}</strong></div><div className="sync-state"><i /> WCIF guardado en este dispositivo</div></header>
       <div className="workspace-content">
-        <div className="page-title"><div><p className="kicker">Paso 2 de 5</p><h1>Configura los grupos</h1><p>Define la capacidad del recinto y ajusta solo las rondas que lo necesiten.</p></div><button className="button secondary" onClick={() => setShowAdvanced(value => !value)}>{showAdvanced ? "Ocultar opciones" : "Opciones avanzadas"}</button></div>
+        <div className="page-title"><div><p className="kicker">Paso 2 de 5</p><h1>Configura los grupos</h1><p>Indica cómo funciona el recinto y elige las prioridades del reparto.</p></div><button className="button secondary" onClick={() => setShowAdvanced(value => !value)}>{showAdvanced ? "Ocultar opciones" : "Opciones avanzadas"}</button></div>
 
         <section className="data-strip" id="summary">
           <div><small>Competidores aceptados</small><strong>{people.length}</strong></div><div><small>Pruebas</small><strong>{competition.events?.length ?? 0}</strong></div><div><small>Salas en el WCIF</small><strong>{competition.schedule?.venues?.reduce((sum, venue) => sum + (venue.rooms?.length ?? 0), 0) ?? 0}</strong></div><div><small>Rondas iniciales</small><strong>{activeRounds.length}</strong></div>
         </section>
 
         <section className="setup-panel">
-          <div className="setup-heading"><div><h2>Configuración general</h2><p>Estas decisiones sirven como punto de partida para todas las pruebas.</p></div><span>Se puede cambiar después</span></div>
+          <div className="setup-heading"><div><h2>Funcionamiento del área</h2><p>Estas decisiones sirven como punto de partida para todas las pruebas.</p></div><span>Se puede cambiar después</span></div>
           <div className="setup-grid">
             <label><span>Estaciones por sala</span><div className="number-field"><button onClick={() => setStations(Math.max(1, stations - 1))}>−</button><strong>{stations}</strong><button onClick={() => setStations(stations + 1)}>+</button></div><small>Mesas disponibles simultáneamente</small></label>
             <label><span>Número de salas</span><div className="number-field"><button onClick={() => setRooms(Math.max(1, rooms - 1))}>−</button><strong>{rooms}</strong><button onClick={() => setRooms(rooms + 1)}>+</button></div><small>Áreas de competición independientes</small></label>
-            <div className="preset-field"><span>Forma de trabajar</span><div className="segmented"><button className={preset === "simple" ? "selected" : ""} onClick={() => applyPreset("simple")}>Simple</button><button className={preset === "balanced" ? "selected" : ""} onClick={() => applyPreset("balanced")}>Equilibrada</button><button className={preset === "large" ? "selected" : ""} onClick={() => applyPreset("large")}>Gran campeonato</button></div><small>Ajusta el tamaño inicial de los grupos</small></div>
+            <div className="preset-field"><span>Entrada de competidores</span><div className="segmented two"><button className={flowMode === "fixed" ? "selected" : ""} onClick={() => setFlowMode("fixed")}>Puestos fijos</button><button className={flowMode === "waiting" ? "selected" : ""} onClick={() => setFlowMode("waiting")}>Sala de espera</button></div><small>{flowMode === "fixed" ? "Cada competidor tendrá un número de estación." : "Los competidores entran cuando queda una estación libre."}</small></div>
           </div>
           {showAdvanced && <div className="advanced-options" id="staff"><label><input type="checkbox" checked={avoidConsecutive} onChange={event => setAvoidConsecutive(event.target.checked)} /><span><strong>Evitar grupos consecutivos</strong><small>Reduce conflictos entre competir y trabajar.</small></span></label><label><input type="checkbox" checked={assignJudges} onChange={event => setAssignJudges(event.target.checked)} /><span><strong>Asignar jueces automáticamente</strong><small>Usa competidores de otros grupos como primera opción.</small></span></label></div>}
         </section>
 
+        <section className="rules-panel">
+          <div className="setup-heading"><div><h2>Reglas de asignación</h2><p>Empieza con un preset y modifica después lo que necesites.</p></div><span>Aplicado a todas las rondas</span></div>
+          <div className="preset-cards">
+            <button className={preset === "simple" ? "selected" : ""} onClick={() => applyPreset("simple")}><span className="preset-radio" /><strong>Open sencillo</strong><p>Grupos de tamaño parecido y reparto básico de tareas.</p></button>
+            <button className={preset === "scrambler-safe" ? "selected featured" : "featured"} onClick={() => applyPreset("scrambler-safe")}><span className="preset-radio" /><span className="recommended">Recomendado</span><strong>Mezcladores garantizados</strong><p>Reserva suficientes personas con buenos resultados para mezclar cada grupo.</p></button>
+            <button className={preset === "custom" ? "selected" : ""} onClick={() => applyPreset("custom")}><span className="preset-radio" /><strong>Personalizado</strong><p>Control manual de prioridades y excepciones.</p></button>
+          </div>
+          {preset === "scrambler-safe" && <div className="rule-explanation"><div><strong>Qué hará el generador</strong><p>Repartirá a los mejores de forma simétrica y podrá asignar tareas antes o después de competir. Evitará únicamente trabajar en el grupo inmediatamente anterior al propio.</p></div><ul><li>Mejores resultados distribuidos entre grupos</li><li>≈ 1 mezclador por cada 5 estaciones</li><li>Personal de confianza con prioridad</li></ul></div>}
+        </section>
+
+        {preset === "scrambler-safe" && <section className="trusted-panel">
+          <div className="setup-heading"><div><h2>Personal de confianza</h2><p>Estas personas tendrán prioridad para las tareas especializadas.</p></div><span>{trustedPeople.length} personas</span></div>
+          <div className="trusted-body"><div className="trusted-picker"><select value={trustedCandidate} onChange={event => setTrustedCandidate(event.target.value)}><option value="">Selecciona un competidor…</option>{people.filter(person => !trustedIds.includes(String(person.registrantId ?? person.wcaId ?? person.name))).map(person => { const id = String(person.registrantId ?? person.wcaId ?? person.name); return <option key={id} value={id}>{person.name}{person.wcaId ? ` · ${person.wcaId}` : ""}</option>; })}</select><button className="button secondary" onClick={addTrustedPerson}>Añadir</button></div>{trustedPeople.length > 0 && <div className="trusted-chips">{trustedPeople.map(person => { const id = String(person.registrantId ?? person.wcaId ?? person.name); return <button key={id} onClick={() => setTrustedIds(current => current.filter(value => value !== id))}>{person.name}<span>×</span></button>; })}</div>}<div className={coverageWarnings.length === 0 ? "coverage-ok" : "coverage-warning"}><strong>{coverageWarnings.length === 0 ? "Experiencia suficiente" : `Revisar ${coverageWarnings.length} rondas`}</strong><p>{coverageWarnings.length === 0 ? "Hay suficientes competidores con resultados oficiales para rotar mezcladores en todos los grupos." : "Hay pruebas con poca gente experimentada. Podrás asignar mezcladores manualmente antes de generar."}</p></div></div>
+        </section>}
+
         <section className="round-section" id="groups">
           <div className="section-heading"><div><h2>Grupos por ronda</h2><p>Las rondas posteriores se activarán cuando haya resultados o cupos definidos.</p></div><div className="group-total"><small>Total previsto</small><strong>{totalGroups} grupos</strong></div></div>
-          <div className="round-table"><div className="round-table-head"><span>Ronda</span><span>Competidores</span><span>Grupos</span><span>Por grupo</span><span>Incluir</span></div>{rounds.map(round => <div className={`round-row ${round.enabled ? "" : "disabled"}`} key={round.id}><div><span className="event-code">{round.eventId}</span><strong>{round.label}</strong></div><span>{round.competitors || "Por definir"}</span><div className="mini-stepper"><button disabled={!round.enabled} onClick={() => updateGroups(round.id, -1)}>−</button><strong>{round.groups}</strong><button disabled={!round.enabled} onClick={() => updateGroups(round.id, 1)}>+</button></div><span>{round.competitors ? `≈ ${Math.ceil(round.competitors / round.groups)}` : "—"}</span><label className="switch"><input type="checkbox" checked={round.enabled} onChange={event => { setRounds(current => current.map(item => item.id === round.id ? { ...item, enabled: event.target.checked } : item)); setGenerated(false); }} /><i /></label></div>)}</div>
+          <div className="round-table"><div className="round-table-head"><span>Ronda</span><span>Competidores</span><span>Grupos</span><span>Mezcladores</span><span>Incluir</span></div>{rounds.map(round => <div className={`round-row ${round.enabled ? "" : "disabled"}`} key={round.id}><div><span className="event-code">{round.eventId}</span><strong>{round.label}</strong></div><span>{round.competitors || "Por definir"}</span><div className="mini-stepper"><button disabled={!round.enabled} onClick={() => updateGroups(round.id, -1)}>−</button><strong>{round.groups}</strong><button disabled={!round.enabled} onClick={() => updateGroups(round.id, 1)}>+</button></div><span>{round.scramblers} / grupo</span><label className="switch"><input type="checkbox" checked={round.enabled} onChange={event => { setRounds(current => current.map(item => item.id === round.id ? { ...item, enabled: event.target.checked } : item)); setGenerated(false); }} /><i /></label></div>)}</div>
         </section>
 
         {generated && <section className="generated-summary" id="review"><div><span>✓</span><div><strong>Propuesta creada</strong><p>{people.length} competidores distribuidos en {totalGroups} grupos. El siguiente paso será revisar conflictos y asignar personal.</p></div></div><button className="button text-button">Ver propuesta →</button></section>}

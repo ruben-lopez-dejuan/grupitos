@@ -5,6 +5,14 @@ export type WcifPerson = {
   name: string;
   wcaId?: string | null;
   roles?: string[];
+  personalBests?: Array<{
+    eventId: string;
+    type: "single" | "average";
+    best: number;
+    worldRanking?: number;
+    continentalRanking?: number;
+    nationalRanking?: number;
+  }>;
   registration?: {
     status?: string;
     isCompeting?: boolean;
