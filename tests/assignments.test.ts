@@ -1,120 +1,121 @@
 import { describe, expect, it } from "vitest";
-import { applyCells, cellValue, dutyLoads, groupTotals, normalizeAssignments, type GeneratedAssignment } from "@/lib/assignments";
+import { applyCells, cellValue, competingGroup, dutyLoads, groupTotals, normalizeAssignments, type GeneratedAssignment, type Task } from "@/lib/assignments";
 import { parseDraft } from "@/lib/draft";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
-function person(id: string, group: number, extra: Partial<GeneratedAssignment> = {}): GeneratedAssignment {
-  return { id: `333-r1:${id}`, roundId: "333-r1", eventId: "333", personId: id, name: `Persona ${id}`, group, duties: [], seedResult: 1000, ...extra };
+function person(id: string, group: number | null, extra: Partial<GeneratedAssignment> & { duties?: Task[] } = {}): GeneratedAssignment {
+  const { duties = [], ...rest } = extra;
+  return { id: `333-r1:${id}`, roundId: "333-r1", eventId: "333", personId: id, name: `Persona ${id}`, inRound: true, seedResult: 1000, tasks: [...(group ? [{ group, role: "competitor" as const }] : []), ...duties], ...rest };
 }
 
 const options = { stations: 3, fixedStations: false };
-const rules: RoundRules = { groups: 2, scramblers: 1, runners: 0, stations: 3, fixedStations: false, checkJudges: false, avoidBeforeOwnGroup: true };
+const rules: RoundRules = { groups: 2, scramblers: 1, runners: 0, stations: 3, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 
 describe("applyCells", () => {
-  it("adds, replaces and clears duties", () => {
+  it("adds, replaces and clears any task", () => {
     let rows = [person("a", 1)];
     rows = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "judge", options).assignments;
     expect(cellValue(rows[0], 2)).toBe("judge");
-    rows = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "scrambler", options).assignments;
-    expect(rows[0].duties).toEqual([{ group: 2, role: "scrambler" }]);
+    rows = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "delegate", options).assignments;
+    expect(cellValue(rows[0], 2)).toBe("delegate");
     rows = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "", options).assignments;
-    expect(rows[0].duties).toEqual([]);
+    expect(rows[0].tasks).toEqual([{ group: 1, role: "competitor" }]);
   });
 
-  it("refuses a duty on the cell where the person competes", () => {
-    const rows = [person("a", 1)];
-    const result = applyCells(rows, [{ id: "333-r1:a", group: 1 }], "judge", options);
-    expect(result).toMatchObject({ changed: 0, skipped: 1 });
-    expect(result.assignments).toBe(rows);
-  });
-
-  it("never clears the competing cell", () => {
+  it("lets you remove the competitor task", () => {
     const result = applyCells([person("a", 1)], [{ id: "333-r1:a", group: 1 }], "", options);
-    expect(result.assignments[0].group).toBe(1);
-    expect(result.skipped).toBe(1);
+    expect(result.changed).toBe(1);
+    expect(result.assignments[0].tasks).toEqual([]);
   });
 
-  it("moves the competing group and drops a duty in the new group", () => {
-    const rows = [person("a", 1, { duties: [{ group: 2, role: "judge" }] })];
-    const result = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "competitor", options);
-    expect(result.assignments[0]).toMatchObject({ group: 2, duties: [] });
+  it("lets you turn the competing cell into a duty", () => {
+    const result = applyCells([person("a", 1)], [{ id: "333-r1:a", group: 1 }], "judge", options);
+    expect(result.assignments[0].tasks).toEqual([{ group: 1, role: "judge" }]);
   });
 
-  it("ignores a competitor move with several cells in the same row", () => {
-    const result = applyCells([person("a", 1)], [{ id: "333-r1:a", group: 2 }, { id: "333-r1:a", group: 3 }], "competitor", options);
-    expect(result).toMatchObject({ changed: 0, skipped: 2 });
+  it("allows competing in several groups (reported by the validator)", () => {
+    const result = applyCells([person("a", 1)], [{ id: "333-r1:a", group: 2 }], "competitor", options);
+    expect(result.assignments[0].tasks.filter(task => task.role === "competitor")).toHaveLength(2);
   });
 
-  it("gives the first free station when moving with fixed stations", () => {
-    const rows = [person("a", 1, { station: 1 }), person("b", 2, { station: 1 }), person("c", 2, { station: 3 })];
-    const result = applyCells(rows, [{ id: "333-r1:a", group: 2 }], "competitor", { stations: 3, fixedStations: true });
-    expect(result.assignments[0].station).toBe(2);
+  it("gives the first free station when someone ends up competing in a new group", () => {
+    const rows = [person("a", 1, { station: 1, duties: [] }), person("b", 2, { station: 1 }), person("c", 2, { station: 3 })];
+    let result = applyCells(rows, [{ id: "333-r1:a", group: 1 }], "", { stations: 3, fixedStations: true }).assignments;
+    expect(result[0].station).toBeUndefined();
+    result = applyCells(result, [{ id: "333-r1:a", group: 2 }], "competitor", { stations: 3, fixedStations: true }).assignments;
+    expect(result[0].station).toBe(2);
   });
 
-  it("applies a batch across rows and counts what changed", () => {
-    const rows = [person("a", 1), person("b", 1), person("c", 2)];
-    const result = applyCells(rows, rows.map(row => ({ id: row.id, group: 2 })), "judge", options);
-    expect(result).toMatchObject({ changed: 2, skipped: 1 });
-    expect(result.assignments[2]).toBe(rows[2]);
+  it("returns the same array when nothing changes", () => {
+    const rows = [person("a", 1)];
+    expect(applyCells(rows, [{ id: "333-r1:a", group: 1 }], "competitor", options).assignments).toBe(rows);
   });
 });
 
 describe("totals", () => {
-  it("counts competitors and duties per group", () => {
-    const rows = [person("a", 1, { duties: [{ group: 2, role: "scrambler" }] }), person("b", 2, { duties: [{ group: 1, role: "judge" }] }), person("c", 2, { duties: [{ group: 1, role: "runner" }] })];
-    expect(groupTotals(rows, 2)).toEqual([
-      { group: 1, competitors: 1, judges: 1, scramblers: 0, runners: 1 },
-      { group: 2, competitors: 2, judges: 0, scramblers: 1, runners: 0 },
-    ]);
+  it("counts every task per group and duties per person", () => {
+    const rows = [person("a", 1, { duties: [{ group: 2, role: "scrambler" }] }), person("b", 2, { duties: [{ group: 1, role: "dataentry" }] })];
+    const [g1, g2] = groupTotals(rows, 2);
+    expect([g1.counts.competitor, g1.counts.dataentry, g2.counts.competitor, g2.counts.scrambler]).toEqual([1, 1, 1, 1]);
     expect(dutyLoads([...rows, { ...rows[0], id: "222-r1:a", roundId: "222-r1" }]).get("a")).toBe(2);
   });
 });
 
 describe("validateRound", () => {
   const codes = (rows: GeneratedAssignment[], overrides: Partial<RoundRules> = {}) => validateRound("333-r1", rows, { ...rules, ...overrides }).map(issue => issue.code);
+  const ok = () => [person("a", 1, { duties: [{ group: 2, role: "scrambler" }] }), person("b", 2, { duties: [{ group: 1, role: "scrambler" }] })];
 
-  it("accepts a correct round", () => {
-    expect(codes([person("a", 1, { duties: [{ group: 2, role: "scrambler" }] }), person("b", 2, { duties: [{ group: 1, role: "scrambler" }] })], { avoidBeforeOwnGroup: false })).toEqual([]);
+  it("accepts a correct round, including work right before competing", () => {
+    expect(codes(ok())).toEqual([]);
   });
 
-  it("flags hard-rule breaks as errors", () => {
-    const issues = validateRound("333-r1", [person("a", 3, { duties: [{ group: 3, role: "judge" }] })], rules);
-    expect(issues.filter(issue => issue.severity === "error").map(issue => issue.code)).toEqual(expect.arrayContaining(["group-out-of-range", "duty-out-of-range", "duty-while-competing"]));
+  it("reports someone in the round without a group as an error", () => {
+    const issues = validateRound("333-r1", [...ok(), person("c", null)], rules);
+    expect(issues.map(issue => [issue.severity, issue.code])).toEqual([["error", "no-group"]]);
+  });
+
+  it("does not expect a group from people who only work", () => {
+    expect(codes([...ok(), person("c", null, { inRound: false, duties: [{ group: 1, role: "judge" }] })])).toEqual([]);
+  });
+
+  it("reports competing in several groups and out-of-range groups", () => {
+    const rows = [...ok(), person("c", 1, { duties: [{ group: 3, role: "competitor" }] })];
+    expect(codes(rows)).toEqual(expect.arrayContaining(["several-groups", "group-out-of-range"]));
   });
 
   it("flags duplicate, missing and out-of-range stations", () => {
     const rows = [person("a", 1, { station: 1 }), person("b", 1, { station: 1 }), person("c", 1), person("e", 1, { station: 2 }), person("d", 2, { station: 9 })];
-    expect(codes(rows, { fixedStations: true })).toEqual(expect.arrayContaining(["duplicate-station", "duplicate-station", "missing-station", "station-out-of-range", "over-capacity"]));
+    expect(codes(rows, { fixedStations: true })).toEqual(expect.arrayContaining(["duplicate-station", "missing-station", "station-out-of-range", "over-capacity"]));
   });
 
-  it("reports missing staff and empty groups as warnings", () => {
-    const issues = validateRound("333-r1", [person("a", 1), person("b", 1)], { ...rules, groups: 3, checkJudges: true, runners: 1 });
+  it("reports missing staff, delegates and data entry as warnings", () => {
+    const issues = validateRound("333-r1", [person("a", 1), person("b", 1)], { ...rules, groups: 2, checkJudges: true, runners: 1, checkDelegates: true, checkDataEntry: true });
     expect(issues.map(issue => [issue.severity, issue.code, issue.group])).toEqual([
       ["warning", "missing-scramblers", 1],
       ["warning", "missing-judges", 1],
       ["warning", "missing-runners", 1],
+      ["warning", "missing-delegate", 1],
+      ["warning", "missing-dataentry", 1],
       ["warning", "empty-group", 2],
-      ["warning", "empty-group", 3],
     ]);
   });
 
-  it("reports scramblers without results and work right before competing", () => {
-    const rows = [person("a", 2, { seedResult: undefined, duties: [{ group: 1, role: "scrambler" }] }), person("b", 1, { duties: [{ group: 2, role: "scrambler" }] })];
-    expect(codes(rows, { groups: 3 })).toEqual(["scrambler-without-result", "empty-group", "works-before-competing"]);
-    expect(codes(rows, { groups: 3, avoidBeforeOwnGroup: false })).toEqual(["scrambler-without-result", "empty-group"]);
-  });
-
-  it("does not report work right before competing with two groups, where it is unavoidable", () => {
-    const rows = [person("a", 2, { duties: [{ group: 1, role: "scrambler" }] }), person("b", 1, { duties: [{ group: 2, role: "scrambler" }] })];
-    expect(codes(rows)).toEqual([]);
+  it("warns when someone with a busy role gets a normal task", () => {
+    expect(codes(ok(), { noNormalTasks: new Set(["a"]) })).toEqual(["role-with-normal-task"]);
   });
 });
 
 describe("drafts", () => {
-  it("migrates the legacy single-duty array format", () => {
-    const legacy = [{ ...person("a", 1), duties: undefined, dutyGroup: 2, dutyRole: "judge" }];
-    const draft = parseDraft(JSON.stringify(legacy));
-    expect(draft?.assignments[0]).toEqual({ ...person("a", 1), duties: [{ group: 2, role: "judge" }] });
+  it("migrates the single-duty array format", () => {
+    const legacy = [{ id: "333-r1:a", roundId: "333-r1", eventId: "333", personId: "a", name: "A", group: 1, dutyGroup: 2, dutyRole: "judge" }];
+    expect(parseDraft(JSON.stringify(legacy))?.assignments[0]).toMatchObject({ inRound: true, tasks: [{ group: 1, role: "competitor" }, { group: 2, role: "judge" }] });
+  });
+
+  it("migrates version 2 drafts and drops their settings", () => {
+    const v2 = { version: 2, settings: { stations: 9 }, assignments: [{ id: "333-r1:a", roundId: "333-r1", eventId: "333", personId: "a", name: "A", group: 2, duties: [{ group: 1, role: "scrambler" }] }] };
+    const draft = parseDraft(JSON.stringify(v2));
+    expect(draft?.settings).toBeUndefined();
+    expect(competingGroup(draft!.assignments[0])).toBe(2);
   });
 
   it("treats unreadable drafts as missing", () => {
@@ -123,7 +124,7 @@ describe("drafts", () => {
     expect(parseDraft(null)).toBeUndefined();
   });
 
-  it("normalizes in place without touching current-format rows", () => {
+  it("leaves current-format rows untouched", () => {
     expect(normalizeAssignments([person("a", 1)])).toEqual([person("a", 1)]);
   });
 });

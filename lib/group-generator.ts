@@ -1,112 +1,299 @@
-import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
-import type { DutyRole, GeneratedAssignment } from "@/lib/assignments";
-import { acceptedPeople, judgesNeeded, personKey, type GenerationRound } from "@/lib/rounds";
-
-type WorkingAssignment = GeneratedAssignment & { trusted: boolean; seedRank: number };
-
-function eventBest(person: WcifPerson, eventId: string) {
-  const results = person.personalBests?.filter(best => best.eventId === eventId) ?? [];
-  return results.find(best => best.type === "average")?.best ?? results.find(best => best.type === "single")?.best;
-}
-
-function symmetricGroup(index: number, groupCount: number) {
-  const cycle = Math.floor(index / groupCount);
-  const offset = index % groupCount;
-  return cycle % 2 === 0 ? offset + 1 : groupCount - offset;
-}
-
-/**
- * Greedy first proposal. Competitors are spread symmetrically by seed; then every
- * group is staffed slot by slot (scramblers first, as they are the scarcest), always
- * picking the candidate with the lowest cost. Preferences only break ties between
- * candidates who are equally loaded, so a group is never left short to honour one.
+/*
+ * Group and staff assignment. The competitor split and the staff selection criteria follow
+ * Groupifier (https://github.com/jonatanklosko/groupifier, Apache-2.0), src/logic/groups.js,
+ * adapted to this app's data model, which has no schedule times. See THIRD_PARTY_NOTICES.md.
  */
-export function generateAssignments({ competition, rounds, stations, fixedStations, trustedIds, avoidBeforeOwnGroup = true, assignJudges = true }: {
+import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
+import { sortTasks, type GeneratedAssignment, type Task, type TaskRole } from "@/lib/assignments";
+import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
+import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
+
+export type AssignmentOptions = {
+  sortingRule: SortingRule;
+  /** Soft: working in the group right before one's own is disfavoured, never forbidden. */
+  avoidBeforeOwnGroup: boolean;
+  assignJudges: boolean;
+  noTasksForNewcomers: boolean;
+  tasksForOwnEventsOnly: boolean;
+  noRunningForForeigners: boolean;
+  spreadDelegates: boolean;
+  /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
+  normalTasksForDelegatesAndOrganizers: boolean;
+  assignDelegateDuties: boolean;
+  assignDataEntry: boolean;
+};
+
+export const DEFAULT_OPTIONS: AssignmentOptions = {
+  sortingRule: "scrambler-safe",
+  avoidBeforeOwnGroup: true,
+  assignJudges: true,
+  noTasksForNewcomers: false,
+  tasksForOwnEventsOnly: false,
+  noRunningForForeigners: false,
+  spreadDelegates: true,
+  normalTasksForDelegatesAndOrganizers: false,
+  assignDelegateDuties: false,
+  assignDataEntry: false,
+};
+
+/** Events where Groupifier's "balanced" rule keeps the plain ranking order. */
+const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "skewb", "clock", "sq1"];
+
+type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number };
+
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
-  fixedStations: boolean;
-  trustedIds: string[];
-  avoidBeforeOwnGroup?: boolean;
-  assignJudges?: boolean;
-}) {
+  zoneMode: ZoneMode;
+  people: PeopleSettings;
+  options: AssignmentOptions;
+}): GeneratedAssignment[] {
   const accepted = acceptedPeople(competition);
-  const trusted = new Set(trustedIds);
+  const country = competitionCountry(competition);
+  const set = (ids?: string[]) => new Set(ids ?? []);
+  const delegates = new Set([...set(people.roles.delegate), ...set(people.roles["trainee-delegate"])]);
+  const organizers = set(people.roles.organizer);
+  const staff = set(people.roles.staff);
+  const dataEntry = set(people.roles.dataentry);
+  const trusted = set(people.trustedIds);
+  const delegateDuty = set(people.delegateDutyIds);
   const globalLoad = new Map<string, number>();
+  const eventLoad = new Map<string, number>();
   const output: GeneratedAssignment[] = [];
 
+  const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0);
+  const normalTasksAllowed = (key: string) => !dataEntry.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
+
   for (const round of rounds.filter(item => item.enabled && item.groups > 0)) {
-    const competitors = accepted
-      .filter(person => person.registration?.eventIds?.includes(round.eventId))
-      .map(person => ({ person, best: eventBest(person, round.eventId) }))
-      .sort((a, b) => (a.best ?? Number.MAX_SAFE_INTEGER) - (b.best ?? Number.MAX_SAFE_INTEGER) || a.person.name.localeCompare(b.person.name));
+    const { people: competitors, known } = roundCompetitors(competition, round.id);
+    if (!known || competitors.length === 0) continue;
+    const firstRound = round.roundNumber === 1;
+    const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
+    const groups = splitIntoGroups(competitors, round.groups, firstRound ? options.sortingRule : "ranks", round.eventId);
+    if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)));
 
-    const roundAssignments: WorkingAssignment[] = competitors.map(({ person, best }, index) => ({
-      id: `${round.id}:${personKey(person)}`,
-      roundId: round.id,
-      eventId: round.eventId,
-      personId: personKey(person),
-      name: person.name,
-      wcaId: person.wcaId,
-      birthdate: person.birthdate,
-      seedResult: best,
-      group: symmetricGroup(index, round.groups),
-      duties: [],
-      trusted: trusted.has(personKey(person)),
-      seedRank: index,
-    }));
+    const rows = new Map<string, Row>();
+    const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
+    groups.forEach((members, groupIndex) => {
+      [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
+        const key = personKey(person);
+        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stations ? index + 1 : undefined });
+      });
+    });
+    const rowFor = (person: WcifPerson) => {
+      const key = personKey(person);
+      if (!rows.has(key)) rows.set(key, { person, key, inRound: false, seedIndex: Number.MAX_SAFE_INTEGER, tasks: [] });
+      return rows.get(key)!;
+    };
+    const ownGroup = (key: string) => rows.get(key)?.tasks.find(task => task.role === "competitor")?.group;
+    const freeIn = (key: string, group: number) => !rows.get(key)?.tasks.some(task => task.group === group);
+    const roundLoad = (key: string) => rows.get(key)?.tasks.filter(task => task.role !== "competitor").length ?? 0;
+    const load = (key: string) => globalLoad.get(key) ?? 0;
+    const loadInEvent = (key: string) => eventLoad.get(`${key}|${round.eventId}`) ?? 0;
+    const beforeOwn = (key: string, group: number) => options.avoidBeforeOwnGroup && ownGroup(key) === group + 1 ? 1 : 0;
+    const registeredForEvent = (person: WcifPerson) => !!person.registration?.eventIds?.includes(round.eventId);
+    const hasResult = (person: WcifPerson) => seedResult(person, round.eventId) !== undefined;
+    const youngerThan10 = (person: WcifPerson) => (ageOf(person) ?? 99) < 10 ? 1 : 0;
+    const suitability = (person: WcifPerson) => (hasResult(person) ? 2 : 0) + (registeredForEvent(person) ? 1 : 0);
 
-    const groupSizes = Array.from({ length: round.groups }, (_, index) => roundAssignments.filter(item => item.group === index + 1).length);
+    const assign = (person: WcifPerson, group: number, role: TaskRole) => {
+      const row = rowFor(person);
+      row.tasks = sortTasks([...row.tasks, { group, role }]);
+      globalLoad.set(row.key, load(row.key) + 1);
+      eventLoad.set(`${row.key}|${round.eventId}`, loadInEvent(row.key) + 1);
+    };
 
-    if (fixedStations) {
-      for (let group = 1; group <= round.groups; group += 1) {
-        roundAssignments.filter(item => item.group === group).forEach((item, index) => {
-          item.station = index < stations ? index + 1 : undefined;
-        });
-      }
-    }
-
-    const roles: DutyRole[] = assignJudges ? ["scrambler", "judge", "runner"] : ["scrambler"];
-    for (const role of roles) {
-      const needs = groupSizes.map(size => size === 0 ? 0 : role === "scrambler" ? round.scramblers : role === "judge" ? judgesNeeded(size, stations) : round.runners);
+    const fill = (role: TaskRole, need: (group: number, size: number) => number, candidates: WcifPerson[], sortKey: (person: WcifPerson, group: number) => number[]) => {
+      const sizes = groups.map(members => members.length);
+      const needs = sizes.map((size, index) => size === 0 ? 0 : need(index + 1, size));
       // Round-robin across groups so the best candidates are not all used by G1.
       for (let slot = 0; slot < Math.max(0, ...needs); slot += 1) {
-        for (let group = 1; group <= round.groups; group += 1) {
+        for (let group = 1; group <= groups.length; group += 1) {
           if (slot >= needs[group - 1]) continue;
-          const best = pickCandidate(roundAssignments, group, role, avoidBeforeOwnGroup, globalLoad);
-          if (!best) continue;
-          best.duties.push({ group, role });
-          globalLoad.set(best.personId, (globalLoad.get(best.personId) ?? 0) + 1);
+          const pick = best(candidates.filter(person => freeIn(personKey(person), group)), person => sortKey(person, group));
+          if (pick) assign(pick, group, role);
         }
       }
+    };
+
+    const strictScramblers = options.sortingRule === "scrambler-safe";
+    const inRoundKeys = new Set(competitors.map(personKey));
+    const scramblerPool = accepted.filter(person => {
+      const key = personKey(person);
+      if (!normalTasksAllowed(key)) return false;
+      if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
+      return !strictScramblers || trusted.has(key) || hasResult(person);
+    });
+    fill("scrambler", () => round.scramblers, scramblerPool, (person, group) => {
+      const key = personKey(person);
+      // Strict: the fastest available people, at most about two groups each per round.
+      if (strictScramblers) return [Math.floor(roundLoad(key) / 2), loadInEvent(key) >= 3 ? 1 : 0, trusted.has(key) ? 0 : 1, staff.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
+      // Groupifier's criteria. Staff are generic here (not scrambling specialists), so they only
+      // win among equally suitable people, like trusted people do.
+      return [
+        options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
+        youngerThan10(person),
+        -suitability(person),
+        trusted.has(key) ? 0 : 1,
+        staff.has(key) ? 0 : 1,
+        busyRoles(key),
+        loadInEvent(key) >= 2 ? 1 : 0,
+        inRoundKeys.has(key) ? 0 : 1,
+        Math.floor(load(key) / 6),
+        beforeOwn(key, group),
+        ...bestAverageAndSingle(person, round.eventId)];
+    });
+
+    if (options.assignDelegateDuties) {
+      fill("delegate", () => 1, accepted.filter(person => delegateDuty.has(personKey(person))), (person, group) => {
+        const key = personKey(person);
+        return [roundLoad(key), beforeOwn(key, group), load(key)];
+      });
     }
 
-    for (const { trusted: _trusted, seedRank: _seedRank, ...assignment } of roundAssignments) {
-      output.push({ ...assignment, duties: assignment.duties.sort((a, b) => a.group - b.group) });
+    if (options.assignDataEntry) {
+      fill("dataentry", () => 1, accepted.filter(person => dataEntry.has(personKey(person))), person => [roundLoad(personKey(person)), load(personKey(person))]);
+    }
+
+    if (options.assignJudges) {
+      const normalPool = accepted.filter(person => normalTasksAllowed(personKey(person)));
+      const staffKey = (person: WcifPerson, group: number) => [0, load(personKey(person)), beforeOwn(personKey(person), group)];
+      const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
+        const key = personKey(person);
+        if (staff.has(key)) return staffKey(person, group);
+        return [1,
+          role === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country ? 1 : 0,
+          options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
+          options.tasksForOwnEventsOnly && !registeredForEvent(person) ? 1 : 0,
+          youngerThan10(person),
+          busyRoles(key),
+          loadInEvent(key) >= 2 ? 1 : 0,
+          inRoundKeys.has(key) ? 0 : 1,
+          load(key),
+          beforeOwn(key, group),
+          role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
+      };
+      fill("runner", () => round.runners, normalPool, othersKey("runner"));
+      fill("judge", (_, size) => judgesNeeded(size, stations), normalPool, othersKey("judge"));
+    }
+
+    const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));
+    for (const row of ordered) {
+      output.push({
+        id: `${round.id}:${row.key}`,
+        roundId: round.id,
+        eventId: round.eventId,
+        personId: row.key,
+        name: row.person.name,
+        wcaId: row.person.wcaId,
+        birthdate: row.person.birthdate,
+        seedResult: seedResult(row.person, round.eventId),
+        inRound: row.inRound,
+        station: row.station,
+        tasks: row.tasks,
+      });
     }
   }
 
   return output;
 }
 
-function pickCandidate(roundAssignments: WorkingAssignment[], group: number, role: DutyRole, avoidBeforeOwnGroup: boolean, globalLoad: Map<string, number>) {
-  let best: WorkingAssignment | undefined;
-  let bestKey: number[] = [];
-  for (const item of roundAssignments) {
-    if (item.group === group || item.duties.some(duty => duty.group === group)) continue;
-    const beforeOwn = avoidBeforeOwnGroup && group === item.group - 1 ? 1 : 0;
-    const key = role === "scrambler"
-      ? [item.duties.length, item.trusted ? 0 : 1, item.seedResult === undefined ? 1 : 0, beforeOwn, item.seedRank]
-      : [item.duties.length, beforeOwn, globalLoad.get(item.personId) ?? 0];
-    if (!best || compareKeys(key, bestKey) < 0) {
-      best = item;
-      bestKey = key;
+function best<T>(items: T[], key: (item: T) => number[]) {
+  let winner: T | undefined;
+  let winnerKey: number[] = [];
+  for (const item of items) {
+    const itemKey = key(item);
+    if (!winner || compareKeys(itemKey, winnerKey) < 0) {
+      winner = item;
+      winnerKey = itemKey;
     }
   }
-  return best;
+  return winner;
 }
 
 function compareKeys(a: number[], b: number[]) {
-  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const x = a[index] ?? 0;
+    const y = b[index] ?? 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
   return 0;
+}
+
+/** Group sizes as even as possible, larger groups first (Groupifier with equal capacities). */
+export function groupSizes(competitors: number, groupCount: number) {
+  const sizes: number[] = [];
+  let remaining = competitors;
+  for (let index = 0; index < groupCount; index += 1) {
+    const size = Math.round(remaining / (groupCount - index));
+    sizes.push(size);
+    remaining -= size;
+  }
+  return sizes;
+}
+
+/**
+ * Splits competitors (best first) into groups, following Groupifier: the list is ordered
+ * worst to best, rearranged by the rule, and then cut into consecutive groups. With "ranks"
+ * the best compete in the last group; symmetric rules deal them out one per group.
+ */
+export function splitIntoGroups(bestFirst: WcifPerson[], groupCount: number, rule: SortingRule, eventId: string): WcifPerson[][] {
+  const worstFirst = [...bestFirst].reverse();
+  const count = worstFirst.length;
+  let ordered = worstFirst;
+  const symmetric = rule === "symmetric" || rule === "scrambler-safe" || (rule === "balanced" && !BALANCED_BY_RANKS.includes(eventId));
+  if (symmetric) {
+    ordered = worstFirst
+      .map((person, index) => ({ person, index, key: groupCount - ((count - index - 1) % groupCount) }))
+      .sort((a, b) => a.key - b.key || a.index - b.index)
+      .map(item => item.person);
+  } else if (rule === "name-optimised") {
+    ordered = separateSameFirstNames(worstFirst);
+  }
+  const sizes = groupSizes(count, groupCount);
+  const groups: WcifPerson[][] = [];
+  let start = 0;
+  for (const size of sizes) {
+    groups.push(ordered.slice(start, start + size));
+    start += size;
+  }
+  return groups;
+}
+
+/** Spreads people sharing a first name as far apart as possible in the list, keeping everyone. */
+function separateSameFirstNames(people: WcifPerson[]) {
+  const byName = new Map<string, WcifPerson[]>();
+  for (const person of people) {
+    const name = person.name.split(" ")[0];
+    byName.set(name, [...(byName.get(name) ?? []), person]);
+  }
+  const sets = [...byName.values()].sort((a, b) => a.length - b.length);
+  let result: WcifPerson[] = [];
+  for (const same of sets) {
+    if (!result.length) { result = [...same]; continue; }
+    const spaced = [...result];
+    const length = result.length;
+    // Insert from the back so earlier positions stay valid.
+    for (let index = same.length - 1; index >= 0; index -= 1) spaced.splice(Math.floor(((index + 1) * length) / same.length), 0, same[index]);
+    result = spaced;
+  }
+  return result;
+}
+
+/** Moves people matching `hasRole` into groups that have none of them, swapping with someone of close seed. */
+export function spreadRole(groups: WcifPerson[][], hasRole: (person: WcifPerson) => boolean) {
+  for (let guard = 0; guard < groups.length * 4; guard += 1) {
+    const counts = groups.map(members => members.filter(hasRole).length);
+    const crowded = counts.findIndex(count => count >= 2);
+    const empty = counts.findIndex(count => count === 0);
+    if (crowded < 0 || empty < 0) return;
+    const mover = groups[crowded].find(hasRole)!;
+    const position = groups[crowded].indexOf(mover);
+    const swapIndex = groups[empty].reduce((closest, person, index) => !hasRole(person) && (closest < 0 || Math.abs(index - position) < Math.abs(closest - position)) ? index : closest, -1);
+    if (swapIndex < 0) return;
+    const other = groups[empty][swapIndex];
+    groups[crowded][position] = other;
+    groups[empty][swapIndex] = mover;
+  }
 }

@@ -1,17 +1,17 @@
-import { groupTotals, type GeneratedAssignment } from "@/lib/assignments";
+import { competingGroup, competingGroups, duties, groupTotals, TASK_LABELS, type GeneratedAssignment } from "@/lib/assignments";
 import { judgesNeeded } from "@/lib/rounds";
 
 /**
  * - error: breaks a hard rule; the WCIF would be wrong if published.
- * - warning: the proposal does not reach what was configured (missing staff, empty group…).
- * - preference: a soft preference could not be honoured.
+ * - warning: the proposal does not reach what was configured, or ignores a configured role.
  */
-export type IssueSeverity = "error" | "warning" | "preference";
+export type IssueSeverity = "error" | "warning";
 
 export type IssueCode =
+  | "no-group"
+  | "several-groups"
+  | "not-registered"
   | "group-out-of-range"
-  | "duty-out-of-range"
-  | "duty-while-competing"
   | "missing-station"
   | "station-out-of-range"
   | "duplicate-station"
@@ -20,8 +20,10 @@ export type IssueCode =
   | "missing-scramblers"
   | "missing-judges"
   | "missing-runners"
+  | "missing-delegate"
+  | "missing-dataentry"
   | "scrambler-without-result"
-  | "works-before-competing";
+  | "role-with-normal-task";
 
 export type Issue = {
   key: string;
@@ -42,39 +44,48 @@ export type RoundRules = {
   fixedStations: boolean;
   /** Judges and runners are only expected when the generator is asked to assign them. */
   checkJudges: boolean;
-  avoidBeforeOwnGroup: boolean;
+  checkDelegates: boolean;
+  checkDataEntry: boolean;
+  /** People who should not get judging, scrambling or running (data entry, and delegates/organizers unless allowed). */
+  noNormalTasks: Set<string>;
 };
 
-export const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, preference: 2 };
+export const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1 };
+const NORMAL_DUTIES = new Set(["judge", "scrambler", "runner"]);
 
 export function validateRound(roundId: string, roundAssignments: GeneratedAssignment[], rules: RoundRules): Issue[] {
   const issues: Issue[] = [];
   const add = (issue: Omit<Issue, "key" | "roundId">) => issues.push({ ...issue, roundId, key: `${roundId}:${issue.code}:${issue.assignmentId ?? ""}:${issue.group ?? ""}` });
 
   for (const item of roundAssignments) {
-    if (item.group < 1 || item.group > rules.groups) {
-      add({ severity: "error", code: "group-out-of-range", group: item.group, assignmentId: item.id, message: `${item.name} compite en G${item.group}, pero la ronda tiene ${rules.groups} grupos.` });
+    const competing = competingGroups(item);
+    if (item.inRound && competing.length === 0) {
+      add({ severity: "error", code: "no-group", assignmentId: item.id, message: `${item.name} está en la ronda y no compite en ningún grupo.` });
     }
-    for (const duty of item.duties) {
-      if (duty.group < 1 || duty.group > rules.groups) {
-        add({ severity: "error", code: "duty-out-of-range", group: duty.group, assignmentId: item.id, message: `${item.name} tiene una tarea en G${duty.group}, pero la ronda tiene ${rules.groups} grupos.` });
+    if (competing.length > 1) {
+      add({ severity: "error", code: "several-groups", group: competing[1], assignmentId: item.id, message: `${item.name} compite en varios grupos (${competing.map(group => `G${group}`).join(", ")}).` });
+    }
+    if (!item.inRound && competing.length > 0) {
+      add({ severity: "warning", code: "not-registered", group: competing[0], assignmentId: item.id, message: `${item.name} compite en G${competing[0]}, pero no está en esta ronda.` });
+    }
+    for (const task of item.tasks) {
+      if (task.group < 1 || task.group > rules.groups) {
+        add({ severity: "error", code: "group-out-of-range", group: task.group, assignmentId: item.id, message: `${item.name} tiene «${TASK_LABELS[task.role]}» en G${task.group}, pero la ronda tiene ${rules.groups} grupos.` });
       }
-      if (duty.group === item.group) {
-        add({ severity: "error", code: "duty-while-competing", group: duty.group, assignmentId: item.id, message: `${item.name} compite y trabaja a la vez en G${duty.group}.` });
-      }
+    }
+    for (const duty of duties(item)) {
       if (duty.role === "scrambler" && item.seedResult === undefined) {
         add({ severity: "warning", code: "scrambler-without-result", group: duty.group, assignmentId: item.id, message: `${item.name} mezcla en G${duty.group} sin resultados oficiales en esta prueba.` });
       }
-      // With two groups, G1 can only be staffed from G2, so there is never an alternative.
-      if (rules.avoidBeforeOwnGroup && rules.groups > 2 && duty.group === item.group - 1) {
-        add({ severity: "preference", code: "works-before-competing", group: duty.group, assignmentId: item.id, message: `${item.name} trabaja en G${duty.group}, justo antes de competir en G${item.group}.` });
+      if (NORMAL_DUTIES.has(duty.role) && rules.noNormalTasks.has(item.personId)) {
+        add({ severity: "warning", code: "role-with-normal-task", group: duty.group, assignmentId: item.id, message: `${item.name} tiene un rol que no hace tareas normales y es ${TASK_LABELS[duty.role].toLowerCase()} en G${duty.group}.` });
       }
     }
   }
 
   if (rules.fixedStations) {
     for (let group = 1; group <= rules.groups; group += 1) {
-      const members = roundAssignments.filter(item => item.group === group);
+      const members = roundAssignments.filter(item => competingGroup(item) === group);
       const byStation = new Map<number, GeneratedAssignment[]>();
       for (const item of members) {
         if (item.station === undefined) {
@@ -97,31 +108,28 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
     }
   }
 
-  for (const totals of groupTotals(roundAssignments, rules.groups)) {
-    const { group } = totals;
-    if (totals.competitors === 0) {
+  for (const { group, counts } of groupTotals(roundAssignments, rules.groups)) {
+    if (counts.competitor === 0) {
       add({ severity: "warning", code: "empty-group", group, message: `G${group} no tiene competidores.` });
       continue;
     }
-    if (totals.scramblers < rules.scramblers) {
-      add({ severity: "warning", code: "missing-scramblers", group, message: `G${group} tiene ${totals.scramblers} de ${rules.scramblers} mezcladores.` });
+    if (counts.scrambler < rules.scramblers) {
+      add({ severity: "warning", code: "missing-scramblers", group, message: `G${group} tiene ${counts.scrambler} de ${rules.scramblers} mezcladores.` });
     }
     if (rules.checkJudges) {
-      const judges = judgesNeeded(totals.competitors, rules.stations);
-      if (totals.judges < judges) {
-        add({ severity: "warning", code: "missing-judges", group, message: `G${group} tiene ${totals.judges} de ${judges} jueces.` });
-      }
-      if (totals.runners < rules.runners) {
-        add({ severity: "warning", code: "missing-runners", group, message: `G${group} tiene ${totals.runners} de ${rules.runners} runners.` });
-      }
+      const judges = judgesNeeded(counts.competitor, rules.stations);
+      if (counts.judge < judges) add({ severity: "warning", code: "missing-judges", group, message: `G${group} tiene ${counts.judge} de ${judges} jueces.` });
+      if (counts.runner < rules.runners) add({ severity: "warning", code: "missing-runners", group, message: `G${group} tiene ${counts.runner} de ${rules.runners} runners.` });
     }
+    if (rules.checkDelegates && counts.delegate === 0) add({ severity: "warning", code: "missing-delegate", group, message: `G${group} no tiene delegado de turno.` });
+    if (rules.checkDataEntry && counts.dataentry === 0) add({ severity: "warning", code: "missing-dataentry", group, message: `G${group} no tiene data entry.` });
   }
 
   return issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0));
 }
 
 export function countBySeverity(issues: Issue[]) {
-  const counts: Record<IssueSeverity, number> = { error: 0, warning: 0, preference: 0 };
+  const counts: Record<IssueSeverity, number> = { error: 0, warning: 0 };
   for (const issue of issues) counts[issue.severity] += 1;
   return counts;
 }

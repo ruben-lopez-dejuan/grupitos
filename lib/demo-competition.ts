@@ -34,8 +34,12 @@ export function buildDemoCompetition({ id, name, people, events, newcomerShare =
     const skill = 0.45 + random() * 1.6;
     const eventIds = events.filter((eventId, eventIndex) => eventIndex === 0 || random() < 0.65);
     const year = 2010 + Math.floor(random() * 15);
+    const roles = index === 3 || index === 17 ? ["delegate"] : index === 29 ? ["trainee-delegate"] : index === 5 || index === 11 ? ["organizer"] : index % 23 === 7 ? ["staff-judge"] : index === 13 ? ["staff-dataentry"] : [];
     return {
       registrantId: index + 1,
+      wcaUserId: 1000 + index,
+      countryIso2: random() < 0.1 ? "PT" : "ES",
+      roles,
       name: `${FIRST_NAMES[Math.floor(random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(random() * LAST_NAMES.length)]} ${LAST_NAMES[Math.floor(random() * LAST_NAMES.length)]}`,
       wcaId: newcomer ? null : `${year}DEMO${String(index % 100).padStart(2, "0")}`,
       birthdate: `${1975 + Math.floor(random() * 40)}-0${1 + Math.floor(random() * 9)}-1${Math.floor(random() * 9)}`,
@@ -51,8 +55,18 @@ export function buildDemoCompetition({ id, name, people, events, newcomerShare =
     name,
     shortName: name,
     persons,
-    events: events.map(eventId => ({ id: eventId, rounds: [1, 2].map(round => ({ id: `${eventId}-r${round}`, format: "a" })) })),
-    schedule: { venues: [{ id: 1, name: "Recinto de prueba", rooms: [{ id: 1, name: "Sala principal", activities: [] }] }] },
+    events: events.map(eventId => ({
+      id: eventId,
+      rounds: [1, 2].map(round => ({
+        id: `${eventId}-r${round}`,
+        format: eventId === "666" || eventId === "777" ? "m" : "a",
+        timeLimit: { centiseconds: Math.round((EVENT_BASE[eventId] ?? 2000) * 3 / 100) * 100, cumulativeRoundIds: [] },
+        cutoff: round === 1 && (EVENT_BASE[eventId] ?? 0) >= 6000 ? { numberOfAttempts: 2, attemptResult: Math.round((EVENT_BASE[eventId] ?? 2000) * 1.5 / 100) * 100 } : null,
+        advancementCondition: round === 1 ? { type: "percent" as const, level: 75 } : null,
+        results: [],
+      })),
+    })),
+    schedule: { venues: [{ id: 1, name: "Recinto de prueba", countryIso2: "ES", rooms: [{ id: 1, name: "Sala principal", activities: [] }] }] },
   };
 }
 

@@ -1,18 +1,20 @@
 import { normalizeAssignments, type GeneratedAssignment } from "@/lib/assignments";
-import type { FlowMode, Preset, RoundConfig } from "@/lib/rounds";
+import type { AssignmentOptions } from "@/lib/group-generator";
+import type { PeopleSettings } from "@/lib/people";
+import type { RoundConfig, ZoneMode } from "@/lib/rounds";
+import type { PrintingOptions } from "@/lib/scorecards/options";
 
 export type WorkspaceSettings = {
   stations: number;
-  flowMode: FlowMode;
-  preset: Preset;
-  trustedIds: string[];
+  zoneMode: ZoneMode;
   rounds: RoundConfig[];
-  avoidBeforeOwnGroup: boolean;
-  assignJudges: boolean;
+  options: AssignmentOptions;
+  people: PeopleSettings;
+  printing: PrintingOptions;
 };
 
 export type Draft = {
-  version: 2;
+  version: 3;
   settings?: WorkspaceSettings;
   /** Signature of the settings the current proposal was generated with. */
   generatedWith?: string;
@@ -27,23 +29,26 @@ export function draftStorageKey(competitionId: string) {
 export function generationSignature(settings: WorkspaceSettings) {
   return JSON.stringify({
     stations: settings.stations,
-    flowMode: settings.flowMode,
-    trustedIds: settings.preset === "simple" ? [] : [...settings.trustedIds].sort(),
+    zoneMode: settings.zoneMode,
     rounds: settings.rounds.filter(round => round.enabled).map(({ id, groups, scramblers, runners }) => ({ id, groups, scramblers, runners })),
-    avoidBeforeOwnGroup: settings.avoidBeforeOwnGroup,
-    assignJudges: settings.assignJudges,
+    options: settings.options,
+    people: settings.people,
   });
 }
 
-/** Accepts the current format and the bare assignment arrays saved by earlier versions. */
+/**
+ * Accepts the current format; older drafts keep their assignments (migrated) and
+ * lose their settings, which had a different shape.
+ */
 export function parseDraft(raw: string | null): Draft | undefined {
   if (!raw) return undefined;
   try {
     const data = JSON.parse(raw) as unknown;
-    if (Array.isArray(data)) return { version: 2, assignments: normalizeAssignments(data) };
-    if (data && typeof data === "object" && (data as Draft).version === 2) {
-      const draft = data as Draft;
-      return { ...draft, assignments: normalizeAssignments(draft.assignments ?? []) };
+    if (Array.isArray(data)) return { version: 3, assignments: normalizeAssignments(data) };
+    if (data && typeof data === "object") {
+      const draft = data as { version?: number; assignments?: unknown[] };
+      if (draft.version === 3) return { ...(data as Draft), assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
+      if (draft.version === 2) return { version: 3, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
     }
   } catch {
     // Fall through: an unreadable draft is treated as missing.

@@ -1,134 +1,187 @@
 import { describe, expect, it } from "vitest";
-import { groupTotals, type GeneratedAssignment } from "@/lib/assignments";
+import { competingGroup, competingGroups, duties, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
+import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
-import { generateAssignments } from "@/lib/group-generator";
-import { acceptedPeople, initialRounds, judgesNeeded, personKey, type FlowMode, type RoundConfig } from "@/lib/rounds";
-import { validateRound } from "@/lib/validation";
-import type { StoredCompetition } from "@/lib/competition-store";
+import { DEFAULT_OPTIONS, generateAssignments, groupSizes, splitIntoGroups, type AssignmentOptions } from "@/lib/group-generator";
+import { peopleFromWcif, type PeopleSettings } from "@/lib/people";
+import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
+import { validateRound, type RoundRules } from "@/lib/validation";
 
-function setup(competition: StoredCompetition, stations: number, flowMode: FlowMode) {
-  const rounds = initialRounds(competition, stations, flowMode, "scrambler-safe");
-  const assignments = generateAssignments({ competition, rounds, stations, fixedStations: flowMode === "fixed", trustedIds: [] });
-  return { rounds, assignments };
+function setup(competition: StoredCompetition, stations: number, zoneMode: ZoneMode, options: Partial<AssignmentOptions> = {}, people = peopleFromWcif(competition)) {
+  const rounds = initialRounds(competition, stations, zoneMode);
+  const assignments = generateAssignments({ competition, rounds, stations, zoneMode, people, options: { ...DEFAULT_OPTIONS, ...options } });
+  return { rounds, assignments, people };
 }
 
-function byRound(assignments: GeneratedAssignment[], roundId: string) {
-  return assignments.filter(item => item.roundId === roundId);
-}
+const byRound = (assignments: GeneratedAssignment[], roundId: string) => assignments.filter(item => item.roundId === roundId);
 
-function rulesFor(round: RoundConfig, stations: number, flowMode: FlowMode) {
-  return { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations, fixedStations: flowMode === "fixed", checkJudges: true, avoidBeforeOwnGroup: true };
+function rulesFor(round: RoundConfig, rows: GeneratedAssignment[], stations: number, zoneMode: ZoneMode, people: PeopleSettings): RoundRules {
+  const noNormalTasks = new Set([...(people.roles.dataentry ?? []), ...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? []), ...(people.roles.organizer ?? [])]);
+  return { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations, fixedStations: usesFixedStations(round.roundNumber, rows.filter(row => row.inRound).length, stations, zoneMode), checkJudges: true, checkDelegates: false, checkDataEntry: false, noNormalTasks };
 }
 
 const scenarios = [
-  { name: "open pequeño, sala de espera", competition: demoCompetition("small"), stations: 8, flowMode: "waiting" as const },
-  { name: "open pequeño, puestos fijos", competition: demoCompetition("small"), stations: 12, flowMode: "fixed" as const },
-  { name: "campeonato grande, puestos fijos", competition: demoCompetition("large"), stations: 16, flowMode: "fixed" as const },
-  { name: "campeonato grande, sala de espera", competition: demoCompetition("large"), stations: 20, flowMode: "waiting" as const },
+  { name: "open pequeño, sala de espera", competition: demoCompetition("small"), stations: 8, zoneMode: "waiting" as const },
+  { name: "open pequeño, puestos fijos", competition: demoCompetition("small"), stations: 12, zoneMode: "fixed" as const },
+  { name: "campeonato grande, puestos fijos", competition: demoCompetition("large"), stations: 16, zoneMode: "fixed" as const },
+  { name: "campeonato grande, mixto", competition: demoCompetition("large"), stations: 20, zoneMode: "mixed" as const },
 ];
 
-describe.each(scenarios)("generateAssignments — $name", ({ competition, stations, flowMode }) => {
-  const { rounds, assignments } = setup(competition, stations, flowMode);
-  const enabled = rounds.filter(round => round.enabled);
+describe.each(scenarios)("generateAssignments — $name", ({ competition, stations, zoneMode }) => {
+  const { rounds, assignments, people } = setup(competition, stations, zoneMode);
+  const generated = rounds.filter(round => round.enabled && round.competitorsKnown);
 
-  it("only generates enabled rounds", () => {
-    expect(new Set(assignments.map(item => item.roundId))).toEqual(new Set(enabled.map(round => round.id)));
+  it("only generates rounds with known competitors (first rounds here)", () => {
+    expect(new Set(assignments.map(item => item.roundId))).toEqual(new Set(generated.map(round => round.id)));
+    expect(generated.every(round => round.roundNumber === 1)).toBe(true);
   });
 
-  it("gives every registered competitor exactly one group per round", () => {
-    for (const round of enabled) {
+  it("puts every registered competitor in exactly one group", () => {
+    for (const round of generated) {
       const registered = acceptedPeople(competition).filter(person => person.registration?.eventIds?.includes(round.eventId)).map(personKey).sort();
-      const rows = byRound(assignments, round.id);
+      const rows = byRound(assignments, round.id).filter(item => item.inRound);
       expect(rows.map(item => item.personId).sort()).toEqual(registered);
-      for (const item of rows) expect(item.group).toBeGreaterThanOrEqual(1);
-      for (const item of rows) expect(item.group).toBeLessThanOrEqual(round.groups);
+      for (const item of rows) expect(competingGroups(item)).toHaveLength(1);
     }
   });
 
   it("keeps group sizes within one person of each other", () => {
-    for (const round of enabled) {
-      const sizes = groupTotals(byRound(assignments, round.id), round.groups).map(total => total.competitors);
+    for (const round of generated) {
+      const sizes = groupTotals(byRound(assignments, round.id), round.groups).map(total => total.counts.competitor);
       expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
     }
   });
 
   it("never breaks a hard rule", () => {
-    for (const round of enabled) {
-      const errors = validateRound(round.id, byRound(assignments, round.id), rulesFor(round, stations, flowMode)).filter(issue => issue.severity === "error");
+    for (const round of generated) {
+      const rows = byRound(assignments, round.id);
+      const errors = validateRound(round.id, rows, rulesFor(round, rows, stations, zoneMode, people)).filter(issue => issue.severity === "error");
       expect(errors).toEqual([]);
     }
   });
 
   it("staffs every group fully, or uses everyone available when it cannot", () => {
-    for (const round of enabled) {
+    const busy = new Set([...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? []), ...(people.roles.organizer ?? []), ...(people.roles.dataentry ?? [])]);
+    const eligible = acceptedPeople(competition).map(personKey).filter(key => !busy.has(key));
+    for (const round of generated) {
       const rows = byRound(assignments, round.id);
-      for (const totals of groupTotals(rows, round.groups)) {
-        const needed = round.scramblers + judgesNeeded(totals.competitors, stations) + round.runners;
-        const available = rows.filter(item => item.group !== totals.group).length;
-        if (available >= needed) {
-          expect(totals.scramblers).toBe(round.scramblers);
-          expect(totals.judges).toBe(judgesNeeded(totals.competitors, stations));
-          expect(totals.runners).toBe(round.runners);
-        } else {
-          expect(totals.scramblers + totals.judges + totals.runners).toBe(available);
-        }
+      for (const { group, counts } of groupTotals(rows, round.groups)) {
+        const needed = round.scramblers + judgesNeeded(counts.competitor, stations) + round.runners;
+        const competing = new Set(rows.filter(row => competingGroup(row) === group).map(row => row.personId));
+        const available = eligible.filter(key => !competing.has(key)).length;
+        const full = counts.scrambler === round.scramblers && counts.judge === judgesNeeded(counts.competitor, stations) && counts.runner === round.runners;
+        expect(full || counts.scrambler + counts.judge + counts.runner === Math.min(available, needed)).toBe(true);
       }
     }
   });
 
-  it("spreads duties before giving anyone a second one", () => {
-    for (const round of enabled) {
-      const loads = byRound(assignments, round.id).map(item => item.duties.length);
-      expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(1);
-    }
+  it("gives no normal tasks to delegates, organizers or data entry", () => {
+    const busy = new Set([...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? []), ...(people.roles.organizer ?? []), ...(people.roles.dataentry ?? [])]);
+    expect(busy.size).toBeGreaterThan(0);
+    expect(assignments.filter(item => busy.has(item.personId)).flatMap(duties)).toEqual([]);
   });
 
   it("is deterministic", () => {
-    expect(setup(competition, stations, flowMode).assignments).toEqual(assignments);
+    expect(setup(competition, stations, zoneMode).assignments).toEqual(assignments);
+  });
+});
+
+describe("splitIntoGroups (Groupifier rules)", () => {
+  const people = Array.from({ length: 10 }, (_, index) => ({ name: `P${index}`, registrantId: index }) as WcifPerson);
+  const names = (groups: WcifPerson[][]) => groups.map(group => group.map(person => person.name));
+
+  it("ranks: the best compete in the last group", () => {
+    expect(names(splitIntoGroups(people, 2, "ranks", "333"))).toEqual([["P9", "P8", "P7", "P6", "P5"], ["P4", "P3", "P2", "P1", "P0"]]);
+  });
+
+  it("symmetric: deals the best out one per group", () => {
+    const groups = splitIntoGroups(people, 3, "symmetric", "333");
+    expect(groups.map(group => group.length)).toEqual(groupSizes(10, 3));
+    expect(groups.map(group => group.some(person => ["P0", "P1", "P2"].includes(person.name)))).toEqual([true, true, true]);
+  });
+
+  it("balanced: ranks for 3x3, symmetric for big cubes", () => {
+    expect(splitIntoGroups(people, 2, "balanced", "333")).toEqual(splitIntoGroups(people, 2, "ranks", "333"));
+    expect(splitIntoGroups(people, 2, "balanced", "555")).toEqual(splitIntoGroups(people, 2, "symmetric", "555"));
+  });
+
+  it("name-optimised keeps everyone and separates repeated first names", () => {
+    const named = ["Ana A", "Ana B", "Ana C", "Luis A", "Luis B", "Eva", "Pau", "Joan", "Rita", "Ivo"].map((name, index) => ({ name, registrantId: index }) as WcifPerson);
+    const groups = splitIntoGroups(named, 3, "name-optimised", "333");
+    expect(groups.flat()).toHaveLength(10);
+    expect(groups.map(group => group.filter(person => person.name.startsWith("Ana")).length)).toEqual([1, 1, 1]);
   });
 });
 
 describe("generateAssignments — reglas concretas", () => {
   const competition = buildDemoCompetition({ id: "Test", name: "Test", people: 60, events: ["333"], seed: 7 });
-  const round: RoundConfig = { id: "333-r1", eventId: "333", label: "", roundNumber: 1, competitors: 60, groups: 4, scramblers: 2, runners: 1, enabled: true };
+  const round: RoundConfig = { id: "333-r1", eventId: "333", label: "", roundNumber: 1, competitors: 60, competitorsKnown: true, groups: 4, scramblers: 2, runners: 1, enabled: true };
+  const people = peopleFromWcif(competition);
+  const run = (options: Partial<AssignmentOptions> = {}, settings: PeopleSettings = people, zoneMode: ZoneMode = "waiting", stations = 10) =>
+    generateAssignments({ competition, rounds: [round], stations, zoneMode, people: settings, options: { ...DEFAULT_OPTIONS, ...options } });
 
-  it("prioritises trusted people as scramblers, even if slower", () => {
-    const slowest = [...acceptedPeople(competition)].filter(person => person.personalBests?.length).sort((a, b) => b.personalBests![0].best - a.personalBests![0].best)[0];
-    const result = generateAssignments({ competition, rounds: [round], stations: 10, fixedStations: false, trustedIds: [personKey(slowest)] });
-    const row = result.find(item => item.personId === personKey(slowest))!;
-    expect(row.duties.some(duty => duty.role === "scrambler")).toBe(true);
+  it("strict scramblers only use people with results or trusted people", () => {
+    const result = run({ sortingRule: "scrambler-safe" });
+    expect(result.filter(item => duties(item).some(duty => duty.role === "scrambler")).every(item => item.seedResult !== undefined)).toBe(true);
   });
 
-  it("prefers scramblers with official results", () => {
-    const result = generateAssignments({ competition, rounds: [round], stations: 10, fixedStations: false, trustedIds: [] });
-    const scramblers = result.filter(item => item.duties.some(duty => duty.role === "scrambler"));
-    expect(scramblers.every(item => item.seedResult !== undefined)).toBe(true);
+  it("trusted people scramble even when slower", () => {
+    const slowest = [...acceptedPeople(competition)].filter(person => person.personalBests?.some(best => best.eventId === "333") && !(person.roles?.length)).sort(compareBySeed("333")).at(-1)!;
+    const result = run({ sortingRule: "symmetric" }, { ...people, trustedIds: [personKey(slowest)] });
+    expect(duties(result.find(item => item.personId === personKey(slowest))!).some(duty => duty.role === "scrambler")).toBe(true);
   });
 
-  it("works right before competing less often when the preference is on", () => {
-    const count = (avoidBeforeOwnGroup: boolean) => generateAssignments({ competition, rounds: [round], stations: 10, fixedStations: false, trustedIds: [], avoidBeforeOwnGroup })
-      .flatMap(item => item.duties.filter(duty => duty.group === item.group - 1)).length;
+  it("does not favour working right before one's own group", () => {
+    const count = (avoidBeforeOwnGroup: boolean) => run({ avoidBeforeOwnGroup }).flatMap(item => duties(item).filter(duty => duty.group === (competingGroup(item) ?? 0) - 1)).length;
     expect(count(true)).toBeLessThan(count(false));
   });
 
-  it("only assigns scramblers when judges are not requested", () => {
-    const result = generateAssignments({ competition, rounds: [round], stations: 10, fixedStations: false, trustedIds: [], assignJudges: false });
-    const roles = new Set(result.flatMap(item => item.duties.map(duty => duty.role)));
-    expect([...roles]).toEqual(["scrambler"]);
+  it("spreads delegates across groups", () => {
+    const delegates = new Set([...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? [])]);
+    const groupsOf = (spreadDelegates: boolean) => run({ spreadDelegates }).filter(item => delegates.has(item.personId)).map(competingGroup);
+    expect(new Set(groupsOf(true)).size).toBe(Math.min(delegates.size, round.groups));
   });
 
-  it("leaves staff missing rather than inventing it in a single-group round", () => {
-    const single = { ...round, groups: 1 };
-    const result = generateAssignments({ competition, rounds: [single], stations: 10, fixedStations: false, trustedIds: [] });
-    expect(result.every(item => item.duties.length === 0)).toBe(true);
-    const issues = validateRound(single.id, result, { groups: 1, scramblers: 2, runners: 1, stations: 10, fixedStations: false, checkJudges: true, avoidBeforeOwnGroup: true });
-    expect(issues.map(issue => issue.code)).toEqual(["missing-scramblers", "missing-judges", "missing-runners"]);
+  it("assigns delegate duties only to the chosen delegates, one per group", () => {
+    const chosen = (people.roles.delegate ?? []).slice(0, 1).concat(people.roles["trainee-delegate"] ?? []);
+    const result = run({ assignDelegateDuties: true }, { ...people, delegateDutyIds: chosen });
+    const delegateDuties = result.flatMap(item => duties(item).filter(duty => duty.role === "delegate").map(duty => ({ person: item.personId, group: duty.group })));
+    expect(delegateDuties.every(duty => chosen.includes(duty.person))).toBe(true);
+    expect(groupTotals(result, round.groups).map(total => total.counts.delegate)).toEqual([1, 1, 1, 1]);
   });
 
-  it("does not hand out stations beyond the available ones", () => {
-    const crowded = { ...round, groups: 2 };
-    const result = generateAssignments({ competition, rounds: [crowded], stations: 20, fixedStations: true, trustedIds: [] });
-    expect(Math.max(...result.map(item => item.station ?? 0))).toBeLessThanOrEqual(20);
-    expect(result.filter(item => item.station === undefined)).toHaveLength(20);
+  it("assigns data entry to data entry people only", () => {
+    const result = run({ assignDataEntry: true });
+    const dataEntry = result.filter(item => duties(item).some(duty => duty.role === "dataentry"));
+    expect(dataEntry.length).toBeGreaterThan(0);
+    expect(dataEntry.every(item => people.roles.dataentry?.includes(item.personId))).toBe(true);
+  });
+
+  it("gives normal tasks to delegates and organizers only when allowed", () => {
+    // Nearly everyone is an organizer, so the generator has to use them if it may.
+    const keys = acceptedPeople(competition).map(personKey);
+    const settings = { ...people, roles: { ...people.roles, organizer: keys.slice(5), staff: [] } };
+    const organizerTasks = (allowed: boolean) => run({ normalTasksForDelegatesAndOrganizers: allowed }, settings).filter(item => settings.roles.organizer.includes(item.personId)).flatMap(duties).length;
+    expect(organizerTasks(false)).toBe(0);
+    expect(organizerTasks(true)).toBeGreaterThan(0);
+  });
+
+  it("makes staff do more tasks than other competitors", () => {
+    const staffKey = personKey(acceptedPeople(competition).find(person => !person.roles?.length)!);
+    const settings = { ...people, roles: { ...people.roles, staff: [staffKey] } };
+    const result = run({}, settings);
+    const load = (key: string) => result.filter(item => item.personId === key).flatMap(duties).length;
+    const others = result.filter(item => item.inRound && !settings.roles.staff.includes(item.personId)).map(item => duties(item).length);
+    expect(load(staffKey)).toBeGreaterThan(Math.max(...others));
+  });
+
+  it("uses fixed stations in rounds that fit in the stations, even with a waiting room", () => {
+    const result = run({}, people, "waiting", 60);
+    expect(result.filter(item => item.inRound).every(item => item.station !== undefined)).toBe(true);
+  });
+
+  it("skips later rounds whose competitors are unknown", () => {
+    const later: RoundConfig = { ...round, id: "333-r2", roundNumber: 2, competitorsKnown: false };
+    expect(generateAssignments({ competition, rounds: [later], stations: 10, zoneMode: "waiting", people, options: DEFAULT_OPTIONS })).toEqual([]);
   });
 });

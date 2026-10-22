@@ -2,8 +2,10 @@
 
 export type WcifPerson = {
   registrantId?: number | null;
+  wcaUserId?: number;
   name: string;
   wcaId?: string | null;
+  countryIso2?: string;
   birthdate?: string;
   roles?: string[];
   personalBests?: Array<{
@@ -21,10 +23,24 @@ export type WcifPerson = {
   };
 };
 
-export type WcifRound = { id: string; format?: string };
+export type WcifAdvancementCondition = { type: "ranking" | "percent" | "attemptResult"; level: number };
+/** WCIF 1.2 uses `advancementCondition`; newer exports use `participationRuleset`. */
+export type WcifParticipationSource =
+  | { type: "registrations" }
+  | { type: "round"; roundId: string; resultCondition: { type: "ranking" | "percent" | "resultAchieved"; value: number | null; scope?: "single" | "average" } }
+  | { type: "linkedRounds"; roundIds: string[]; resultCondition: { type: "ranking" | "percent" | "resultAchieved"; value: number | null; scope?: "single" | "average" } };
+export type WcifRound = {
+  id: string;
+  format?: string;
+  timeLimit?: { centiseconds: number; cumulativeRoundIds: string[] } | null;
+  cutoff?: { numberOfAttempts: number; attemptResult?: number; resultValue?: number } | null;
+  advancementCondition?: WcifAdvancementCondition | null;
+  participationRuleset?: { participationSource: WcifParticipationSource } | null;
+  results?: Array<{ personId: number; ranking?: number | null }>;
+};
 export type WcifEvent = { id: string; rounds?: WcifRound[] };
 export type WcifRoom = { id?: number; name?: string; activities?: unknown[] };
-export type WcifVenue = { id?: number; name?: string; rooms?: WcifRoom[] };
+export type WcifVenue = { id?: number; name?: string; countryIso2?: string; rooms?: WcifRoom[] };
 
 export type StoredCompetition = {
   id: string;

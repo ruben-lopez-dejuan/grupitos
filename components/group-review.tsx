@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EventIcon } from "@/components/event-icon";
-import { applyCells, cellValue, dutyLoads, groupTotals, normalizeAssignments, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment } from "@/lib/assignments";
+import { applyCells, cellValue, duties, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, TASK_LABELS, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { judgesNeeded } from "@/lib/rounds";
 import { countBySeverity, SEVERITY_ORDER, validateRound, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
@@ -11,17 +11,16 @@ type History = { past: GeneratedAssignment[][]; present: GeneratedAssignment[]; 
 type HistoryAction = { type: "commit"; next: GeneratedAssignment[] } | { type: "undo" } | { type: "redo" };
 
 const HISTORY_LIMIT = 200;
-const VALUES: CellValue[] = ["competitor", "judge", "scrambler", "runner", ""];
-const CELL_LABELS: Record<CellValue, string> = { "": "Vacío", competitor: "Compite", judge: "Juez", scrambler: "Mezclador", runner: "Runner" };
-const CELL_CODES: Record<CellValue, string> = { "": "", competitor: "C", judge: "J", scrambler: "M", runner: "R" };
-const HOTKEY_LABELS: Record<CellValue, string> = { "": "0", competitor: "C", judge: "J", scrambler: "M / S", runner: "R" };
-const HOTKEYS: Record<string, CellValue> = { c: "competitor", j: "judge", m: "scrambler", s: "scrambler", r: "runner", "0": "", delete: "", backspace: "" };
-const SEVERITY_LABELS: Record<IssueSeverity, string> = { error: "Error", warning: "Aviso", preference: "Preferencia" };
-const SEVERITY_COUNTS: Record<IssueSeverity, [string, string]> = { error: ["error", "errores"], warning: ["aviso", "avisos"], preference: ["preferencia no cumplida", "preferencias no cumplidas"] };
+const VALUES: CellValue[] = ["competitor", "judge", "scrambler", "runner", "delegate", "stagelead", "announcer", "dataentry", "other", ""];
+const HOTKEY_LABELS: Record<CellValue, string> = { "": "0", competitor: "C", judge: "J", scrambler: "M", runner: "R", delegate: "D", stagelead: "L", announcer: "A", dataentry: "E", other: "O" };
+const HOTKEYS: Record<string, CellValue> = { c: "competitor", j: "judge", m: "scrambler", s: "scrambler", r: "runner", d: "delegate", l: "stagelead", a: "announcer", e: "dataentry", o: "other", "0": "", delete: "", backspace: "" };
+/** Extra roles only appear in the group totals when someone has them or the rules require them. */
+const EXTRA_ROLES: TaskRole[] = ["delegate", "stagelead", "announcer", "dataentry", "other"];
+const SEVERITY_LABELS: Record<IssueSeverity, string> = { error: "Error", warning: "Aviso" };
+const SEVERITY_COUNTS: Record<IssueSeverity, [string, string]> = { error: ["error", "errores"], warning: ["aviso", "avisos"] };
 const SEVERITY_HELP: Record<IssueSeverity, string> = {
   error: "Incumple una regla obligatoria. Hay que corregirlo antes de publicar.",
-  warning: "La propuesta no llega a lo configurado.",
-  preference: "Se intentó evitar, pero no fue posible con las personas disponibles.",
+  warning: "La propuesta no llega a lo configurado o no respeta un rol.",
 };
 
 function historyReducer(state: History, action: HistoryAction): History {
@@ -69,17 +68,13 @@ function formatSeed(value: number | undefined, eventId: string) {
   return `${minutes}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
 }
 
-function describeChange(value: CellValue, changed: number, skipped: number) {
-  const parts: string[] = [];
-  if (changed) parts.push(`${CELL_LABELS[value]}: ${changed === 1 ? "1 persona actualizada" : `${changed} personas actualizadas`}`);
-  if (skipped) parts.push(value === "competitor"
-    ? `${skipped === 1 ? "1 celda ignorada" : `${skipped} celdas ignoradas`}: cada persona compite en un solo grupo`
-    : `${skipped === 1 ? "1 celda ignorada" : `${skipped} celdas ignoradas`}: la celda de competir solo se puede mover a otro grupo`);
-  return parts.join(" · ");
+function describeChange(value: CellValue, changed: number) {
+  if (!changed) return "Sin cambios";
+  return `${value ? TASK_LABELS[value] : "Celdas vaciadas"}: ${changed === 1 ? "1 persona actualizada" : `${changed} personas actualizadas`}`;
 }
 
 function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
-  return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, avoidBeforeOwnGroup: false };
+  return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 }
 
 export function GroupReview({ initialAssignments, rules, eventNames, roomName = "Área de competición", onChange }: {
@@ -111,11 +106,16 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
     return [round.id, validateRound(round.id, rows, rules[round.id] ?? fallbackRules(rows))];
   })), [assignments, rounds, rules]);
 
-  const visible = useMemo(() => assignments.filter(item => item.roundId === roundId).sort((a, b) => (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name)), [assignments, roundId]);
+  // People in the round first, by seed; staff who only work in this round after them, by name.
+  const visible = useMemo(() => assignments.filter(item => item.roundId === roundId).sort((a, b) =>
+    Number(b.inRound) - Number(a.inRound)
+    || (a.inRound ? (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER) : 0)
+    || a.name.localeCompare(b.name)), [assignments, roundId]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);
   const groupCount = Math.max(currentRules.groups, usedGroupCount(visible), 1);
   const totals = groupTotals(visible, groupCount);
+  const extraRoles = EXTRA_ROLES.filter(role => totals.some(total => total.counts[role] > 0) || (role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry));
   const loads = useMemo(() => dutyLoads(assignments), [assignments]);
   const selected = useMemo(() => new Set(selection), [selection]);
   const currentRound = rounds.find(round => round.id === roundId);
@@ -168,7 +168,7 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
     if (!keys.length) return;
     const result = applyCells(assignments, keys.map(refFromKey), value, { stations: currentRules.stations, fixedStations: currentRules.fixedStations });
     if (result.changed) dispatch({ type: "commit", next: result.assignments });
-    setStatus(describeChange(value, result.changed, result.skipped));
+    setStatus(describeChange(value, result.changed));
   }
 
   function undo() {
@@ -272,8 +272,9 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   }
 
   function focusIssue(issue: Issue) {
-    if (issue.assignmentId && issue.group !== undefined && issue.group >= 1) {
-      selectSingle({ id: issue.assignmentId, group: issue.group });
+    if (issue.assignmentId) {
+      const group = issue.group !== undefined && issue.group >= 1 ? issue.group : 1;
+      selectSingle({ id: issue.assignmentId, group });
       setFocusRequest(request => request + 1);
     } else if (issue.group !== undefined) {
       selectColumn(issue.group);
@@ -283,31 +284,31 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
   const tabbable = cursor ?? (visible[0] ? { id: visible[0].id, group: 1 } : undefined);
 
   return <section className="review-panel matrix-review" id="review" onKeyDown={handleKeyDown}>
-    <div className="review-head"><div><p className="kicker">Revisar y validar</p><h2>{currentRound ? `${eventNames[currentRound.eventId] ?? currentRound.eventId} · ${currentRound.id.split("-").at(-1)?.toUpperCase()}` : "Revisar asignaciones"}</h2><p>Selecciona celdas y asígnales una tarea con el teclado o con los botones.</p></div><div className="matrix-legend">{VALUES.filter(Boolean).map(value => <span key={value} className={`cell-chip ${value}`}>{CELL_CODES[value]} <small>{CELL_LABELS[value]}</small></span>)}</div></div>
+    <div className="review-head"><div><p className="kicker">Revisar y validar</p><h2>{currentRound ? `${eventNames[currentRound.eventId] ?? currentRound.eventId} · Ronda ${currentRound.id.split("-r").at(-1)}` : "Revisar asignaciones"}</h2><p>Selecciona celdas y asígnales una tarea con el teclado o con los botones. Puedes cambiar cualquier celda; los problemas aparecen abajo.</p></div></div>
 
     <div className="round-tabs" role="tablist" aria-label="Rondas">{rounds.map(round => {
-      const roundIssues = (issuesByRound.get(round.id) ?? []).filter(issue => issue.severity !== "preference");
+      const roundIssues = issuesByRound.get(round.id) ?? [];
       const worst = worstSeverity(roundIssues);
-      return <button key={round.id} role="tab" aria-selected={roundId === round.id} className={roundId === round.id ? "active" : ""} onClick={() => changeRound(round.id)}><EventIcon eventId={round.eventId} label={eventNames[round.eventId] ?? round.eventId} /><span>{eventNames[round.eventId] ?? round.eventId}<small>{round.id}</small></span>{worst && <em className={`tab-issues ${worst}`} title={`${roundIssues.length} problemas`}>{roundIssues.length}</em>}</button>;
+      return <button key={round.id} role="tab" aria-selected={roundId === round.id} className={roundId === round.id ? "active" : ""} onClick={() => changeRound(round.id)} title={`${eventNames[round.eventId] ?? round.eventId} · ${round.id}`}><EventIcon eventId={round.eventId} label={eventNames[round.eventId] ?? round.eventId} /><span>{eventNames[round.eventId] ?? round.eventId}<small>Ronda {round.id.split("-r").at(-1)}</small></span>{worst && <em className={`tab-issues ${worst}`} title={`${roundIssues.length} problemas`}>{roundIssues.length}</em>}</button>;
     })}</div>
 
     <div className="matrix-toolbar">
       <div className="tool-group" role="radiogroup" aria-label="Al hacer clic en una celda"><strong>Al hacer clic</strong>
         <button role="radio" aria-checked={tool === "select"} className={`select ${tool === "select" ? "active" : ""}`} onClick={() => setTool("select")}>Solo seleccionar</button>
-        {VALUES.map(value => <button key={value || "empty"} role="radio" aria-checked={tool === value} className={`${value || "empty"} ${tool === value ? "active" : ""}`} onClick={() => setTool(value)}><kbd>{HOTKEY_LABELS[value]}</kbd>{value ? CELL_LABELS[value] : "Vaciar"}</button>)}
+        {VALUES.map(value => <button key={value || "empty"} role="radio" aria-checked={tool === value} className={`${value || "empty"} ${tool === value ? "active" : ""}`} onClick={() => setTool(value)}><kbd>{HOTKEY_LABELS[value]}</kbd>{value ? TASK_LABELS[value] : "Vaciar"}</button>)}
       </div>
       <div className="history-actions"><button onClick={undo} disabled={!history.past.length} title="Deshacer (Ctrl+Z)">↶ Deshacer</button><button onClick={redo} disabled={!history.future.length} title="Rehacer (Ctrl+Y o Ctrl+Mayús+Z)">↷ Rehacer</button></div>
     </div>
 
     <div className="selection-bar">{selection.length > 1
-      ? <><strong>{selection.length} celdas seleccionadas</strong><span>Asignar:</span>{VALUES.map(value => <button key={value || "empty"} className={`cell-chip ${value || "empty"}`} onClick={() => apply(value)}>{value ? `${CELL_CODES[value]} · ${CELL_LABELS[value]}` : "Vaciar"}</button>)}<button className="plain" onClick={clearSelection}>Quitar selección <kbd>Esc</kbd></button></>
-      : <p>Arrastra o usa <kbd>Mayús</kbd> y <kbd>Ctrl</kbd> para seleccionar varias celdas. Pulsa <kbd>C</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>R</kbd> o <kbd>0</kbd> para asignar a la selección y <kbd>↑↓←→</kbd> para moverte.</p>}
+      ? <><strong>{selection.length} celdas seleccionadas</strong><span>Asignar:</span>{VALUES.map(value => <button key={value || "empty"} className={`cell-chip ${value || "empty"}`} onClick={() => apply(value)} title={value ? TASK_LABELS[value] : "Vaciar"}>{value ? TASK_CODES[value] : "Vaciar"}</button>)}<button className="plain" onClick={clearSelection}>Quitar selección <kbd>Esc</kbd></button></>
+      : <p>Arrastra o usa <kbd>Mayús</kbd> y <kbd>Ctrl</kbd> para seleccionar varias celdas. Pulsa la letra de una tarea o <kbd>0</kbd> para asignarla a la selección y <kbd>↑↓←→</kbd> para moverte.</p>}
     </div>
 
     <div className="issue-bar">
       <div className="issue-counts">{issues.length === 0
         ? <span className="ok">Sin problemas en esta ronda</span>
-        : (["error", "warning", "preference"] as IssueSeverity[]).filter(severity => counts[severity]).map(severity => <span key={severity} className={severity} title={SEVERITY_HELP[severity]}>{countLabel(counts[severity], SEVERITY_COUNTS[severity])}</span>)}
+        : (["error", "warning"] as IssueSeverity[]).filter(severity => counts[severity]).map(severity => <span key={severity} className={severity} title={SEVERITY_HELP[severity]}>{countLabel(counts[severity], SEVERITY_COUNTS[severity])}</span>)}
       </div>
       <span className="review-status" role="status">{status}</span>
       {issues.length > 0 && <button className="plain" aria-expanded={showIssues} onClick={() => setShowIssues(value => !value)}>{showIssues ? "Ocultar lista" : "Ver lista"}</button>}
@@ -315,20 +316,21 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
     {showIssues && issues.length > 0 && <ul className="issue-items">{issues.map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{SEVERITY_LABELS[issue.severity]}</span>{issue.message}</button></li>)}</ul>}
 
     <div className="assignment-matrix-wrap" ref={matrixRef}><table className="assignment-matrix" aria-label="Matriz de asignaciones"><thead>
-      <tr><th className="rank-column">#</th><th className="name-column">Competidor</th><th>Edad</th><th>Seed</th><th>Inscrito</th><th className="groups-heading" colSpan={groupCount}>{roomName}</th><th className="tasks-column">Tareas</th></tr>
-      <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{totals.map(total => {
-        const groupIssues = issueIndex.groups.get(total.group);
+      <tr><th className="rank-column">#</th><th className="name-column">Persona</th><th>Edad</th><th>Seed</th><th>En la ronda</th><th className="groups-heading" colSpan={groupCount}>{roomName}</th><th className="tasks-column">Tareas</th></tr>
+      <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{totals.map(({ group, counts: groupCounts }) => {
+        const groupIssues = issueIndex.groups.get(group);
         const severity = worstSeverity(groupIssues);
-        const extra = total.group > currentRules.groups;
-        const judges = judgesNeeded(total.competitors, currentRules.stations);
+        const extra = group > currentRules.groups;
+        const judges = judgesNeeded(groupCounts.competitor, currentRules.stations);
         const shortClass = (have: number, need: number) => !extra && have < need ? "short" : "";
-        return <th key={total.group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={groupIssues?.map(issue => issue.message).join("\n")}>
-          <button type="button" onClick={() => selectColumn(total.group)} title={`Seleccionar toda la columna G${total.group}`}>G{total.group}{extra && " · sobra"}</button>
+        return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={groupIssues?.map(issue => issue.message).join("\n")}>
+          <button type="button" onClick={() => selectColumn(group)} title={`Seleccionar toda la columna G${group}`}>G{group}{extra && " · sobra"}</button>
           <span className="group-totals">
-            <span title="Competidores">C {total.competitors}</span>
-            <span className={shortClass(total.scramblers, currentRules.scramblers)} title="Mezcladores asignados / necesarios">M {total.scramblers}{!extra && `/${currentRules.scramblers}`}</span>
-            <span className={currentRules.checkJudges ? shortClass(total.judges, judges) : ""} title="Jueces asignados / necesarios">J {total.judges}{currentRules.checkJudges && !extra && `/${judges}`}</span>
-            <span className={currentRules.checkJudges ? shortClass(total.runners, currentRules.runners) : ""} title="Runners asignados / necesarios">R {total.runners}{currentRules.checkJudges && !extra && `/${currentRules.runners}`}</span>
+            <span title="Competidores">C {groupCounts.competitor}</span>
+            <span className={shortClass(groupCounts.scrambler, currentRules.scramblers)} title="Mezcladores asignados / necesarios">M {groupCounts.scrambler}{!extra && `/${currentRules.scramblers}`}</span>
+            <span className={currentRules.checkJudges ? shortClass(groupCounts.judge, judges) : ""} title="Jueces asignados / necesarios">J {groupCounts.judge}{currentRules.checkJudges && !extra && `/${judges}`}</span>
+            <span className={currentRules.checkJudges ? shortClass(groupCounts.runner, currentRules.runners) : ""} title="Runners asignados / necesarios">R {groupCounts.runner}{currentRules.checkJudges && !extra && `/${currentRules.runners}`}</span>
+            {extraRoles.map(role => <span key={role} className={(role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry) ? shortClass(groupCounts[role], 1) : ""} title={TASK_LABELS[role]}>{TASK_CODES[role]} {groupCounts[role]}</span>)}
           </span>
         </th>;
       })}<th /></tr>
@@ -336,12 +338,13 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
       const rowIssues = issueIndex.rows.get(item.id);
       const rowSeverity = worstSeverity(rowIssues);
       const load = loads.get(item.personId) ?? 0;
-      return <tr key={item.id}>
-        <td className="rank-column">{index + 1}</td>
+      const rowDuties = duties(item);
+      return <tr key={item.id} className={item.inRound ? "" : "staff-row"}>
+        <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
         <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issue => issue.message).join("\n")} />}<strong>{item.name}</strong><small>{item.wcaId ?? "Sin WCA ID"}</small></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
         <td>{formatSeed(item.seedResult, item.eventId)}</td>
-        <td><span className="registered-check" aria-label="Inscrito">✓</span></td>
+        <td>{item.inRound ? <span className="registered-check" aria-label="Compite en esta ronda">✓</span> : <span className="muted-mark" aria-label="Solo trabaja en esta ronda">—</span>}</td>
         {Array.from({ length: groupCount }, (_, groupIndex) => {
           const group = groupIndex + 1;
           const cell = { id: item.id, group };
@@ -351,7 +354,7 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
           const severity = worstSeverity(cellIssues);
           const isCursor = cursor?.id === item.id && cursor.group === group;
           const classes = [value || "empty", isCursor && "cursor", selected.has(key) && "in-selection", severity && `issue-${severity}`].filter(Boolean).join(" ");
-          const description = `${CELL_LABELS[value]} · G${group}${cellIssues ? `\n${cellIssues.map(issue => issue.message).join("\n")}` : ""}`;
+          const description = `${TASK_LABELS[value]} · G${group}${cellIssues ? `\n${cellIssues.map(issue => issue.message).join("\n")}` : ""}`;
           return <td key={group} className="matrix-cell"><button
             data-cell={key}
             className={classes}
@@ -366,12 +369,12 @@ export function GroupReview({ initialAssignments, rules, eventNames, roomName = 
               selectSingle(cell);
               if (tool !== "select") apply(tool, [key]);
             }}
-          ><strong>{CELL_CODES[value]}</strong>{value === "competitor" && item.station && <small>P{item.station}</small>}</button></td>;
+          ><strong>{TASK_CODES[value]}</strong>{value === "competitor" && item.station && <small>P{item.station}</small>}</button></td>;
         })}
-        <td className="tasks-column">{item.duties.length ? item.duties.map(duty => `G${duty.group} ${CELL_CODES[duty.role]}`).join(" · ") : "—"}{load > 0 && <small>{load === 1 ? "1 tarea" : `${load} tareas`} en total</small>}</td>
+        <td className="tasks-column">{rowDuties.length ? rowDuties.map(duty => `G${duty.group} ${TASK_CODES[duty.role]}`).join(" · ") : "—"}{load > 0 && <small>{load === 1 ? "1 tarea" : `${load} tareas`} en total</small>}</td>
       </tr>;
     })}</tbody></table></div>
 
-    <div className="review-footer"><span><strong>{visible.length} personas</strong> · {issues.length ? (["error", "warning"] as IssueSeverity[]).map(severity => countLabel(counts[severity], SEVERITY_COUNTS[severity])).join(" · ") : "sin problemas"}</span><span className="review-saved">Guardado en este dispositivo · sin publicar</span></div>
+    <div className="review-footer"><span><strong>{visible.filter(item => item.inRound).length} competidores</strong>{visible.some(item => !item.inRound) && ` · ${visible.filter(item => !item.inRound).length} personas solo con tareas`} · {issues.length ? (["error", "warning"] as IssueSeverity[]).map(severity => countLabel(counts[severity], SEVERITY_COUNTS[severity])).join(" · ") : "sin problemas"}</span><span className="review-saved">Guardado en este dispositivo · sin publicar</span></div>
   </section>;
 }
