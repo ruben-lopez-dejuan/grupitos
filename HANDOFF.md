@@ -46,7 +46,7 @@ Preferencias firmes del usuario:
 - Comandos:
   - `npm run dev`. El usuario suele tenerlo ya abierto en el puerto 3000, y un segundo `next dev` en la misma carpeta no arranca.
   - `npm run typecheck`.
-  - `npm test`: Vitest, con 200 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
+  - `npm test`: Vitest, con 208 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
   - `npm run build`.
 - Demo sin login, solo en desarrollo:
   - `/demo?size=small`: 34 personas y una sala.
@@ -171,6 +171,15 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
 - **«¿Por qué esta persona?»**: cada tarea generada guarda `why` (personas libres, tareas previas, motivos y, con pesos, la puntuación y sus mayores aportaciones). Se ve al pasar por la celda y en la ficha.
 - **Solapes encadenados**: competir en dos pruebas con grupos que se solapan hasta 10 minutos cuenta como ir de una a otra (`COMPETING_OVERLAP_TOLERANCE`).
 - Posibles mejoras: más scorers (estaciones coherentes `MismatchedStationScorer`, condiciones libres `ConditionalScorer` con segmentos), pesos distintos por tarea y exportar los perfiles como plantilla JSON.
+
+### 6.3b. Personal en salas auxiliares y equipos (23/10/2026)
+
+- **Equipos → roles** (Personas, PRO): la propiedad `team` de natshelper (u otra) se convierte en roles con sugerencias: voluntario → staff, data entry → data entry, registro/streaming/médico → «Sin tareas normales» (nuevo rol `notasks`, que no juzga, ni mezcla ni hace de runner).
+- **Staff que no compite**: las personas con rol WCA sin inscripción (`nonCompetingStaff()`, como dos organizadores del Nacional) aparecen como no competidoras.
+- **Delegados por escasez**: la tarea de delegado se planifica para toda la competición antes que el resto, empezando por los grupos con menos delegados libres (antes, las rondas de la sala principal se los llevaban y la sala auxiliar se quedaba sin ninguno).
+- **Mezcladores de reserva**: si un grupo no se cubre con el grupo habitual (rondas de un solo grupo en sala auxiliar, escenarios en paralelo), entra gente que no compite en la ronda pero tiene marca en la prueba que se mezcla (`SCRAMBLE_EVENT`: 4BLD → 4x4, 5BLD → 5x5, BLD/OH/multi → 3x3).
+- **Equipo por sala o escenario** (Zona, PRO, `LaneStaffing.team`): un segmento dedicado a esa sala; sus miembros van primero allí y no trabajan en ningún otro sitio.
+- Con el WCIF del Nacional ya no queda ningún grupo sin delegado ni sin mezcladores, con reglas o con puntuación.
 
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
