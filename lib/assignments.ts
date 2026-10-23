@@ -3,7 +3,8 @@ export const DUTY_ROLES = ["judge", "scrambler", "runner", "delegate", "stagelea
 export type DutyRole = typeof DUTY_ROLES[number];
 export type TaskRole = "competitor" | DutyRole;
 export type CellValue = TaskRole | "";
-export type Task = { group: number; role: TaskRole };
+/** `attempt` (2, 3…): competing in a later attempt's column of an attempt-based round (multi-blind). */
+export type Task = { group: number; role: TaskRole; attempt?: number };
 export type CellRef = { id: string; group: number };
 
 export const TASK_CODES: Record<CellValue, string> = {
@@ -85,8 +86,9 @@ export function cellValue(item: GeneratedAssignment, group: number): CellValue {
   return item.tasks.find(task => task.group === group)?.role ?? "";
 }
 
+/** Groups where the person competes; later attempts of the same group are not counted again. */
 export function competingGroups(item: GeneratedAssignment) {
-  return item.tasks.filter(task => task.role === "competitor").map(task => task.group);
+  return item.tasks.filter(task => task.role === "competitor" && !(task.attempt && task.attempt > 1)).map(task => task.group);
 }
 
 /** The single competing group, or undefined when there is none or more than one. */

@@ -374,3 +374,4 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .change-competition.restart{color:var(--muted);background:transparent;border:0;font:inherit;cursor:pointer}
 .change-competition.restart:hover{color:#b42318}
 .wcif-note{margin:0 0 10px}
+.group-attempt{margin-left:4px;color:var(--muted);font-size:12px;font-weight:650;text-transform:none}

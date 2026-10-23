@@ -77,4 +77,20 @@ describe("groups already in the WCIF", () => {
     expect(Object.fromEntries(groupsByRound)).toEqual({ "333-r1": 2, "444bf-r1": 1 });
     expect(assignments.find(item => item.id === "333-r1:1")!.tasks).toEqual([{ group: 1, role: "competitor" }, { group: 2, role: "judge" }]);
   });
+
+  it("place later multi-blind attempts in their own column", () => {
+    const competition = wcif();
+    const room = competition.schedule!.venues![0].rooms![1];
+    room.activities!.push(
+      { id: 30, name: "MBLD A1", activityCode: "333mbf-r1-a1", startTime: "2026-12-05T15:00:00Z", endTime: "2026-12-05T16:00:00Z", childActivities: [{ id: 31, name: "", activityCode: "333mbf-r1-g1-a1", startTime: "2026-12-05T15:00:00Z", endTime: "2026-12-05T16:00:00Z" }] },
+      { id: 40, name: "MBLD A2", activityCode: "333mbf-r1-a2", startTime: "2026-12-05T17:00:00Z", endTime: "2026-12-05T18:00:00Z", childActivities: [{ id: 41, name: "", activityCode: "333mbf-r1-g1-a2", startTime: "2026-12-05T17:00:00Z", endTime: "2026-12-05T18:00:00Z" }] },
+    );
+    competition.events!.push({ id: "333mbf", rounds: [{ id: "333mbf-r1" }] });
+    competition.persons![0].assignments!.push({ activityId: 31, assignmentCode: "competitor" }, { activityId: 41, assignmentCode: "competitor" });
+    competition.persons![1].assignments!.push({ activityId: 41, assignmentCode: "staff-judge" });
+    const slots = groupSlots(importSchedule(competition, () => 1));
+    const { assignments } = groupsFromWcif(competition, slots);
+    expect(assignments.find(item => item.id === "333mbf-r1:1")!.tasks).toEqual([{ group: 1, role: "competitor" }, { group: 2, role: "competitor", attempt: 2 }]);
+    expect(assignments.find(item => item.id === "333mbf-r1:2")).toMatchObject({ inRound: false, tasks: [{ group: 2, role: "judge" }] });
+  });
 });

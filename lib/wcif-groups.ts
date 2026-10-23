@@ -71,14 +71,16 @@ export type ImportedGroups = {
 /** The WCIF's group assignments as a proposal. `slots`: PRO schedule columns (imported from this WCIF). */
 export function groupsFromWcif(competition: StoredCompetition, slots?: Map<string, GroupSlot[]>): ImportedGroups {
   const groups = groupActivities(competition);
-  const column = (group: GroupActivity) => {
-    if (!slots) return group.number;
+  const column = (group: GroupActivity): { at?: number; attempt?: number } => {
+    if (!slots) return { at: group.number };
     const roundSlots = slots.get(group.roundId) ?? [];
     const sameLane = (slot: GroupSlot) => slot.roomId === group.roomId && slot.stageId === group.stageId;
-    // Same room and stage at the same start time; later attempts (multi-blind) start later.
-    return (roundSlots.find(slot => sameLane(slot) && slot.windows.some(window => window.start === group.start))
-      ?? roundSlots.find(slot => sameLane(slot) && slot.number === group.number)
-      ?? roundSlots.find(slot => slot.roomId === group.roomId && slot.number === group.number))?.group;
+    const sameAttempt = (slot: GroupSlot) => (slot.attempt ?? 1) === group.attempt;
+    // Same room and stage at the same start time; each later attempt (multi-blind) has its own column.
+    const slot = roundSlots.find(item => sameLane(item) && item.windows.some(window => window.start === group.start))
+      ?? roundSlots.find(item => sameLane(item) && sameAttempt(item) && item.number === group.number)
+      ?? roundSlots.find(item => item.roomId === group.roomId && sameAttempt(item) && item.number === group.number);
+    return { at: slot?.group, attempt: slot?.attempt };
   };
   const eventOf = (roundId: string) => roundId.split("-")[0];
   const rows = new Map<string, GeneratedAssignment>();
@@ -89,8 +91,9 @@ export function groupsFromWcif(competition: StoredCompetition, slots?: Map<strin
       const group = groups.get(item.activityId);
       const role = roleOfAssignmentCode(item.assignmentCode);
       if (!group || !role) continue;
-      const at = column(group);
+      const { at, attempt } = column(group);
       if (at === undefined) { unplaced += 1; continue; }
+      const later = !!attempt && attempt > 1 && role === "competitor";
       groupsByRound.set(group.roundId, Math.max(groupsByRound.get(group.roundId) ?? 0, at));
       const key = personKey(person);
       const id = `${group.roundId}:${key}`;
@@ -99,8 +102,8 @@ export function groupsFromWcif(competition: StoredCompetition, slots?: Map<strin
         seedResult: seedResult(person, eventOf(group.roundId)), inRound: false, tasks: [],
       };
       // A multi-blind person has a group per attempt in the same column: one task is enough.
-      if (!row.tasks.some(task => task.group === at && task.role === role)) row.tasks = sortTasks([...row.tasks, { group: at, role }]);
-      if (role === "competitor") {
+      if (!row.tasks.some(task => task.group === at && task.role === role)) row.tasks = sortTasks([...row.tasks, { group: at, role, ...(later ? { attempt } : {}) }]);
+      if (role === "competitor" && !later) {
         row.inRound = true;
         if (typeof item.stationNumber === "number") row.station = item.stationNumber;
         if (person.wcaUserId !== undefined && group.featured.includes(person.wcaUserId)) row.featured = true;

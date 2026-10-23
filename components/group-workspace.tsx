@@ -569,7 +569,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                     <span>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
                     <div className="group-cell">{pro && slots?.has(round.id)
                       // PRO: the total is set here and spread over the round's blocks in the schedule.
-                      ? <><Stepper label={t("rounds.stepperGroups")} value={round.groups} min={minScheduledGroups(pro.schedule, round.id)} big disabled={excluded} onChange={groups => setSchedule(setRoundGroups(pro.schedule, round.id, groups))} />
+                      ? <><Stepper label={t("rounds.stepperGroups")} value={round.groups - (slots?.get(round.id) ?? []).filter(slot => slot.linkedTo).length} min={minScheduledGroups(pro.schedule, round.id)} big disabled={excluded} onChange={groups => setSchedule(setRoundGroups(pro.schedule, round.id, groups))} />
                         <button type="button" className="lane-split" title={t("rounds.fromSchedule")} onClick={() => changeTab("schedule")}>{scheduleLanes(pro.schedule).flatMap(lane => {
                           const count = slots.get(round.id)!.filter(slot => targetKey(slot.roomId, slot.stageId) === lane.key).length;
                           return count ? [<span key={lane.key} title={lane.name}><i style={{ background: lane.color }} />{count}</span>] : [];

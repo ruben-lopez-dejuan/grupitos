@@ -103,8 +103,9 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
     if (!slot) return String(group);
     const lanes = new Set(slots!.get(round)!.map(item => targetKey(item.roomId, item.stageId)));
     const lane = laneByKey.get(targetKey(slot.roomId, slot.stageId));
-    return lanes.size > 1 && lane ? `${slot.number} ${lane.name}` : String(slot.number);
-  }, [slots, laneByKey]);
+    const attempt = slot.attempt ? ` · ${t("review.attempt", { number: slot.attempt })}` : "";
+    return (lanes.size > 1 && lane ? `${slot.number} ${lane.name}` : String(slot.number)) + attempt;
+  }, [slots, laneByKey, t]);
   const issueText = useIssueText(groupLabel);
   const whyText = useWhyText();
   const taskLabel = (value: CellValue) => value ? t(keyOf("tasks", value)) : t("tasks.empty");
@@ -477,11 +478,11 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         const roles = (["scrambler", "judge", "runner", ...extraRoles] as TaskRole[]).filter(role => groupCounts[role] > 0 || needs[role]);
         const summary = [tp("review.groupCompetitors", groupCounts.competitor), ...roles.map(role => needs[role] !== undefined ? t("review.roleCountOf", { role: taskLabel(role), count: groupCounts[role], need: needs[role]! }) : t("review.roleCount", { role: taskLabel(role), count: groupCounts[role] })), ...(groupIssues ?? []).map(issueText)].join("\n");
         return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""} ${startsBlock(position) ? "block-start" : ""}`} title={summary}>
-          <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group: groupLabel(roundId, group) })}\n${summary}`}>G{roundSlots?.find(item => item.group === group)?.number ?? group}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
+          <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group: groupLabel(roundId, group) })}\n${summary}`}>G{roundSlots?.find(item => item.group === group)?.number ?? group}{roundSlots?.find(item => item.group === group)?.attempt && <span className="group-attempt">{t("review.attempt", { number: roundSlots.find(item => item.group === group)!.attempt! })}</span>}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
           {(() => {
             const slot = roundSlots?.find(item => item.group === group);
             const lane = slot && laneByKey.get(targetKey(slot.roomId, slot.stageId));
-            return lane && <span className="group-stage" title={`${lane.name} · G${slot.number} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: lane.color }} />{lane.name} · {clockOf(slot.windows[0].start)}</span>;
+            return lane && <span className="group-stage" title={`${lane.name} · G${slot.number} · ${slot.windows[0].start.slice(0, 10)} ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: lane.color }} />{lane.name} · {clockOf(slot.windows[0].start)}</span>;
           })()}
           <span className="group-chips">{roles.map(role => {
             const need = needs[role];

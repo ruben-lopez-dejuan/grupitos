@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import stagedFixture from "@/tests/fixtures/schedule-with-rooms-and-stages.json";
-import { groupTotals, type GeneratedAssignment } from "@/lib/assignments";
+import { competingGroup, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
@@ -69,8 +69,11 @@ describe("importSchedule", () => {
     const imported = importSchedule(competition, () => 1);
     expect(imported.blocks.map(item => [item.activityCode, item.groups])).toEqual([["444-r1", 3], ["333mbf-r1-a1", 1], ["333mbf-r1-a2", 1]]);
     const mbf = groupSlots(imported).get("333mbf-r1")!;
-    expect(mbf).toHaveLength(1);
-    expect(mbf[0].windows).toEqual([{ start: "2026-02-21T12:00", end: "2026-02-21T13:00" }, { start: "2026-02-21T15:00", end: "2026-02-21T16:00" }]);
+    // One column per attempt; the second repeats the first's group number and people.
+    expect(mbf.map(slot => [slot.group, slot.number, slot.attempt, slot.linkedTo, slot.windows])).toEqual([
+      [1, 1, undefined, undefined, [{ start: "2026-02-21T12:00", end: "2026-02-21T13:00" }]],
+      [2, 1, 2, 1, [{ start: "2026-02-21T15:00", end: "2026-02-21T16:00" }]],
+    ]);
   });
 
   it("reads multi-blind groups named per attempt (333mbf-r1-g1-a1) and cube submission", () => {
@@ -82,7 +85,7 @@ describe("importSchedule", () => {
     // The suggestion (3 groups) must not replace the single group already in the WCIF.
     const imported = importSchedule(competition, () => 3);
     expect(imported.blocks.map(item => [item.activityCode, item.groups])).toEqual([["333mbf-r1-a1", 1], ["333mbf-r1-a2", 1]]);
-    expect(groupSlots(imported).get("333mbf-r1")).toHaveLength(1);
+    expect(groupSlots(imported).get("333mbf-r1")!.map(slot => slot.attempt ?? 1)).toEqual([1, 2]);
     expect(eventBusyWindows(imported).get("333mbf")).toEqual([{ start: "2026-02-21T12:15", end: "2026-02-21T12:35" }]);
   });
 });
@@ -311,5 +314,38 @@ describe("data entry per time slot", () => {
     const round = rounds.find(item => item.id === "333-r1")!;
     const rules = { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations: 12, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: true, dataEntryCovered: covered, noNormalTasks: new Set<string>() };
     expect(validateRound("333-r1", assignments.filter(item => item.roundId === "333-r1"), rules).filter(issue => issue.code === "missing-dataentry")).toEqual([]);
+  });
+});
+
+describe("multi-blind attempts", () => {
+  it("put every competitor in every attempt, each attempt with its own staff", () => {
+    const competition = buildDemoCompetition({ id: "Mbf", name: "Mbf", people: 24, events: ["333", "333mbf"], newcomerShare: 0, seed: 8 });
+    const schedule: ProSchedule = {
+      timeZone: "UTC", days: ["2026-02-21", "2026-02-22"], activities: [],
+      rooms: [{ id: 1, name: "Sala", color: "#2563eb", stages: [] }],
+      blocks: [
+        { id: "a", activityCode: "333-r1", roomId: 1, start: "2026-02-21T10:00", end: "2026-02-21T11:00", groups: 2 },
+        { id: "m1", activityCode: "333mbf-r1-a1", roomId: 1, start: "2026-02-21T12:00", end: "2026-02-21T13:00", groups: 1 },
+        { id: "m2", activityCode: "333mbf-r1-a2", roomId: 1, start: "2026-02-22T12:00", end: "2026-02-22T13:00", groups: 1 },
+      ],
+    };
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots);
+    expect(rounds.find(round => round.id === "333mbf-r1")!.groups).toBe(2);
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots });
+    const mbf = assignments.filter(item => item.roundId === "333mbf-r1" && item.inRound);
+    expect(mbf.length).toBeGreaterThan(0);
+    for (const item of mbf) {
+      expect(item.tasks.filter(task => task.role === "competitor")).toEqual([{ group: 1, role: "competitor" }, { group: 2, role: "competitor", attempt: 2 }]);
+      expect(competingGroup(item)).toBe(1);
+    }
+    const totals = groupTotals(assignments.filter(item => item.roundId === "333mbf-r1"), 2);
+    expect(totals[0].counts.competitor).toBe(totals[1].counts.competitor);
+    expect(totals[1].counts.judge).toBeGreaterThan(0);
+    expect(validateTimes(assignments, slots).filter(issue => issue.severity === "error")).toEqual([]);
+    // One scorecard per person, from attempt 1.
+    const cards = roundScorecards({ competition, assignments, rounds, stations: 12, zoneMode: "fixed", printing: { ...DEFAULT_PRINTING, order: "natural" }, schedule, slots }, ["333mbf-r1"]);
+    const printed = JSON.stringify(cards);
+    for (const item of mbf) expect(printed.split(JSON.stringify(item.name)).length - 1).toBe(1);
   });
 });

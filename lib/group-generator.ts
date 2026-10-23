@@ -249,14 +249,19 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
 
   // Build every competitor split first. In PRO mode they are then repaired together, so the
   // order in which rounds happen to appear in the WCIF cannot create avoidable clashes.
+  // Multi-blind: later attempts are columns of their own that repeat their attempt-1 column's
+  // competitors. People are split over the attempt-1 columns, which hold every attempt's times.
+  const linkedColumns = (roundId: string) => slots?.get(roundId)?.filter(slot => slot.linkedTo) ?? [];
+  const competingSlots = slots && new Map([...slots].map(([roundId, list]) => [roundId, list.filter(slot => !slot.linkedTo).map(slot => ({ ...slot, windows: [...slot.windows, ...list.filter(other => other.linkedTo === slot.group).flatMap(other => other.windows)] }))]));
   const plans: CompetitorPlan[] = rounds.filter(item => item.enabled && item.groups > 0).flatMap(round => {
     const { people: competitors, known } = roundCompetitors(competition, round.id);
     if (!known || competitors.length === 0) return [];
     const firstRound = round.roundNumber === 1;
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
     const rule = firstRound ? options.sortingRule : "ranks";
-    const sets = assignmentSets?.(round) ?? [];
-    const { groups, allowed, featured } = sets.length ? splitWithSets(competitors, round.groups, sets, rule, round.eventId) : { groups: splitIntoGroups(competitors, round.groups, rule, round.eventId), allowed: undefined, featured: undefined };
+    const primary = Math.max(1, round.groups - linkedColumns(round.id).length);
+    const sets = assignmentSets?.({ ...round, groups: primary }) ?? [];
+    const { groups, allowed, featured } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId) : { groups: splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined };
     if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group));
     const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     const preferredGroup = new Map<string, number>();
@@ -267,10 +272,15 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const reserved = new Map<string, Array<{ roundId: string; window: TimeWindow }>>();
   if (slots && laneTeams) for (const plan of plans) plan.groups.forEach((members, index) => {
     if (!members.length) return;
-    const windows = slots.get(plan.round.id)?.find(slot => slot.group === index + 1)?.windows ?? [];
+    const windows = competingSlots!.get(plan.round.id)?.find(slot => slot.group === index + 1)?.windows ?? [];
     for (const key of laneTeams.forGroup(plan.round.id, index + 1) ?? []) reserved.set(key, [...(reserved.get(key) ?? []), ...windows.map(window => ({ roundId: plan.round.id, window }))]);
   });
-  if (slots) resolveCompetitorOverlaps(plans, slots, reserved);
+  if (competingSlots) resolveCompetitorOverlaps(plans, competingSlots, reserved);
+  // Then every attempt column takes its attempt-1 column's competitors.
+  for (const plan of plans) {
+    for (const linked of linkedColumns(plan.round.id)) plan.groups[linked.group - 1] = [...(plan.groups[linked.linkedTo! - 1] ?? [])];
+    for (let index = 0; index < plan.groups.length; index += 1) plan.groups[index] ??= [];
+  }
 
   // Every competition slot is occupied before staff allocation starts. Staff selection therefore
   // sees future rounds as well as earlier ones and cannot hide a competitor clash through ordering.
@@ -361,14 +371,19 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const busyDuring = (key: string, group: number) => windowsOf(group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
     const stationsIn = (group: number) => staffing?.(round.id, group)?.stations ?? stations;
+    const attemptOfColumn = new Map(linkedColumns(round.id).map(slot => [slot.group, slot.attempt!]));
     const stationRule = fixed ? stationRules?.(round) : undefined;
     groups.forEach((members, groupIndex) => {
       const rule = stationRule?.get(groupIndex + 1);
       const ruled = rule && assignStations(members.map(person => ({ key: personKey(person), seed: seedIndex.get(personKey(person))!, registrantId: person.registrantId, name: person.name, property: rule.property ? personProperties[personKey(person)]?.[rule.property] : undefined })), stationsIn(groupIndex + 1), rule);
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
+        const attempt = attemptOfColumn.get(groupIndex + 1);
+        const task: Task = { group: groupIndex + 1, role: "competitor", ...(attempt ? { attempt } : {}) };
+        const existing = rows.get(key);
+        if (existing) { existing.tasks = sortTasks([...existing.tasks, task]); return; }
         const station = ruled ? ruled.get(key) : fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined;
-        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station, why: [] });
+        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [task], station, why: [] });
       });
     });
     const rowFor = (person: WcifPerson) => {

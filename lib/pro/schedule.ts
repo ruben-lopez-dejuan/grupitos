@@ -56,7 +56,11 @@ export type ScheduleLane = { key: string; roomId: number; stageId?: number; name
  * number people see and the WCIF uses (-g{number}): by convention, groups that start at the same
  * time in different stages share it, and each new start time takes the next number.
  */
-export type GroupSlot = { group: number; roomId: number; stageId?: number; number: number; windows: TimeWindow[] };
+/**
+ * Attempt-based rounds (multi-blind) have a column per attempt: `attempt` (2, 3…) and `linkedTo`, the
+ * attempt-1 column whose competitors take every attempt.
+ */
+export type GroupSlot = { group: number; roomId: number; stageId?: number; number: number; windows: TimeWindow[]; attempt?: number; linkedTo?: number };
 
 export const STAGE_COLORS = ["#d93636", "#2f9e44", "#2563eb", "#e8a317", "#9c36b5", "#0c8599", "#f76707", "#495057"];
 
@@ -267,11 +271,12 @@ export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
     const first = parts(1).sort((a, b) => a.window.start.localeCompare(b.window.start) || laneOrder.get(targetKey(a.roomId, a.stageId))! - laneOrder.get(targetKey(b.roomId, b.stageId))! || a.position - b.position);
     const starts = [...new Set(first.map(part => part.window.start))];
     const slots = first.map((part, index): GroupSlot => ({ group: index + 1, roomId: part.roomId, stageId: part.stageId, number: starts.indexOf(part.window.start) + 1, windows: [part.window] }));
+    // Each later attempt is a column of its own, after the attempt-1 columns, with the same number.
     const attempts = [...new Set(blocks.map(block => attemptOf(block.activityCode)))].filter(attempt => attempt > 1).sort();
     for (const attempt of attempts) {
       for (const part of parts(attempt)) {
         const match = first.findIndex(candidate => candidate.roomId === part.roomId && candidate.stageId === part.stageId && candidate.position === part.position);
-        if (match >= 0) slots[match].windows.push(part.window);
+        if (match >= 0) slots.push({ group: slots.length + 1, roomId: part.roomId, stageId: part.stageId, number: slots[match].number, windows: [part.window], attempt, linkedTo: match + 1 });
       }
     }
     result.set(roundId, slots);

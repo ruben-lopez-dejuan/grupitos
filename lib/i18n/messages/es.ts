@@ -654,6 +654,7 @@ export const es = {
     "444bf": "4×4 a ciegas", "555bf": "5×5 a ciegas", clock: "Clock", minx: "Megaminx", pyram: "Pyraminx", skewb: "Skewb", sq1: "Square-1",
   },
   review: {
+    attempt: "intento {number}",
     columnOrder: "Orden de las columnas",
     columnsByGroup: "Columnas por grupo",
     columnsByStage: "Columnas por escenario",

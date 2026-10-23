@@ -401,7 +401,9 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
     const rows = assignments.filter(item => item.roundId === roundId && competingGroup(item) !== undefined);
     const fixed = usesFixedStations(config.roundNumber, rows.length || config.competitors, stations, zoneMode);
 
-    const groups: Array<{ group: number; competitors: Array<{ competitor: CardCompetitor; station?: number }> }> = rows.length
+    // Later multi-blind attempts are columns of their own with the same people: cards come from attempt 1.
+    const attemptColumns = new Set((slots?.get(roundId) ?? []).filter(slot => slot.linkedTo).map(slot => slot.group));
+    const groups: Array<{ group: number; competitors: Array<{ competitor: CardCompetitor; station?: number }> }> = (rows.length
       ? times(config.groups, index => ({
         group: index + 1,
         competitors: rows
@@ -412,7 +414,7 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
             return { competitor: { name: item.name, registrantId: person?.registrantId ?? null, wcaId: item.wcaId ?? null, personalBests: person?.personalBests, featured: item.featured }, station: item.station };
           }),
       }))
-      : groupSizes(config.competitors, config.groups).map((size, index) => ({ group: index + 1, competitors: times(size, () => ({ competitor: NAMELESS })) }));
+      : groupSizes(config.competitors, config.groups - attemptColumns.size).map((size, index) => ({ group: index + 1, competitors: times(size, () => ({ competitor: NAMELESS })) }))).filter(item => !attemptColumns.has(item.group));
 
     // PRO: print each stage's groups together, in time order, with the number people know.
     const roundSlots = slots?.get(roundId);
