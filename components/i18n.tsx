@@ -38,20 +38,26 @@ export function useEventName() {
   }, [t]);
 }
 
-/** An issue's text in the current language. */
-export function useIssueText() {
+/**
+ * An issue's text in the current language. `groupLabel` names a matrix column as people know
+ * it (in PRO mode "1 Araba"); texts add the "G".
+ */
+export function useIssueText(groupLabel?: (roundId: string, group: number) => string) {
   const { t } = useI18n();
   const eventName = useEventName();
   return useCallback((issue: Issue) => {
-    const { groups, names, task, otherRound, otherTask, ...rest } = issue.params;
+    const { groups, names, task, otherRound, otherTask, group, otherGroup, ...rest } = issue.params;
     const params: Record<string, string | number> = Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)) as Record<string, string | number>;
-    if (groups) params.groups = groups.map(group => `G${group}`).join(", ");
+    const label = (roundId: string, value: number) => groupLabel?.(roundId, value) ?? String(value);
+    if (group !== undefined) params.group = label(issue.roundId, group);
+    if (otherGroup !== undefined) params.otherGroup = label(otherRound ?? issue.roundId, otherGroup);
+    if (groups) params.groups = groups.map(value => `G${label(issue.roundId, value)}`).join(", ");
     if (names) params.names = names.join(t("issues.and"));
     if (task) params.task = t(keyOf("tasks", task));
     if (otherTask) params.otherTask = t(keyOf("tasks", otherTask));
     if (otherRound) params.otherRound = roundName(otherRound, eventName, t);
     return t(keyOf("issues", issue.code), params);
-  }, [t, eventName]);
+  }, [t, eventName, groupLabel]);
 }
 
 /** "3x3x3 Cube · Round 2" from "333-r2". */

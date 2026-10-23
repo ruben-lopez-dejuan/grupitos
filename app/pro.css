@@ -111,3 +111,8 @@ button.plain.danger{justify-self:start;color:var(--error)}
 @media (max-width:1100px){
   .schedule-drag-hint{display:none}
 }
+
+.lane-split{display:flex;gap:8px;padding:1px 4px;color:var(--muted);background:transparent;border:0;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer}
+.lane-split span{display:inline-flex;align-items:center;gap:3px}
+.lane-split i{width:8px;height:8px;border-radius:50%}
+.lane-split:hover{color:var(--ink);background:var(--surface-subtle)}

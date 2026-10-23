@@ -242,7 +242,7 @@ export const es = {
     perGroup: "{size} por grupo",
     excluded: "Excluidas",
     planned: "Prevista",
-    fromSchedule: "Grupos según el horario. Haz clic para editarlo.",
+    fromSchedule: "Grupos por escenario en el horario. El total que pongas aquí se reparte entre los bloques de la ronda; haz clic para colocarlos de otra forma.",
     plannedHelp: "Se podrá generar cuando el WCIF tenga los clasificados. Su configuración ya se usa para las hojas de tiempos sin nombres.",
     include: "↺ Incluir",
     includeHelp: "Volver a incluir esta ronda",

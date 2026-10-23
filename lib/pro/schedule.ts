@@ -35,6 +35,11 @@ export type ProSchedule = {
 export type ProConfig = { enabled: boolean; schedule: ProSchedule };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
+/**
+ * `group` is the matrix column (G1…Gn in time order, then lane order). `number` is the group
+ * number people see and the WCIF uses (-g{number}): by convention, groups that start at the same
+ * time in different stages share it, and each new start time takes the next number.
+ */
 export type GroupSlot = { group: number; roomId: number; stageId?: number; number: number; windows: TimeWindow[] };
 
 export const STAGE_COLORS = ["#d93636", "#2f9e44", "#2563eb", "#e8a317", "#9c36b5", "#0c8599", "#f76707", "#495057"];
@@ -221,7 +226,7 @@ export function splitBlock(block: TimeWindow & { groups: number; groupWindows?: 
   return Array.from({ length: count }, (_, index) => ({ start: fromMinutes(start + index * length), end: fromMinutes(start + (index + 1) * length) }));
 }
 
-/** Global G numbers follow time then room/stage order; `number` remains local to the lane. */
+/** Columns follow time then room/stage order; numbers follow start times (see GroupSlot). */
 export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
   const lanes = scheduleLanes(schedule);
   const laneOrder = new Map(lanes.map((lane, index) => [lane.key, index]));
@@ -232,22 +237,26 @@ export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
   }
   const result = new Map<string, GroupSlot[]>();
   for (const [roundId, blocks] of byRound) {
+    // `position` is the order within the lane; later attempts (multi-blind) match on it.
     const parts = (attempt: number) => {
-      const numbered: Array<{ roomId: number; stageId?: number; number: number; window: TimeWindow }> = [];
+      const numbered: Array<{ roomId: number; stageId?: number; position: number; window: TimeWindow }> = [];
       for (const lane of lanes) {
-        let number = 0;
+        let position = 0;
         for (const block of sortByTime(blocks.filter(item => targetKey(item.roomId, item.stageId) === lane.key && attemptOf(item.activityCode) === attempt))) {
-          for (const window of splitBlock(block)) numbered.push({ roomId: lane.roomId, stageId: lane.stageId, number: ++number, window });
+          for (const window of splitBlock(block)) numbered.push({ roomId: lane.roomId, stageId: lane.stageId, position: ++position, window });
         }
       }
       return numbered;
     };
-    const slots = parts(1)
-      .sort((a, b) => a.window.start.localeCompare(b.window.start) || laneOrder.get(targetKey(a.roomId, a.stageId))! - laneOrder.get(targetKey(b.roomId, b.stageId))! || a.number - b.number)
-      .map((part, index): GroupSlot => ({ group: index + 1, roomId: part.roomId, stageId: part.stageId, number: part.number, windows: [part.window] }));
+    const first = parts(1).sort((a, b) => a.window.start.localeCompare(b.window.start) || laneOrder.get(targetKey(a.roomId, a.stageId))! - laneOrder.get(targetKey(b.roomId, b.stageId))! || a.position - b.position);
+    const starts = [...new Set(first.map(part => part.window.start))];
+    const slots = first.map((part, index): GroupSlot => ({ group: index + 1, roomId: part.roomId, stageId: part.stageId, number: starts.indexOf(part.window.start) + 1, windows: [part.window] }));
     const attempts = [...new Set(blocks.map(block => attemptOf(block.activityCode)))].filter(attempt => attempt > 1).sort();
     for (const attempt of attempts) {
-      for (const part of parts(attempt)) slots.find(slot => slot.roomId === part.roomId && slot.stageId === part.stageId && slot.number === part.number)?.windows.push(part.window);
+      for (const part of parts(attempt)) {
+        const match = first.findIndex(candidate => candidate.roomId === part.roomId && candidate.stageId === part.stageId && candidate.position === part.position);
+        if (match >= 0) slots[match].windows.push(part.window);
+      }
     }
     result.set(roundId, slots);
   }
@@ -330,6 +339,56 @@ export function normalizeProSchedule(value: unknown): ProSchedule {
 export function eventBusyWindows(schedule: ProSchedule): Map<string, TimeWindow[]> {
   const submissions = schedule.activities.filter(activity => activity.kind === "multi").map(({ start, end }) => ({ start, end }));
   return new Map(submissions.length ? [["333mbf", submissions]] : []);
+}
+
+/** Blocks of a round's first attempt (all of them for rounds without attempts). */
+function firstAttemptBlocks(schedule: ProSchedule, roundId: string) {
+  return sortByTime(schedule.blocks.filter(block => roundIdOf(block.activityCode) === roundId && attemptOf(block.activityCode) === 1));
+}
+
+/** Fewest groups a round can have in the schedule: one per block. */
+export function minScheduledGroups(schedule: ProSchedule, roundId: string) {
+  return Math.max(1, firstAttemptBlocks(schedule, roundId).length);
+}
+
+/**
+ * Sets a round's total groups from the rounds table: the total is spread over its blocks in
+ * proportion to their length (at least one each), and later attempts copy their lane's count.
+ * Blocks whose count changes lose their imported exact windows and are split evenly.
+ */
+export function setRoundGroups(schedule: ProSchedule, roundId: string, total: number): ProSchedule {
+  const first = firstAttemptBlocks(schedule, roundId);
+  if (!first.length) return schedule;
+  const target = Math.max(first.length, Math.round(total));
+  const lengths = first.map(block => Math.max(1, toMinutes(block.end) - toMinutes(block.start)));
+  const sum = lengths.reduce((a, b) => a + b, 0);
+  const extra = target - first.length;
+  const shares = lengths.map(length => (extra * length) / sum);
+  const counts = shares.map(share => 1 + Math.floor(share));
+  let left = target - counts.reduce((a, b) => a + b, 0);
+  for (const index of shares.map((share, index) => ({ index, rest: share - Math.floor(share) })).sort((a, b) => b.rest - a.rest || a.index - b.index).map(item => item.index)) {
+    if (left <= 0) break;
+    counts[index] += 1;
+    left -= 1;
+  }
+  const byId = new Map(first.map((block, index) => [block.id, counts[index]]));
+  const laneCounts = new Map<string, number[]>();
+  first.forEach((block, index) => laneCounts.set(targetKey(block.roomId, block.stageId), [...(laneCounts.get(targetKey(block.roomId, block.stageId)) ?? []), counts[index]]));
+  const laterSeen = new Map<string, number>();
+  const blocks = sortByTime(schedule.blocks).map(block => {
+    if (roundIdOf(block.activityCode) !== roundId) return block;
+    let groups = byId.get(block.id);
+    if (groups === undefined) {
+      const key = `${attemptOf(block.activityCode)}|${targetKey(block.roomId, block.stageId)}`;
+      const position = laterSeen.get(key) ?? 0;
+      laterSeen.set(key, position + 1);
+      groups = laneCounts.get(targetKey(block.roomId, block.stageId))?.[position] ?? block.groups;
+    }
+    if (groups === block.groups) return block;
+    const { groupWindows: _exact, ...rest } = block;
+    return { ...rest, groups };
+  });
+  return { ...schedule, blocks };
 }
 
 export function withScheduledGroups<T extends { id: string; groups: number }>(rounds: T[], slots: Map<string, GroupSlot[]>): T[] {

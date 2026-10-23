@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EventIcon } from "@/components/event-icon";
 import { useEventName, useI18n, useIssueText } from "@/components/i18n";
 import { PersonCard } from "@/components/person-card";
@@ -89,7 +89,19 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
 }) {
   const { t, tp } = useI18n();
   const eventName = useEventName();
-  const issueText = useIssueText();
+  const laneByKey = useMemo(() => new Map((rooms ?? []).flatMap(room => [
+    [targetKey(room.id), { name: room.name, color: room.color }] as const,
+    ...room.stages.map(stage => [targetKey(room.id, stage.id), { name: stage.name, color: stage.color }] as const),
+  ])), [rooms]);
+  /** PRO mode: "1 Araba" for the column of Araba's first group; parallel stages share the number. */
+  const groupLabel = useCallback((round: string, group: number) => {
+    const slot = slots?.get(round)?.find(item => item.group === group);
+    if (!slot) return String(group);
+    const lanes = new Set(slots!.get(round)!.map(item => targetKey(item.roomId, item.stageId)));
+    const lane = laneByKey.get(targetKey(slot.roomId, slot.stageId));
+    return lanes.size > 1 && lane ? `${slot.number} ${lane.name}` : String(slot.number);
+  }, [slots, laneByKey]);
+  const issueText = useIssueText(groupLabel);
   const taskLabel = (value: CellValue) => value ? t(keyOf("tasks", value)) : t("tasks.empty");
   const severityCount = (severity: IssueSeverity, count: number) => severity === "error" ? tp("review.errors", count) : tp("review.warnings", count);
   const [history, dispatch] = useReducer(historyReducer, initialAssignments, initial => ({ past: [], present: normalizeAssignments(initial), future: [] }));
@@ -128,10 +140,6 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
     }));
   }, [assignments, rounds, rules, slots]);
   const roundSlots = slots?.get(roundId);
-  const laneByKey = useMemo(() => new Map((rooms ?? []).flatMap(room => [
-    [targetKey(room.id), { name: room.name, color: room.color }] as const,
-    ...room.stages.map(stage => [targetKey(room.id, stage.id), { name: stage.name, color: stage.color }] as const),
-  ])), [rooms]);
 
   // People in the round first, by seed; staff who only work in this round after them, by name.
   const loads = useMemo(() => dutyLoads(assignments), [assignments]);
@@ -441,11 +449,11 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         const roles = (["scrambler", "judge", "runner", ...extraRoles] as TaskRole[]).filter(role => groupCounts[role] > 0 || needs[role]);
         const summary = [tp("review.groupCompetitors", groupCounts.competitor), ...roles.map(role => needs[role] !== undefined ? t("review.roleCountOf", { role: taskLabel(role), count: groupCounts[role], need: needs[role]! }) : t("review.roleCount", { role: taskLabel(role), count: groupCounts[role] })), ...(groupIssues ?? []).map(issueText)].join("\n");
         return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={summary}>
-          <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group })}\n${summary}`}>G{group}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
+          <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group: groupLabel(roundId, group) })}\n${summary}`}>G{roundSlots?.find(item => item.group === group)?.number ?? group}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
           {(() => {
             const slot = roundSlots?.find(item => item.group === group);
             const lane = slot && laneByKey.get(targetKey(slot.roomId, slot.stageId));
-            return lane && <span className="group-stage" title={`${lane.name} ${slot.number} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: lane.color }} />{lane.name} {slot.number} · {clockOf(slot.windows[0].start)}</span>;
+            return lane && <span className="group-stage" title={`${lane.name} · G${slot.number} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><i style={{ background: lane.color }} />{lane.name} · {clockOf(slot.windows[0].start)}</span>;
           })()}
           <span className="group-chips">{roles.map(role => {
             const need = needs[role];
@@ -529,6 +537,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
       photo={showPhotos ? photos[cardPersonId] : undefined}
       roles={roleLabels[cardPersonId] ?? []}
       issues={[...issuesByRound.values()].flat()}
+      groupLabel={groupLabel}
       onClose={() => setCardPersonId(undefined)}
       onGoTo={(targetRound, group) => {
         if (targetRound !== roundId) changeRound(targetRound);

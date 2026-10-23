@@ -17,7 +17,7 @@ import { getCompetition, type StoredCompetition } from "@/lib/competition-store"
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
-import { eventBusyWindows, groupSlots, importSchedule, scheduleLanes, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
+import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
@@ -288,8 +288,13 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                     <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })} · {round.eventId}</small></div></div>
                     <span className="round-number">{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
                     <span>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
-                    <div className="group-cell">{slots?.has(round.id)
-                      ? <button type="button" className="scheduled-groups" title={t("rounds.fromSchedule")} onClick={() => changeTab("schedule")}><strong>{round.groups}</strong><span>{scheduleLanes(pro!.schedule).filter(lane => slots.get(round.id)!.some(slot => targetKey(slot.roomId, slot.stageId) === lane.key)).map(lane => <i key={lane.key} style={{ background: lane.color }} title={`${lane.name}: ${slots.get(round.id)!.filter(slot => targetKey(slot.roomId, slot.stageId) === lane.key).length}`} />)}</span></button>
+                    <div className="group-cell">{pro && slots?.has(round.id)
+                      // PRO: the total is set here and spread over the round's blocks in the schedule.
+                      ? <><Stepper label={t("rounds.stepperGroups")} value={round.groups} min={minScheduledGroups(pro.schedule, round.id)} big disabled={excluded} onChange={groups => setSchedule(setRoundGroups(pro.schedule, round.id, groups))} />
+                        <button type="button" className="lane-split" title={t("rounds.fromSchedule")} onClick={() => changeTab("schedule")}>{scheduleLanes(pro.schedule).flatMap(lane => {
+                          const count = slots.get(round.id)!.filter(slot => targetKey(slot.roomId, slot.stageId) === lane.key).length;
+                          return count ? [<span key={lane.key} title={lane.name}><i style={{ background: lane.color }} />{count}</span>] : [];
+                        })}</button></>
                       : <Stepper label={t("rounds.stepperGroups")} value={round.groups} min={1} big disabled={excluded} onChange={groups => updateRound(round.id, { groups })} />}<small>{perGroup}</small></div>
                     <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={round.scramblers} min={0} disabled={excluded} onChange={scramblers => updateRound(round.id, { scramblers })} />
                     <Stepper label={t("rounds.stepperRunners")} variant="runner" value={round.runners} min={0} disabled={excluded || !options.assignJudges} onChange={runners => updateRound(round.id, { runners })} />

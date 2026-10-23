@@ -240,7 +240,7 @@ export const en: Messages = {
     perGroup: "{size} per group",
     excluded: "Excluded",
     planned: "Planned",
-    fromSchedule: "Groups from the schedule. Click to edit it.",
+    fromSchedule: "Groups per stage in the schedule. The total you set here is spread over the round's blocks; click to place them differently.",
     plannedHelp: "Can be generated once the WCIF has the people who advanced. Its setup is already used for nameless scorecards.",
     include: "↺ Include",
     includeHelp: "Include this round again",

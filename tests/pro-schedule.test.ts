@@ -5,7 +5,7 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
-import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
+import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, minScheduledGroups, setRoundGroups, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds } from "@/lib/rounds";
 import { validateTimes } from "@/lib/validation";
 
@@ -94,6 +94,25 @@ describe("groupSlots", () => {
   it("continues a stage's numbering across blocks of the same round", () => {
     const slots = groupSlots(schedule([block("a", "333-r1", 1, "10:00", "11:00", 2), block("b", "333-r1", 1, "15:00", "15:30", 1)])).get("333-r1")!;
     expect(slots.map(slot => [slot.group, slot.number, slot.windows[0].start.slice(11)])).toEqual([[1, 1, "10:00"], [2, 2, "10:30"], [3, 3, "15:00"]]);
+  });
+
+  it("gives groups that start together the same number, and each new start time the next one", () => {
+    // Rojo runs the round 10:00-11:00 in three groups; Verde runs two later groups.
+    const slots = groupSlots(schedule([block("a", "333-r1", 1, "10:00", "11:00", 3), block("b", "333-r1", 2, "10:00", "10:20", 1), block("c", "333-r1", 2, "11:00", "11:40", 2)])).get("333-r1")!;
+    expect(slots.map(slot => `G${slot.group}=${stages.find(stage => stage.id === slot.stageId)!.name} ${slot.number} ${slot.windows[0].start.slice(11)}`))
+      .toEqual(["G1=Rojo 1 10:00", "G2=Verde 1 10:00", "G3=Rojo 2 10:20", "G4=Rojo 3 10:40", "G5=Verde 4 11:00", "G6=Verde 5 11:20"]);
+  });
+
+  it("spreads a round's total over its blocks by length, at least one each", () => {
+    const base = schedule([block("a", "444-r1", 1, "10:00", "11:00", 2), block("b", "444-r1", 2, "10:00", "10:30", 2), block("c", "222-r1", 1, "11:00", "12:00", 3)]);
+    const imported = { ...base, blocks: base.blocks.map(item => item.id === "a" ? { ...item, groupWindows: [{ start: "2026-02-21T10:00", end: "2026-02-21T10:40" }, { start: "2026-02-21T10:40", end: "2026-02-21T11:00" }] } : item) };
+    const nine = setRoundGroups(imported, "444-r1", 9);
+    expect(Object.fromEntries(nine.blocks.map(item => [item.id, item.groups]))).toEqual({ a: 6, b: 3, c: 3 });
+    // Changed blocks drop their imported uneven windows; other rounds are untouched.
+    expect(nine.blocks.find(item => item.id === "a")!.groupWindows).toBeUndefined();
+    expect(Object.fromEntries(setRoundGroups(imported, "444-r1", 1).blocks.map(item => [item.id, item.groups]))).toEqual({ a: 1, b: 1, c: 3 });
+    expect(minScheduledGroups(imported, "444-r1")).toBe(2);
+    expect(groupSlots(nine).get("444-r1")).toHaveLength(9);
   });
 
   it("gives scheduled rounds their group count", () => {

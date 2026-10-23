@@ -9,19 +9,21 @@ import { keyOf } from "@/lib/i18n";
 import type { Issue } from "@/lib/validation";
 
 /** Side panel with one person's groups and duties across every generated round. */
-export function PersonCard({ rows, roundOrder, photo, roles, issues, onGoTo, onClose }: {
+export function PersonCard({ rows, roundOrder, photo, roles, issues, groupLabel = (_, group) => String(group), onGoTo, onClose }: {
   /** This person's assignment rows, one per round. */
   rows: GeneratedAssignment[];
   roundOrder: string[];
   photo?: string;
   roles: string[];
   issues: Issue[];
+  /** How people know a group (PRO: "1 Araba"). */
+  groupLabel?: (roundId: string, group: number) => string;
   onGoTo: (roundId: string, group: number) => void;
   onClose: () => void;
 }) {
   const { t, tp } = useI18n();
   const eventName = useEventName();
-  const issueText = useIssueText();
+  const issueText = useIssueText(groupLabel);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -53,8 +55,8 @@ export function PersonCard({ rows, roundOrder, photo, roles, issues, onGoTo, onC
           <EventIcon eventId={row.eventId} label={eventName(row.eventId)} />
           <span className="round-label">{eventName(row.eventId)}<small>{t("rounds.roundNumber", { number: row.roundId.split("-r").at(-1) ?? "" })}</small></span>
           <span className="round-tasks">
-            {groups.map(group => <span key={`c${group}`} className="cell-chip mini competitor">C G{group}{row.station && groups.length === 1 ? ` · P${row.station}` : ""}</span>)}
-            {duties(row).map(duty => <span key={`${duty.role}${duty.group}`} className={`cell-chip mini ${duty.role}`} title={t(keyOf("tasks", duty.role))}>{TASK_CODES[duty.role]} G{duty.group}</span>)}
+            {groups.map(group => <span key={`c${group}`} className="cell-chip mini competitor">C G{groupLabel(row.roundId, group)}{row.station && groups.length === 1 ? ` · P${row.station}` : ""}</span>)}
+            {duties(row).map(duty => <span key={`${duty.role}${duty.group}`} className={`cell-chip mini ${duty.role}`} title={t(keyOf("tasks", duty.role))}>{TASK_CODES[duty.role]} G{groupLabel(row.roundId, duty.group)}</span>)}
             {!groups.length && !duties(row).length && <span className="muted-mark">—</span>}
           </span>
           {rowIssues.length > 0 && <i className={`issue-dot static ${rowIssues.some(issue => issue.severity === "error") ? "error" : "warning"}`} title={rowIssues.map(issueText).join("\n")} />}
