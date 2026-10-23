@@ -573,8 +573,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const penalty = (person: WcifPerson, job: TaskRole) => {
         const key = personKey(person);
         let value = -20 * busyRoles(key);
-        if (options.noTasksForNewcomers && isNewcomer(person)) value -= 5000;
-        if (options.tasksForOwnEventsOnly && !registeredForEvent(person)) value -= 5000;
+        // Staff and volunteers work in any event (CanVolunteer in the Spanish Championship scripts).
+        if (options.noTasksForNewcomers && isNewcomer(person) && !staff.has(key)) value -= 5000;
+        if (options.tasksForOwnEventsOnly && !registeredForEvent(person) && !staff.has(key)) value -= 5000;
         if (job === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country) value -= 5000;
         return value;
       };

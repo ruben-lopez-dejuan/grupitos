@@ -24,6 +24,7 @@ import { draftStorageKey, generationSignature, parseDraft, type Draft, type Work
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
+import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { resolveStationRules, type StationRuleConfig } from "@/lib/pro/station-rules";
 import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
@@ -65,6 +66,11 @@ function defaultSettings(competition: StoredCompetition): WorkspaceSettings {
     people: peopleFromWcif(competition),
     printing: DEFAULT_PRINTING,
   };
+}
+
+/** Rooms and stages a team can work in, with whether a room has stages. */
+function laneChoices(schedule: ProSchedule) {
+  return scheduleLanes(schedule).map(lane => ({ key: lane.key, name: lane.name, color: lane.color, hasStages: lane.stageId !== undefined || (schedule.rooms.find(room => room.id === lane.roomId)?.stages.length ?? 0) > 0 }));
 }
 
 export function GroupWorkspace({ competitionId, userName }: { competitionId: string; userName: string }) {
@@ -147,21 +153,33 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const people = useMemo(() => competition ? acceptedPeople(competition) : [], [competition]);
   /** People who can hold a role: competitors and staff who do not compete (organizers without a registration…). */
   const rolePeople = useMemo(() => competition ? [...acceptedPeople(competition), ...nonCompetingStaff(competition)] : [], [competition]);
+  // PRO: teams read live from a person property decide part of the roles (lib/pro/teams.ts).
+  const teamState = useMemo(() => {
+    if (!competition || !settings?.pro?.enabled) return undefined;
+    const proPeople = settings.pro.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
+    const { property, setups, values } = teamSetups(proPeople, proPeople.teams, laneChoices(settings.pro.schedule));
+    if (!values.size) return undefined;
+    const { settings: people, fromTeam } = withTeams(settings.people, values, setups);
+    return { property, setups, values, people, fromTeam, unavailable: teamUnavailability(values, setups), jobExclusions: teamJobExclusions(values, setups), lanes: teamLanes(values, setups) };
+  }, [competition, settings]);
+  /** Role lists as the generator and the review use them: with teams applied. */
+  const rolesInUse = teamState?.people ?? settings?.people;
   const roleLabels = useMemo(() => {
     const labels: Record<string, string[]> = {};
-    if (!settings) return labels;
+    if (!settings || !rolesInUse) return labels;
     const add = (keys: string[] | undefined, label: string) => keys?.forEach(key => { labels[key] = [...(labels[key] ?? []), label]; });
-    add(settings.people.roles.delegate, t("people.roleTags.delegate"));
-    add(settings.people.roles["trainee-delegate"], t("people.roleTags.trainee-delegate"));
-    add(settings.people.roles.organizer, t("people.roleTags.organizer"));
-    add(settings.people.roles.staff, t("people.roleTags.staff"));
-    add(settings.people.roles.dataentry, t("people.roleTags.dataentry"));
-    add(settings.people.roles.avoid, t("people.roleTags.avoid"));
-    add(settings.people.roles.notasks, t("people.roleTags.notasks"));
-    add(settings.people.trustedIds, t("people.roleTags.trusted"));
+    add(rolesInUse.roles.delegate, t("people.roleTags.delegate"));
+    add(rolesInUse.roles["trainee-delegate"], t("people.roleTags.trainee-delegate"));
+    add(rolesInUse.roles.organizer, t("people.roleTags.organizer"));
+    add(rolesInUse.roles.staff, t("people.roleTags.staff"));
+    add(rolesInUse.roles.dataentry, t("people.roleTags.dataentry"));
+    add(rolesInUse.roles.avoid, t("people.roleTags.avoid"));
+    add(rolesInUse.roles.notasks, t("people.roleTags.notasks"));
+    add(rolesInUse.trustedIds, t("people.roleTags.trusted"));
+    teamState?.values.forEach((team, key) => add([key], t("proPeople.teamCluster", { team })));
     if (settings.pro?.enabled) add(settings.pro.people?.volunteers.map(volunteer => volunteer.key), t("proPeople.volunteerTag"));
     return labels;
-  }, [settings, t]);
+  }, [settings, rolesInUse, teamState, t]);
   const photos = useMemo(() => Object.fromEntries((competition?.persons ?? []).map(person => [personKey(person), person.avatar?.thumbUrl])), [competition]);
   const signature = useMemo(() => settings ? generationSignature(settings) : "", [settings]);
   const pro = settings?.pro?.enabled ? settings.pro : undefined;
@@ -170,7 +188,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const effectiveRounds = useMemo(() => settings ? slots ? withScheduledGroups(settings.rounds, slots) : settings.rounds : [], [settings, slots]);
   const roundRules = useMemo(() => {
     if (!settings) return {};
-    const { people: roles, options, stations, zoneMode } = settings;
+    const { options, stations, zoneMode } = settings;
+    const roles = teamState?.people ?? settings.people;
     // PRO: one data entry per time slot covers every group running then.
     const typingWindows = slots ? proposal.flatMap(item => item.tasks.filter(task => task.role === "dataentry").flatMap(task => slots.get(item.roundId)?.find(slot => slot.group === task.group)?.windows ?? [])) : [];
     const coveredGroups = (roundId: string) => new Set((slots?.get(roundId) ?? []).filter(slot => slot.windows.some(window => typingWindows.some(typing => typing.start < window.end && window.start < typing.end))).map(slot => slot.group));
@@ -190,7 +209,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         noNormalTasks,
       } satisfies RoundRules];
     }));
-  }, [settings, proposal, effectiveRounds, slots]);
+  }, [settings, proposal, effectiveRounds, slots, teamState]);
   const handleReviewChange = useCallback((next: GeneratedAssignment[]) => setProposal(next), []);
 
   if (loading) return <main className="workspace-loading"><div /><p>{t("workspace.loading")}</p></main>;
@@ -222,21 +241,11 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const setProPeople = (next: ProPeople) => updatePro(() => ({ people: next }));
   const segments = settings.pro?.segments ?? [];
   const setSegments = (next: Segment[]) => updatePro(() => ({ segments: next }));
-  /** Teams → rooms: each team becomes a cluster ("Team: Side room") dedicated to its room or stage. */
-  const applyLaneTeams = (items: Array<{ lane: string; property: string; value: string }>) => updatePro(current => {
-    const nextSegments = [...(current.segments ?? [])];
-    const nextStaffing = { ...(current.staffing ?? {}) };
-    for (const { lane, property, value } of items) {
-      const name = t("proPeople.teamCluster", { team: value });
-      let segment = nextSegments.find(item => item.name === name);
-      if (!segment) {
-        segment = { id: newSegmentId(nextSegments), name, match: "all", rules: [{ kind: "property", key: property, op: "eq", value }] };
-        nextSegments.push(segment);
-      }
-      nextStaffing[lane] = { ...nextStaffing[lane], team: segment.id };
-    }
-    return { segments: nextSegments, staffing: nextStaffing };
-  });
+  /** Teams can be chosen wherever a cluster is: assignment sets, station rules, job eligibility, review filter. */
+  // A saved cluster with the same rule (property = team) already stands for the team.
+  const savedAs = (team: string) => segments.some(segment => segment.rules.length === 1 && segment.rules[0].kind === "property" && segment.rules[0].key === teamState?.property && segment.rules[0].op === "eq" && segment.rules[0].value === team && !segment.rules[0].negate);
+  const teamClusters = teamState ? [...new Set(teamState.values.values())].sort().filter(team => !savedAs(team)).map(team => ({ id: teamClusterId(team), name: t("proPeople.teamCluster", { team }), members: new Set([...teamState.values].filter(([, value]) => value === team).map(([key]) => key)) })) : [];
+  const peopleInUse = teamState?.people ?? settings.people;
   const sets = settings.pro?.sets ?? [];
   const setSets = (next: AssignmentSetConfig[]) => updatePro(() => ({ sets: next }));
   const stationRuleList = settings.pro?.stationRules ?? [];
@@ -281,30 +290,43 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   // PRO: people allowed to do each job, per event (segments can depend on the round's event).
   const eventIds = (competition.events ?? []).map(event => event.id);
   const eligible: Partial<Record<JobRole, Map<string, Set<string>>>> = pro ? Object.fromEntries(JOB_ROLES.flatMap(role => {
+    const excluded = teamState?.jobExclusions[role];
+    const team = teamClusters.find(item => item.id === jobs[role]);
     const segment = segments.find(item => item.id === jobs[role]);
-    if (!segment) return [];
+    if (!team && !segment && !excluded?.size) return [];
     const all = everyone(competition, proPeople);
-    return [[role, new Map(eventIds.map(eventId => [eventId, new Set(segmentMembers(segment, all, { people: settings.people, pro: proPeople, segments, eventId }).map(personKey))]))]];
+    const members = (eventId: string) => team ? team.members : segment ? new Set(segmentMembers(segment, all, { people: peopleInUse, pro: proPeople, segments, eventId }).map(personKey)) : new Set(all.map(personKey));
+    return [[role, new Map(eventIds.map(eventId => [eventId, new Set([...members(eventId)].filter(key => !excluded?.has(key)))]))]];
   })) : {};
   /** Smallest and largest number of eligible people over the events, for the rules tab. */
   const eligibleRange = (role: JobRole) => {
     const sizes = [...(eligible[role]?.values() ?? [])].map(set => set.size);
     return sizes.length ? [Math.min(...sizes), Math.max(...sizes)] : undefined;
   };
-  // PRO: teams dedicated to a room or stage, from the segment chosen in the zone tab.
-  const laneTeams = pro && slots && Object.values(staffing).some(lane => lane.team) ? (() => {
+  // PRO: people who work first in a room or stage: the cluster chosen in the zone tab (only
+  // there) and teams with a room (first there, or only there).
+  const laneTeams = pro && slots && (Object.values(staffing).some(lane => lane.team) || teamState?.lanes.first.size) ? (() => {
     const all = everyone(competition, proPeople);
-    const context = { people: settings.people, pro: proPeople, segments };
-    const byLane = new Map(Object.entries(staffing).flatMap(([lane, own]) => {
+    const context = { people: peopleInUse, pro: proPeople, segments };
+    const byLane = new Map<string, Set<string>>();
+    const only = new Set(teamState?.lanes.only ?? []);
+    for (const [lane, own] of Object.entries(staffing)) {
       const segment = segments.find(item => item.id === own.team);
-      return segment ? [[lane, new Set(segmentMembers(segment, all, context).map(personKey))] as const] : [];
-    }));
+      const team = teamClusters.find(item => item.id === own.team);
+      const members = team ? team.members : segment ? new Set(segmentMembers(segment, all, context).map(personKey)) : undefined;
+      if (!members) continue;
+      byLane.set(lane, new Set([...(byLane.get(lane) ?? []), ...members]));
+      members.forEach(key => only.add(key));
+    }
+    for (const [lane, members] of teamState?.lanes.first ?? []) byLane.set(lane, new Set([...(byLane.get(lane) ?? []), ...members]));
+    // A room key covers its stages.
+    const forLane = (roomId: number, stageId?: number) => new Set([...(byLane.get(targetKey(roomId, stageId)) ?? []), ...(stageId === undefined ? [] : byLane.get(targetKey(roomId)) ?? [])]);
     return {
       forGroup: (roundId: string, group: number) => {
         const slot = slots.get(roundId)?.find(item => item.group === group);
-        return slot ? byLane.get(targetKey(slot.roomId, slot.stageId)) : undefined;
+        return slot ? forLane(slot.roomId, slot.stageId) : undefined;
       },
-      members: new Set([...byLane.values()].flatMap(members => [...members])),
+      members: only,
     };
   })() : undefined;
   // PRO: ordered assignment sets and station rules, resolved per round (a cluster may depend on the round's event).
@@ -312,20 +334,22 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     const cache = new Map<string, Set<string>>();
     let all: ReturnType<typeof everyone> | undefined;
     return (segmentId: string, eventId: string) => {
+      const team = teamClusters.find(item => item.id === segmentId);
+      if (team) return team.members;
       const segment = segments.find(item => item.id === segmentId);
       if (!segment) return undefined;
       const key = `${segmentId}|${eventId}`;
       all ??= everyone(competition, proPeople);
-      if (!cache.has(key)) cache.set(key, new Set(segmentMembers(segment, all, { people: settings.people, pro: proPeople, segments, eventId }).map(personKey)));
+      if (!cache.has(key)) cache.set(key, new Set(segmentMembers(segment, all, { people: peopleInUse, pro: proPeople, segments, eventId }).map(personKey)));
       return cache.get(key);
     };
   })();
   const assignmentSets = pro && sets.some(set => !set.off) ? (round: GenerationRound) => resolveSets(sets, round, slots?.get(round.id), membersOf) : undefined;
   const stationRules = pro && stationRuleList.some(rule => !rule.off) ? (round: GenerationRound) => resolveStationRules(stationRuleList, round, slots?.get(round.id), membersOf) : undefined;
-  const segmentFilters = pro && segments.length ? (() => {
-    const context = { people: settings.people, pro: proPeople, segments };
+  const segmentFilters = pro && (segments.length || teamClusters.length) ? (() => {
+    const context = { people: peopleInUse, pro: proPeople, segments };
     const all = everyone(competition, proPeople);
-    return segments.map(segment => ({ id: segment.id, name: segment.name, members: new Set(segmentMembers(segment, all, context).map(personKey)) }));
+    return [...segments.map(segment => ({ id: segment.id, name: segment.name, members: new Set(segmentMembers(segment, all, context).map(personKey)) })), ...teamClusters];
   })() : undefined;
 
   const activeRounds = rounds.filter(round => round.enabled);
@@ -334,12 +358,12 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const totalGroups = activeRounds.reduce((sum, round) => sum + round.groups, 0);
   const roomCount = competition.schedule?.venues?.reduce((sum, venue) => sum + (venue.rooms?.length ?? 0), 0) ?? 0;
   const proposalOutdated = proposal.length > 0 && generatedWith !== undefined && generatedWith !== signature;
-  const delegatesWithoutDuties = options.assignDelegateDuties && !settings.people.delegateDutyIds.some(key => isDelegate(settings.people, key));
+  const delegatesWithoutDuties = options.assignDelegateDuties && !peopleInUse.delegateDutyIds.some(key => isDelegate(peopleInUse, key));
 
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -414,7 +438,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
             <StationRulesPanel rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} propertyKeys={proPeople.propertyKeys} />
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
             <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
-              <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>
+              <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}{teamClusters.length > 0 && <optgroup label={t("proPeople.teams")}>{teamClusters.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</optgroup>}</select>
               {eligibleRange(role) && <small>{eligibleRange(role)![0] === eligibleRange(role)![1] ? tp("segments.members", eligibleRange(role)![0]) : t("jobs.range", { min: eligibleRange(role)![0], max: eligibleRange(role)![1] })}</small>}
             </label>)}</div>
             {!segments.length && <p className="setup-note">{t("jobs.noSegments")}</p>}
@@ -430,11 +454,11 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           </>}
         </section>}
 
-        {tab === "people" && <><PeoplePanel people={rolePeople} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
-          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} peopleSettings={settings.people} onPeopleSettingsChange={next => update({ people: next })} lanes={scheduleLanes(pro.schedule).map(lane => ({ key: lane.key, name: lane.name, hasStages: lane.stageId !== undefined || (pro.schedule.rooms.find(room => room.id === lane.roomId)?.stages.length ?? 0) > 0 }))} onLaneTeams={applyLaneTeams} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
+        {tab === "people" && <><PeoplePanel people={rolePeople} settings={settings.people} inUse={peopleInUse} fromTeam={teamState?.fromTeam} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
+          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} lanes={laneChoices(pro.schedule)} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
         </>}
 
-        {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={settings.people} proPeople={proPeople} segments={segments} onChange={setSegments} />}
+        {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={peopleInUse} proPeople={proPeople} segments={segments} onChange={setSegments} />}
 
         {tab === "rounds" && <>
           {outdatedNote}
@@ -485,7 +509,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
             const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
             return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
-          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
+          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : undefined} segmentFilters={segmentFilters} />}
         </>}
 
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}

@@ -12,12 +12,18 @@ import { personKey } from "@/lib/rounds";
 type ListId = PersonRole | "trusted";
 
 const ORDER: ListId[] = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "avoid", "notasks", "trusted"];
+/** Lists a team decides in PRO mode (lib/pro/teams.ts). */
+const TEAM_LISTS: ListId[] = ["staff", "dataentry", "avoid", "notasks"];
 
-export function PeoplePanel({ people, settings, onChange, delegateDuties, showPhotos, onShowPhotosChange }: {
+export function PeoplePanel({ people, settings, inUse = settings, fromTeam, onChange, delegateDuties, showPhotos, onShowPhotosChange }: {
   showPhotos: boolean;
   onShowPhotosChange: (show: boolean) => void;
   people: WcifPerson[];
   settings: PeopleSettings;
+  /** PRO: the lists with teams applied, shown instead; team members change with their team. */
+  inUse?: PeopleSettings;
+  /** PRO: the team that decided each person's role. */
+  fromTeam?: Map<string, string>;
   onChange: (settings: PeopleSettings) => void;
   /** Whether the delegate-duty checkboxes matter (the option is on). */
   delegateDuties: boolean;
@@ -25,6 +31,7 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties, showPh
   const { t } = useI18n();
   const byKey = new Map(people.map(person => [personKey(person), person]));
   const listOf = (id: ListId) => id === "trusted" ? settings.trustedIds : settings.roles[id] ?? [];
+  const shownList = (id: ListId) => id === "trusted" ? inUse.trustedIds : inUse.roles[id] ?? [];
 
   function setList(id: ListId, keys: string[]) {
     if (id === "trusted") onChange({ ...settings, trustedIds: keys });
@@ -50,7 +57,7 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties, showPh
   return <section className="people-panel" id="people">
     <div className="setup-heading"><h2>{t("people.title")} <Hint align="start" text={t("people.hint")} /></h2><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> {t("people.showPhotos")}</label></div>
     <div className="role-grid">{ORDER.map(id => {
-      const keys = listOf(id);
+      const keys = shownList(id);
       const isDelegateList = id === "delegate" || id === "trainee-delegate";
       return <div className="role-card" key={id}>
         <div className="role-card-head"><h3>{t(keyOf("people.lists", id))} <Hint text={t(keyOf("people.descriptions", id))} /></h3><span>{keys.length}</span></div>
@@ -61,7 +68,9 @@ export function PeoplePanel({ people, settings, onChange, delegateDuties, showPh
             {showPhotos && <PersonAvatar name={person?.name ?? key} url={person?.avatar?.thumbUrl} size={28} />}
             <span>{person?.name ?? key}</span>
             {person && !person.wcaId && <NewcomerBadge />}
-            <button type="button" onClick={() => remove(id, key)} aria-label={t("people.remove", { name: person?.name ?? key })}>×</button>
+            {fromTeam?.has(key) && TEAM_LISTS.includes(id)
+              ? <small className="team-tag" title={t("people.fromTeamHelp")}>{fromTeam.get(key)}</small>
+              : <button type="button" onClick={() => remove(id, key)} aria-label={t("people.remove", { name: person?.name ?? key })}>×</button>}
           </li>;
         })}</ul>}
         <PersonPicker people={people} exclude={keys} label={id === "trusted" ? t("people.addTrusted") : t("people.addTo", { role: t(keyOf("people.lists", id)).toLowerCase() })} onAdd={key => add(id, key)} />

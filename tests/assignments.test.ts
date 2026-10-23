@@ -150,3 +150,25 @@ describe("drafts", () => {
     expect(normalizeAssignments([person("a", 1)])).toEqual([person("a", 1)]);
   });
 });
+
+describe("drafts with the old team-to-room choice", () => {
+  it("drop the copied room team and keep the team's room in its setup", () => {
+    const schedule = { timeZone: "UTC", days: [], rooms: [], activities: [], blocks: [] };
+    const draft = {
+      version: 3,
+      assignments: [],
+      settings: {
+        pro: {
+          enabled: true,
+          schedule,
+          people: { propertyKeys: ["team"], properties: {}, volunteers: [], unavailable: [], teamRoles: { property: "team", map: { "Side room": "lane:2:room" } } },
+          segments: [{ id: "s1", name: "Equipo: Side room", match: "all", rules: [{ kind: "property", key: "team", op: "eq", value: "Side room" }] }, { id: "s2", name: "Jueces", match: "all", rules: [] }],
+          staffing: { "2:room": { team: "s1", stations: 6 }, "1:1": { team: "s2" } },
+        },
+      },
+    };
+    const pro = parseDraft(JSON.stringify(draft))!.settings!.pro!;
+    expect(pro.staffing).toEqual({ "2:room": { stations: 6 }, "1:1": { team: "s2" } });
+    expect(pro.people?.teams?.setup["Side room"]).toEqual({ kind: "volunteer", lane: "2:room", laneOnly: true });
+  });
+});

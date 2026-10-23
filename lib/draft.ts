@@ -3,8 +3,8 @@ import type { AssignmentOptions } from "@/lib/group-generator";
 import type { PeopleSettings } from "@/lib/people";
 import { normalizeProPeople } from "@/lib/pro/people";
 import { normalizeScoring } from "@/lib/pro/scoring";
-import { normalizeJobs, normalizeSegments } from "@/lib/pro/segments";
-import { normalizeProSchedule, type ProConfig } from "@/lib/pro/schedule";
+import { normalizeJobs, normalizeSegments, type Segment } from "@/lib/pro/segments";
+import { normalizeProSchedule, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 
@@ -50,6 +50,12 @@ export function generationSignature(settings: WorkspaceSettings) {
       blocks: settings.pro.schedule.blocks,
       volunteers: settings.pro.people?.volunteers.map(volunteer => volunteer.key),
       unavailable: settings.pro.people?.unavailable,
+      // Teams are read live from a property: their setup and people's values shape the proposal.
+      teams: settings.pro.people?.teams,
+      teamValues: settings.pro.people?.properties && Object.fromEntries(Object.entries(settings.pro.people.properties).flatMap(([key, own]) => {
+        const property = settings.pro?.people?.teams?.property ?? "team";
+        return own[property] ? [[key, own[property]]] : [];
+      })),
       // Segment rules decide who may do each job, so they shape the proposal too.
       jobs: settings.pro.jobs,
       staffing: settings.pro.staffing,
@@ -67,6 +73,28 @@ export function generationSignature(settings: WorkspaceSettings) {
 }
 
 /**
+ * Older drafts sent a team to a room by writing an "Equipo: X" cluster (property = X) as that
+ * room's dedicated team in the zone tab. The team's own setup carries the room now, so that copy
+ * is dropped; any other room team is kept.
+ */
+function withoutOldTeamRooms(staffing: Record<string, LaneStaffing>, segments: unknown, teamRoles: unknown) {
+  const old = teamRoles as { property?: string; map?: Record<string, string> } | undefined;
+  if (!old?.property || !old.map || !Array.isArray(segments)) return staffing;
+  const next = { ...staffing };
+  for (const [team, choice] of Object.entries(old.map)) {
+    if (typeof choice !== "string" || !choice.startsWith("lane:")) continue;
+    const lane = choice.slice(5);
+    const segment = (segments as Segment[]).find(item => item.id === next[lane]?.team);
+    const copy = segment?.rules.length === 1 && segment.rules[0].kind === "property" && segment.rules[0].key === old.property && segment.rules[0].op === "eq" && segment.rules[0].value === team && !segment.rules[0].negate;
+    if (!copy) continue;
+    const { team: _dropped, ...rest } = next[lane];
+    if (Object.keys(rest).length) next[lane] = rest;
+    else delete next[lane];
+  }
+  return next;
+}
+
+/**
  * Accepts the current format; older drafts keep their assignments (migrated) and
  * lose their settings, which had a different shape.
  */
@@ -79,7 +107,8 @@ export function parseDraft(raw: string | null): Draft | undefined {
       const draft = data as { version?: number; assignments?: unknown[] };
       if (draft.version === 3) {
         const current = data as Draft;
-        const settings = current.settings?.pro ? { ...current.settings, pro: { ...current.settings.pro, schedule: normalizeProSchedule(current.settings.pro.schedule), ...(current.settings.pro.people ? { people: normalizeProPeople(current.settings.pro.people) } : {}), segments: normalizeSegments(current.settings.pro.segments), jobs: normalizeJobs(current.settings.pro.jobs), scoring: normalizeScoring(current.settings.pro.scoring) } } : current.settings;
+        const pro = current.settings?.pro;
+        const settings = pro && current.settings ? { ...current.settings, pro: { ...pro, schedule: normalizeProSchedule(pro.schedule), ...(pro.people ? { people: normalizeProPeople(pro.people) } : {}), segments: normalizeSegments(pro.segments), jobs: normalizeJobs(pro.jobs), scoring: normalizeScoring(pro.scoring), ...(pro.staffing ? { staffing: withoutOldTeamRooms(pro.staffing, pro.segments, (pro.people as { teamRoles?: unknown } | undefined)?.teamRoles) } : {}) } } : current.settings;
         return { ...current, settings, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
       }
       if (draft.version === 2) return { version: 3, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };

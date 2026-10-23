@@ -4,7 +4,8 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, staffRoleFromWcif } from "@/lib/people";
-import { applyTeamRoles, suggestTeamLane, everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, suggestTeamRole, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
+import { everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
+import { suggestTeamSetup, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams, type TeamSetup } from "@/lib/pro/teams";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
 import { validateAvailability } from "@/lib/validation";
@@ -99,21 +100,42 @@ describe("availability check", () => {
 });
 
 describe("teams and non-competing staff", () => {
-  it("suggests a role for the national championship's teams", () => {
-    const suggested = Object.fromEntries(["Voluntario normal", "Data entry", "Registro / Stand AES", "Streaming", "Médico", "Control de Accesos", "Side room", "Delegado", "Organizador", "Aceptado SIN categorizar", "Otro"].map(team => [team, suggestTeamRole(team)]));
+  it("suggests a setup for the national championship's teams, as CanVolunteer does", () => {
+    const lanes = [{ key: "0:0", name: "Araba", hasStages: true }, { key: "0:1", name: "Bizkaia", hasStages: true }, { key: "1:room", name: "Sala Auxiliar", hasStages: false }];
+    const suggested = Object.fromEntries(["Voluntario normal", "Data entry", "Registro / Stand AES", "Streaming", "Médico", "Control de Accesos", "Side room", "Delegado", "Organizador", "Aceptado SIN categorizar", "Otro"].map(team => [team, suggestTeamSetup(team, lanes)]));
     expect(suggested).toEqual({
-      "Voluntario normal": "staff", "Data entry": "dataentry", "Registro / Stand AES": "notasks", Streaming: "notasks", "Médico": "notasks", "Control de Accesos": "notasks",
-      "Side room": "none", Delegado: "none", Organizador: "none", "Aceptado SIN categorizar": "none", Otro: "none",
+      "Voluntario normal": { kind: "volunteer" }, "Data entry": { kind: "dataentry" }, "Side room": { kind: "volunteer", lane: "1:room" },
+      Delegado: { kind: "inherit" }, Organizador: { kind: "inherit" },
+      "Registro / Stand AES": { kind: "notasks" }, Streaming: { kind: "notasks" }, "Médico": { kind: "notasks" }, "Control de Accesos": { kind: "notasks" }, "Aceptado SIN categorizar": { kind: "notasks" }, Otro: { kind: "notasks" },
     });
   });
 
-  it("adds people to role lists by team, keeping who was there", () => {
-    const pro = normalizeProPeople({ propertyKeys: ["team"], properties: { a: { team: "Voluntario normal" }, b: { team: "Streaming" }, c: { team: "Otro" }, d: { team: "Voluntario normal" } } });
-    const settings = { roles: { staff: ["d", "z"] }, trustedIds: [], delegateDutyIds: [] };
-    const result = applyTeamRoles(settings, pro, { property: "team", map: { "Voluntario normal": "staff", Streaming: "notasks", Otro: "none" } });
-    expect(result.settings.roles).toEqual({ staff: ["d", "z", "a"], notasks: ["b"] });
-    expect(result.added).toBe(2);
-    expect(propertyValues(pro, "team")).toEqual([["Voluntario normal", 2], ["Otro", 1], ["Streaming", 1]]);
+  it("applies teams live, above the role lists, without touching delegates and organizers", () => {
+    const pro = normalizeProPeople({ propertyKeys: ["team"], properties: { a: { team: "Voluntario normal" }, b: { team: "Streaming" }, c: { team: "Organizador" }, d: { team: "Voluntario normal" } } });
+    const settings = { roles: { staff: ["b", "z"], organizer: ["c"], notasks: ["d"] }, trustedIds: [], delegateDutyIds: [] };
+    const { setups, values } = teamSetups(pro, undefined, []);
+    const { settings: inUse, fromTeam } = withTeams(settings, values, setups);
+    expect(inUse.roles).toEqual({ staff: ["z", "a", "d"], organizer: ["c"], notasks: ["b"], avoid: [], dataentry: [] });
+    expect(fromTeam.get("b")).toBe("Streaming");
+    expect(fromTeam.has("c")).toBe(false);
+    expect(propertyValues(pro, "team")).toEqual([["Voluntario normal", 2], ["Organizador", 1], ["Streaming", 1]]);
+  });
+
+  it("turns busy times, jobs and rooms into what the generator reads", () => {
+    const values = new Map([["a", "Side room"], ["b", "Side room"], ["c", "Jueces"]]);
+    const setups = new Map<string, TeamSetup>([["Side room", { kind: "volunteer", lane: "1:room", busy: [{ day: "2026-12-06", start: "08:45", end: "09:15" }] }], ["Jueces", { kind: "volunteer", lane: "0:1", laneOnly: true, jobs: ["judge"] }]]);
+    expect(teamUnavailability(values, setups).map(item => [item.personKey, item.start, item.end])).toEqual([["a", "2026-12-06T08:45", "2026-12-06T09:15"], ["b", "2026-12-06T08:45", "2026-12-06T09:15"]]);
+    const excluded = teamJobExclusions(values, setups);
+    expect([...excluded.scrambler, ...excluded.runner]).toEqual(["c", "c"]);
+    expect(excluded.judge.size).toBe(0);
+    const lanes = teamLanes(values, setups);
+    expect([...lanes.first.get("1:room")!]).toEqual(["a", "b"]);
+    expect([...lanes.only]).toEqual(["c"]);
+  });
+
+  it("reads the one-choice teams of older drafts", () => {
+    const pro = normalizeProPeople({ propertyKeys: ["team"], properties: {}, teamRoles: { property: "team", map: { "Voluntario normal": "staff", Streaming: "notasks", Otro: "none", "Side room": "lane:1:room" } } });
+    expect(pro.teams).toEqual({ property: "team", setup: { "Voluntario normal": { kind: "volunteer" }, Streaming: { kind: "notasks" }, Otro: { kind: "inherit" }, "Side room": { kind: "volunteer", lane: "1:room", laneOnly: true } } });
   });
 
   it("brings in organizers without a registration as non-competing people", () => {
@@ -131,17 +153,6 @@ describe("teams and non-competing staff", () => {
     const quiet = competition.persons!.slice(0, 8).map(personKey);
     const assignments = generateAssignments({ competition, rounds: initialRounds(competition, 8, "fixed"), stations: 8, zoneMode: "fixed", people: { ...people, roles: { ...people.roles, notasks: quiet } }, options: DEFAULT_OPTIONS });
     expect(assignments.filter(item => quiet.includes(item.personId)).every(item => item.tasks.every(task => task.role === "competitor"))).toBe(true);
-  });
-});
-
-describe("teams dedicated to a room", () => {
-  it("suggests the side room for the side room team, and keeps lane choices out of the role lists", () => {
-    const lanes = [{ key: "0:0", name: "Araba", hasStages: true }, { key: "0:1", name: "Bizkaia", hasStages: true }, { key: "1:room", name: "Sala Auxiliar", hasStages: false }];
-    expect(suggestTeamLane("Side room", lanes)).toBe("1:room");
-    expect(suggestTeamLane("Voluntario normal", lanes)).toBeUndefined();
-    const pro = normalizeProPeople({ propertyKeys: ["team"], properties: { a: { team: "Side room" }, b: { team: "Voluntario normal" } } });
-    const result = applyTeamRoles({ roles: {}, trustedIds: [], delegateDutyIds: [] }, pro, { property: "team", map: { "Side room": "lane:1:room", "Voluntario normal": "staff" } });
-    expect(result.settings.roles).toEqual({ staff: ["b"] });
   });
 });
 

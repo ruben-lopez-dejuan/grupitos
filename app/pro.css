@@ -332,3 +332,21 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .station-exclusion{padding-left:28px}
 .station-exclusion-add{padding-left:22px}
 @media (max-width:700px){.station-exclusion,.station-exclusion-add{padding-left:0}.station-rules .set-head{flex-wrap:wrap}}
+
+/* PRO teams (People tab) */
+.team-setup{display:grid;gap:10px}
+.team-rows{display:grid;gap:4px;max-width:900px;margin:0;padding:0;list-style:none}
+.team-rows li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 10px;background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px;font-size:14px}
+.team-rows select{padding:5px 7px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.team-name{min-width:170px;font-weight:700}
+.team-name small{margin-left:4px;color:var(--muted);font-size:12px;font-weight:700}
+.team-lane{display:inline-flex;align-items:center;gap:6px}
+.team-lane label{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:13px}
+.team-jobs{display:inline-flex;gap:3px}
+.team-jobs button{border:0;cursor:pointer}
+.team-jobs button.off{opacity:.3}
+.team-busy{display:inline-flex;flex-wrap:wrap;gap:4px}
+.team-busy>span{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 8px;background:var(--surface);border:1px solid var(--line);border-radius:4px;font-size:13px}
+.team-busy button{padding:0 4px;color:var(--muted);background:transparent;border:0;cursor:pointer}
+.team-tag{padding:1px 6px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:4px;font-size:11px;font-weight:700}
+@media (max-width:700px){.team-name{min-width:0;width:100%}}
