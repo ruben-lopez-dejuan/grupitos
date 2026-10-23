@@ -227,6 +227,12 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Empezar de cero** (junto al nombre de la competición): vuelve a descargar el WCIF si puede y borra el borrador de esa competición en el navegador; PRO sigue activo si lo estaba.
 - **Grupos del WCIF** (`lib/wcif-groups.ts`): si el WCIF ya tiene asignaciones de grupo (CompScript, Groupifier…), al abrir la competición por primera vez o al empezar de cero se cargan como propuesta y se abre Revisar. En PRO cada grupo va a la columna de su sala, escenario y hora; si hay escenarios se activa PRO con el horario del WCIF. Lee estaciones y la estrella de Groupifier (`featuredCompetitorWcaUserIds`).
 
+### 6.9. Multi por intentos, resultados de multi y exportar WCIF (24/10/2026)
+
+- **Resultados de multi** (`lib/results.ts`): se decodifica el valor de la WCA (0DDTTTTTMM y el antiguo 1SSAATTTTT): 650343301 = 35/36 57:13.
+- **Intentos de multi** (`GroupSlot.attempt`, `linkedTo`): cada intento posterior es una columna propia con el mismo número de grupo. Los competidores se reparten en las columnas del intento 1 (contando las horas de todos los intentos) y luego compiten en todos (`Task.attempt`); cada intento tiene su propio personal. `competingGroups` solo cuenta el intento 1, así que hojas y validación no cambian. Revisar muestra «intento 2» en la cabecera; Grupos cuenta grupos del intento 1.
+- **Exportar WCIF** (paso Publicar, `lib/wcif-export.ts`, `components/publish-panel.tsx`): descarga el WCIF guardado con la propuesta, sin enviarlo a la WCA. Reutiliza los grupos del WCIF que coinciden en sala, escenario y hora, crea los demás (horas PRO, o la ronda partida en partes iguales sin PRO) y quita los que ya no se usan; escribe asignaciones con estación, destacados de Groupifier, propiedades natshelper y escenarios. Conserva `formatVersion`, `id` y lo demás. Con el Nacional: 112 grupos reutilizados, 4611 asignaciones, ida y vuelta idéntica.
+
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
 Archivo local del usuario (**no commitear: tiene datos personales**). Estructura:
@@ -242,7 +248,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 2. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.
 3. **Fase 6, publicación e informes:**
    - **WCIF v2**: la importación ya pide `GET /api/v0/competitions/{id}/wcif/version/2` (formato 2.2; con el token del organizador devuelve el WCIF privado). Para publicar, `PATCH /api/v0/competitions/{id}/wcif` y **hay que mandar siempre `formatVersion` e `id`** (recomendación de la WCA que trasladó el usuario).
-   - Escribir actividades y `assignments` en el WCIF, conservando las extensiones desconocidas.
+   - Escribir actividades y `assignments` en el WCIF, conservando las extensiones desconocidas. *Hecho como descarga (6.9); falta el PATCH.*
    - Escribir las extensiones natshelper de sala y grupo, con el número de grupo compartido en `-g{n}`.
    - Mostrar el diff, pedir confirmación explícita, hacer el PATCH y volver a leer el WCIF para comprobarlo.
    - Informes.
