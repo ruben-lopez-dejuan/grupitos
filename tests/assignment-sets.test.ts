@@ -3,6 +3,7 @@ import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments, splitWithSets } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { allowedGroups, formatGroupNumbers, parseGroupNumbers, resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
+import { previewSets } from "@/lib/pro/sets-preview";
 import { groupSlots, targetKey, withScheduledGroups } from "@/lib/pro/schedule";
 import { initialRounds, personKey, roundCompetitors } from "@/lib/rounds";
 
@@ -97,5 +98,33 @@ describe("top per group of the whole round", () => {
   it("counts every group of the round, as the Spanish Championship 2026 scripts do", () => {
     const set: AssignmentSetConfig = { id: "s", name: "Featured", top: 1, perGroup: "round", rounds: "first", lanes: ["1:1"], groups: "any", featured: true };
     expect(resolveSets([set], { id: "333-r1", eventId: "333", roundNumber: 1, groups: 12 }, undefined, () => undefined)[0].top).toBe(12);
+  });
+});
+
+describe("sets never overfill a group", () => {
+  it("place what fits and leave the rest to later sets, with stats", () => {
+    const people = bestFirst.slice(0, 24);
+    // Four groups of six; the "top" set asks for 20 people in two groups (12 seats).
+    const { groups, stats } = splitWithSets(people, 4, [
+      { id: "top", name: "Top", top: 20, groups: [1, 2], featured: false },
+      { id: "rest", name: "Rest", groups: [3, 4], featured: false },
+    ], "symmetric", "333");
+    expect(groups.map(members => members.length)).toEqual([6, 6, 6, 6]);
+    expect(stats).toEqual([{ id: "top", name: "Top", wanted: 20, seats: 12, placed: 12 }, { id: "rest", name: "Rest", wanted: 12, seats: 12, placed: 12 }]);
+    // The best twelve made it; the other eight went with the rest.
+    expect(keys([...groups[0], ...groups[1]]).sort()).toEqual(keys(people.slice(0, 12)).sort());
+  });
+
+  it("take a number per event", () => {
+    const set: AssignmentSetConfig = { id: "t", name: "Top", top: 4, topByEvent: { "555": 2 }, perGroup: true, rounds: "first", lanes: [], groups: "any" };
+    expect(resolveSets([set], { id: "333-r1", eventId: "333", roundNumber: 1, groups: 3 }, undefined, () => undefined)[0].top).toBe(12);
+    expect(resolveSets([set], { id: "555-r1", eventId: "555", roundNumber: 1, groups: 3 }, undefined, () => undefined)[0].top).toBe(6);
+  });
+
+  it("are previewed with the people registered now", () => {
+    const rounds = initialRounds(competition, 8, "fixed").filter(round => round.id === "333-r1").map(round => ({ ...round, groups: 4 }));
+    const preview = previewSets({ competition, rounds, membersOf: () => undefined, sets: [{ id: "big", name: "Big", top: 30, perGroup: false, rounds: "first", lanes: [], groups: [1] }] });
+    // 40 people in four groups: group 1 has ten seats.
+    expect(preview.get("big")).toEqual([{ roundId: "333-r1", wanted: 30, seats: 10, placed: 10 }]);
   });
 });

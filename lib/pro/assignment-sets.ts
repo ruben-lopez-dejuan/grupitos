@@ -19,6 +19,8 @@ export type AssignmentSetConfig = {
   segment?: string;
   /** Only the best `top` of the round (psych sheet in first rounds, previous round after). */
   top?: number;
+  /** `top` for some events (like the US Nationals' tier 2: 200 in 3x3, 40 in Square-1…). */
+  topByEvent?: Record<string, number>;
   /**
    * `top` counts per group: of the set (Amore: 4 per group of the main stage), or of the whole
    * round with "round" (the Spanish Championship 2026: per group of the round, all stages).
@@ -79,7 +81,8 @@ export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id
     const groups = allowedGroups(set, round.groups, slots);
     // A cluster that no longer exists takes nobody rather than everyone.
     const members = set.segment ? membersOf(set.segment, round.eventId) ?? new Set<string>() : undefined;
-    const top = set.top === undefined ? undefined : set.perGroup === "round" ? set.top * round.groups : set.perGroup ? set.top * groups.length : set.top;
+    const count = set.top === undefined ? undefined : set.topByEvent?.[round.eventId] ?? set.top;
+    const top = count === undefined ? undefined : set.perGroup === "round" ? count * round.groups : set.perGroup ? count * groups.length : count;
     return { id: set.id, name: set.name, members, top, groups, featured: !!set.featured };
   });
 }

@@ -770,24 +770,33 @@ export function splitIntoGroups(bestFirst: WcifPerson[], groupCount: number, rul
   return groups;
 }
 
+/** How one assignment set went in a round: people it wanted, seats it had and people it placed. */
+export type SetStats = { id: string; name: string; wanted: number; seats: number; placed: number };
+
 /**
  * CompScript's AssignGroups with ordered assignment sets. Each set, in order, takes its people
  * not placed yet (best first) and deals them over its groups one per group and pass, emptiest
- * first, never above the even group size (raised only when a set's groups are all full). Whoever
- * is left fills the remaining seats so that groups stay even, following the sorting rule.
+ * first. A group never takes more than the even size of the round (people / groups): unlike
+ * CompScript, which raises that limit when a set's groups are full, the people who do not fit
+ * are left to the next sets and to the sorting rule, and the stats say how many. Whoever is left
+ * fills the remaining seats so that groups stay even, following the sorting rule.
  */
 export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets: ResolvedSet[], rule: SortingRule, eventId: string) {
   const groups: WcifPerson[][] = Array.from({ length: groupCount }, () => []);
   const allowed = new Map<string, Set<number>>();
   const featured = new Set<string>();
-  let limit = Math.ceil(bestFirst.length / Math.max(1, groupCount));
+  const stats: SetStats[] = [];
+  const limit = Math.ceil(bestFirst.length / Math.max(1, groupCount));
   for (const set of sets) {
     const eligible = set.groups.filter(group => group >= 1 && group <= groupCount);
+    // A set with no group in this round (its stage is not used) does not apply here.
     if (!eligible.length) continue;
     const queue = bestFirst.filter((person, index) => !allowed.has(personKey(person)) && (set.top === undefined || index < set.top) && (!set.members || set.members.has(personKey(person))));
+    const seats = eligible.reduce((sum, group) => sum + Math.max(0, limit - groups[group - 1].length), 0);
+    let placed = 0;
     for (let pass = 0; queue.length; pass += 1) {
       const open = eligible.filter(group => groups[group - 1].length < limit);
-      if (!open.length) { limit += 1; continue; }
+      if (!open.length) break;
       // Alternating the tie order snakes the best people over the groups.
       open.sort((a, b) => groups[a - 1].length - groups[b - 1].length || (pass % 2 ? b - a : a - b));
       for (const group of open) {
@@ -796,15 +805,17 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
         groups[group - 1].push(person);
         allowed.set(personKey(person), new Set(eligible));
         if (set.featured) featured.add(personKey(person));
+        placed += 1;
       }
     }
+    stats.push({ id: set.id, name: set.name, wanted: placed + queue.length, seats, placed });
   }
-  if (!allowed.size) return { groups: splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined };
+  if (!allowed.size) return { groups: splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined, stats };
   const rest = bestFirst.filter(person => !allowed.has(personKey(person)));
   const sizes = groups.map(members => members.length);
   for (let left = rest.length; left > 0; left -= 1) sizes[sizes.indexOf(Math.min(...sizes))] += 1;
   fillByRule(rest, sizes.map((size, index) => size - groups[index].length), rule, eventId).forEach((members, index) => groups[index].push(...members));
-  return { groups, allowed, featured };
+  return { groups, allowed, featured, stats };
 }
 
 /** Splits people (best first) into groups of the given sizes, as `splitIntoGroups` would. */

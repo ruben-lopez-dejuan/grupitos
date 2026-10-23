@@ -381,3 +381,16 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .publish-panel .volunteer-form{padding:0 22px 12px}
 .publish-report{display:grid;gap:4px;padding:0 22px 18px;font-size:14px}
 .publish-report p{margin:0}
+
+/* Sets: per-event top and seats preview */
+.set-by-event{font-size:13px}
+.set-by-event.on{font-weight:750}
+.set-events{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding-left:28px}
+.set-events small{width:100%;color:var(--muted);font-size:12px}
+.set-events label{display:inline-flex;align-items:center;gap:4px}
+.set-events input{width:56px}
+.set-events .event-icon{width:24px;height:24px}
+.set-preview{margin:0;padding-left:28px;color:var(--muted);font-size:13px}
+.set-preview.short{color:#a35d00;font-weight:650}
+:root[data-theme="dark"] .set-preview.short{color:#f3c27a}
+@media (max-width:700px){.set-events,.set-preview{padding-left:0}}

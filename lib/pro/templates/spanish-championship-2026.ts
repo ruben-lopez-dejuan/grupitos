@@ -38,7 +38,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
   format: TEMPLATE_FORMAT,
   version: 1,
   name: "Campeonato de España 2026",
-  note: "Destacados 1 y top 2 por grupo de la ronda son valores de prueba (los scripts de primeras rondas aún no están en el repo): ajústalos en Reglas. Los conjuntos de delegados usan la propiedad delegate-cluster.",
+  note: "Destacados 4 y top 18 por grupo de Bizkaia (22 por grupo) son valores de partida: los scripts de primeras rondas aún no están en el repo. Ajústalos en Reglas, también por prueba; la vista previa avisa si no caben. Los conjuntos de delegados usan la propiedad delegate-cluster.",
   // CanVolunteer: without a team, only in one's own events and with a WCA ID.
   options: { tasksForOwnEventsOnly: true, noTasksForNewcomers: true },
   printing: { paperSize: "a4", order: "stacked", coverSheets: true, scrambleCheckerTopRanked: true, scrambleCheckerFinalRounds: true },
@@ -50,8 +50,10 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
     // AssignStaff in the side room: JudgeJob(20), RunnerJob(2), ScramblerJob(2).
     staffing: { [SIDE]: { stations: 20, scramblers: 2, runners: 2 } },
     sets: [
-      set("sc26-featured", "Destacados", { top: 1, perGroup: "round", lanes: [BIZKAIA], featured: true }),
-      set("sc26-top", "Top", { top: 2, perGroup: "round", lanes: [BIZKAIA] }),
+      // FeaturedSet and TopSet. The scripts count per group of the whole round
+      // (NumberPerGroupToPerRound); here it is per group of Bizkaia, which is how the numbers read.
+      set("sc26-featured", "Destacados", { top: 4, perGroup: true, lanes: [BIZKAIA], featured: true }),
+      set("sc26-top", "Top", { top: 18, perGroup: true, lanes: [BIZKAIA] }),
       set("sc26-core", "Organización", { segment: teamClusterId("Organizador"), lanes: [GIPUZKOA] }),
       ...delegates("sábado", SATURDAY, [BIZKAIA, GIPUZKOA, ARABA]),
       ...delegates("domingo", SUNDAY, [GIPUZKOA, ARABA, BIZKAIA]),
