@@ -326,3 +326,4 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .set-templates small{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase}
 @media (max-width:700px){.set-fields,.set-lanes,.set-rounds{padding-left:0}.set-star span{display:none}}
 .featured-star{margin-left:5px;color:#c99400;font-size:13px}
+.sheet-import-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.sheet-import-head .round-subtabs{margin-right:auto}.template-link{color:var(--blue);font-size:14px;font-weight:650;text-decoration:none}.template-link:hover{text-decoration:underline}

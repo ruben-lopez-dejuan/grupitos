@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Hint } from "@/components/hint";
 import { useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
 import type { ProPeople } from "@/lib/pro/people";
-import { applySheetImport, guessMapping, MATCH_BY, parseCsv, spreadsheetIdFromUrl, type SheetMapping } from "@/lib/pro/sheet-import";
+import { applySheetImport, guessMapping, MATCH_BY, parseCsv, propertiesTemplate, spreadsheetIdFromUrl, type SheetMapping } from "@/lib/pro/sheet-import";
 
 type Source = "google" | "csv";
 type Status = { configured: boolean; email?: string } | { error: string };
@@ -23,6 +23,7 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
   const [mapping, setMapping] = useState<SheetMapping>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const template = useMemo(() => `data:text/csv;charset=utf-8,${encodeURIComponent(`\uFEFF${propertiesTemplate(people, value)}`)}`, [people, value]);
 
   useEffect(() => {
     if (source !== "google" || status) return;
@@ -35,7 +36,7 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
     const guess = guessMapping(headers);
     const nameColumn = headers.findIndex(header => /name|nombre/i.test(header));
     setRows(data);
-    setMapping({ ...guess, propertyColumns: headers.map((_, index) => index).filter(index => index !== guess.matchColumn && index !== nameColumn && !/marca temporal|timestamp|e-?mail|correo/i.test(headers[index])), ...(nameColumn >= 0 ? { volunteerNameColumn: nameColumn } : {}) });
+    setMapping({ ...guess, propertyColumns: headers.map((_, index) => index).filter(index => index !== guess.matchColumn && index !== nameColumn && !/marca temporal|timestamp|e-?mail|correo|wca\s*id|^\s*(registrant\s*id|id)\s*$/i.test(headers[index])), ...(nameColumn >= 0 ? { volunteerNameColumn: nameColumn } : {}) });
     setMessage("");
   }
 
@@ -68,7 +69,11 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
   const columnName = (index: number) => headers[index]?.trim() || t("sheetImport.column", { number: index + 1 });
 
   return <div className="sheet-import">
-    <div className="round-subtabs" role="tablist">{(["google", "csv"] as Source[]).map(item => <button key={item} type="button" role="tab" aria-selected={source === item} className={source === item ? "active" : ""} onClick={() => { setSource(item); setRows(undefined); setMessage(""); }}>{t(keyOf("sheetImport.sources", item))}</button>)}</div>
+    <div className="sheet-import-head">
+      <div className="round-subtabs" role="tablist">{(["google", "csv"] as Source[]).map(item => <button key={item} type="button" role="tab" aria-selected={source === item} className={source === item ? "active" : ""} onClick={() => { setSource(item); setRows(undefined); setMessage(""); }}>{t(keyOf("sheetImport.sources", item))}</button>)}</div>
+      <a className="template-link" href={template} download="weights-template.csv">{t("sheetImport.template")}</a>
+      <Hint align="end" text={t("sheetImport.templateHelp")} />
+    </div>
     {!rows && (source === "google" ? <div className="sheet-source">
       <p className="sheet-status">{!status ? "…" : "error" in status ? t(keyOf("sheetImport.errors", status.error), { email: "" }) : status.configured ? t("sheetImport.shareWith", { email: status.email ?? "" }) : t("sheetImport.errors.not-configured", { email: "" })}</p>
       <form className="volunteer-form" onSubmit={event => { event.preventDefault(); readGoogle(); }}>

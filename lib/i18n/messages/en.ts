@@ -410,6 +410,8 @@ export const en: Messages = {
     },
   },
   sheetImport: {
+    template: "Download weights CSV template",
+    templateHelp: "One row per person (ID, WCA ID, name) with the weight-judge, weight-scrambler, weight-runner and team columns, plus the properties that already exist with their values. Fill it in Excel or Google Sheets and upload it here: rows match by ID, so newcomers are found too.",
     sources: {
       google: "Google Sheets",
       csv: "CSV",

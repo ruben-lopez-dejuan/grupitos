@@ -61,6 +61,9 @@ const normalizeName = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g
 /** A good first guess of the identity column, from the headers. */
 export function guessMapping(headers: string[]): Pick<SheetMapping, "matchBy" | "matchColumn"> {
   const find = (pattern: RegExp) => headers.findIndex(header => pattern.test(header));
+  // The app's own template: the registrant id also finds newcomers without a WCA ID.
+  const registrant = find(/^\s*(registrant\s*id|id)\s*$/i);
+  if (registrant >= 0) return { matchBy: "registrantId", matchColumn: registrant };
   const wca = find(/wca\s*id/i);
   if (wca >= 0) return { matchBy: "wcaId", matchColumn: wca };
   const email = find(/e-?mail|correo/i);
@@ -76,6 +79,28 @@ function matcher(people: WcifPerson[], matchBy: MatchBy) {
     if (value !== undefined && value !== null && value !== "") index.set(matchBy === "name" ? normalizeName(String(value)) : String(value).trim().toLowerCase(), person);
   }
   return (text: string) => index.get(matchBy === "name" ? normalizeName(text) : text.trim().toLowerCase());
+}
+
+/** Preference weights read by the scoring (CompScript's PreferenceScorer with prefix "weight-"). */
+export const WEIGHT_PROPERTIES = ["weight-judge", "weight-scrambler", "weight-runner"];
+
+const csvCell = (value: string | number | null | undefined) => {
+  const text = value === null || value === undefined ? "" : String(value);
+  return /[",\n\r;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+/**
+ * A CSV to fill in and import back: one row per person (registrant id, WCA ID, name), the weight
+ * and team columns, and every property already known, with its current values.
+ */
+export function propertiesTemplate(people: WcifPerson[], current: ProPeople) {
+  const keys = [...new Set([...WEIGHT_PROPERTIES, "team", ...current.propertyKeys])];
+  const sorted = [...people].sort((a, b) => (a.registrantId ?? Number.MAX_SAFE_INTEGER) - (b.registrantId ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
+  const rows = [
+    ["ID", "WCA ID", "Name", ...keys],
+    ...sorted.map(person => [person.registrantId, person.wcaId, person.name, ...keys.map(key => current.properties[personKey(person)]?.[key])]),
+  ];
+  return rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
 /** Rows after the header are applied; existing values in imported columns are replaced. */

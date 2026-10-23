@@ -412,6 +412,8 @@ export const es = {
     },
   },
   sheetImport: {
+    template: "Descargar plantilla CSV de pesos",
+    templateHelp: "Una fila por persona (ID, WCA ID, nombre) con las columnas weight-judge, weight-scrambler, weight-runner y team, y las propiedades que ya existen con sus valores. Rellénala en Excel o Google Sheets y súbela aquí: se empareja por ID, así que también encuentra a los newcomers.",
     sources: {
       google: "Google Sheets",
       csv: "CSV",
