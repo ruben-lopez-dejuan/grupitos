@@ -9,6 +9,22 @@ y de indisponibilidades aún no están subidos.
 Todo se hace con el **modo PRO** activado (interruptor arriba a la derecha). La configuración se
 guarda en tu navegador, por competición.
 
+## Atajo: la plantilla de un clic
+
+En **Zona → Plantillas** elige «Campeonato de España 2026» y pulsa **Aplicar**. Hace los pasos 2 a
+8 de esta guía de una vez (`lib/pro/templates/spanish-championship-2026.ts`) y avisa de las salas,
+rondas o días que no encuentre. Después solo queda:
+
+- Ajustar en **Reglas** los números de «Destacados» (1) y «Top» (2), que son de prueba.
+- Rellenar `delegate-cluster` si queréis los conjuntos de delegados.
+- Marcar los delegados de turno y, si lo queréis, activar «Delegado de turno».
+
+Con **Exportar JSON** guardas tu versión ajustada y con **Importar JSON…** la cargas en otro
+navegador o en otra competición (las salas se buscan por nombre; los datos personales no van en
+el archivo).
+
+El resto de la guía explica qué hace cada parte, por si quieres hacerlo a mano o cambiar algo.
+
 ## 0. Importar
 
 1. Dashboard → importar la competición (el WCIF trae salas, escenarios y grupos de natshelper).

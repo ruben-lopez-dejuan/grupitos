@@ -213,6 +213,12 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Borradores antiguos**: el `teamRoles` de una elección se convierte en `teams`, y la copia que el antiguo «Aplicar» dejaba en Zona (cluster «Equipo: X» como equipo de la sala) se quita (`withoutOldTeamRooms` en `lib/draft.ts`).
 - Con el WCIF del Nacional y los conjuntos del script: 108 destacados, todos en Bizkaia; Organizador, AES y Data en Gipuzkoa; Streaming en Araba; los equipos sin tareas, 0 tareas; el equipo Side room pasa de 1 a 15 tareas en la sala auxiliar. Quedan 2 personas con choque real multi/4×4 (ver la guía).
 
+### 6.7. Plantillas PRO (24/10/2026)
+
+- `lib/pro/template.ts`: `exportTemplate`, `parseTemplate`, `applyTemplate`. Formato `wca-easy-groups/pro-template` v1: clusters, conjuntos, reglas de estación, personal por sala, equipos, puntuación, opciones de reglas e impresión y mezcladores/runners por ronda. Salas y escenarios por **nombre** (sin tildes ni mayúsculas), horas ocupadas por **número de día**. Sin datos personales ni horario. Al aplicar, cada sección presente sustituye la actual y se avisa de salas, rondas y días que no existen.
+- Plantilla incluida «Campeonato de España 2026» (`lib/pro/templates/spanish-championship-2026.ts`), con los valores de prueba destacados 1 y top 2 por grupo de la ronda.
+- Interfaz: Zona → Plantillas (`components/pro-template-panel.tsx`). Comprobado con el WCIF del Nacional: todo se encuentra.
+
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
 Archivo local del usuario (**no commitear: tiene datos personales**). Estructura:
