@@ -233,3 +233,13 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .limit-row small{color:var(--muted)}
 .round-note{color:var(--muted);font-size:15px}
 .segment-members strong small{color:var(--muted);font-weight:500}
+
+/* PRO staffing per room and stage */
+.staffing-table{width:calc(100% - 44px);margin:0 22px 18px;border-collapse:collapse;font-size:14px}
+.staffing-table th,.staffing-table td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)}
+.staffing-table thead th{color:var(--muted);font-size:12px;font-weight:750;text-transform:uppercase;white-space:nowrap}
+.staffing-table tbody th{display:flex;align-items:center;gap:7px;font-weight:700}
+.staffing-table tbody th i{width:10px;height:10px;flex:none;border-radius:50%}
+.staffing-table tbody th small{color:var(--muted);font-weight:500}
+.staffing-table input{width:90px;padding:5px 7px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit}
+.staffing-table thead th .cell-chip{display:inline-grid;place-items:center;width:20px;min-width:0;height:20px;margin-right:4px;vertical-align:middle}

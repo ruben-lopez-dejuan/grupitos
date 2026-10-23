@@ -10,7 +10,7 @@ import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
 import { clockOf, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
-import { countBySeverity, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
+import { countBySeverity, groupLimits, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
 type Tool = CellValue | "select";
 type History = { past: GeneratedAssignment[][]; present: GeneratedAssignment[]; future: GeneratedAssignment[][] };
@@ -454,8 +454,8 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         const extra = group > currentRules.groups;
         // Needed staff per role; undefined when the rules expect none, so only the count shows.
         const needs: Partial<Record<TaskRole, number>> = extra ? {} : {
-          scrambler: currentRules.scramblers,
-          ...(currentRules.checkJudges ? { judge: judgesNeeded(groupCounts.competitor, currentRules.stations), runner: currentRules.runners } : {}),
+          scrambler: groupLimits(currentRules, group).scramblers,
+          ...(currentRules.checkJudges ? { judge: judgesNeeded(groupCounts.competitor, groupLimits(currentRules, group).stations), runner: groupLimits(currentRules, group).runners } : {}),
           ...(currentRules.checkDelegates ? { delegate: 1 } : {}),
           ...(currentRules.checkDataEntry ? { dataentry: 1 } : {}),
         };

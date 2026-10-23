@@ -153,7 +153,7 @@ function overlapMinutes(a: GroupSlot, b: GroupSlot) {
   return total;
 }
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {} }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -170,6 +170,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   unavailable?: Unavailability[];
   /** PRO mode: who (keys) may judge, scramble or run, per event; absent means the usual rules. */
   eligible?: Partial<Record<"judge" | "scrambler" | "runner", Map<string, Set<string>>>>;
+  /** PRO mode: stations and staff per group where a room or stage overrides the round's values. */
+  staffing?: (roundId: string, group: number) => { stations?: number; scramblers?: number; runners?: number } | undefined;
 }): GeneratedAssignment[] {
   const accepted = [...acceptedPeople(competition), ...extraPeople];
   const country = competitionCountry(competition);
@@ -238,10 +240,11 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const markBusy = (key: string, group: number) => busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windowsOf(group)]);
     const busyDuring = (key: string, group: number) => windowsOf(group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
+    const stationsIn = (group: number) => staffing?.(round.id, group)?.stations ?? stations;
     groups.forEach((members, groupIndex) => {
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
-        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stations ? index + 1 : undefined });
+        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined });
       });
     });
     const rowFor = (person: WcifPerson) => {
@@ -305,7 +308,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
       return !strictScramblers || trusted.has(key) || (hasResult(person) && (seedIndex.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
-    fill("scrambler", () => round.scramblers, scramblerPool, (person, group) => {
+    fill("scrambler", group => staffing?.(round.id, group)?.scramblers ?? round.scramblers, scramblerPool, (person, group) => {
       const key = personKey(person);
       // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
       if (strictScramblers) return [roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
@@ -357,8 +360,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
       };
       const poolFor = (role: "runner" | "judge") => allowed(role) ? normalPool.filter(person => allowed(role)!.has(personKey(person))) : normalPool;
-      fill("runner", () => round.runners, poolFor("runner"), othersKey("runner"));
-      fill("judge", (_, size) => judgesNeeded(size, stations), poolFor("judge"), othersKey("judge"));
+      fill("runner", group => staffing?.(round.id, group)?.runners ?? round.runners, poolFor("runner"), othersKey("runner"));
+      fill("judge", (group, size) => judgesNeeded(size, stationsIn(group)), poolFor("judge"), othersKey("judge"));
     }
 
     const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));

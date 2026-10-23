@@ -255,6 +255,12 @@ export const es = {
     stepperScramblers: "mezcladores",
     stepperRunners: "runners",
   },
+  staffing: {
+    title: "Por sala y escenario",
+    hint: "Estaciones, mezcladores y runners por grupo en cada sala o escenario. Vacío: el valor general (estaciones) o el de cada ronda (mezcladores y runners). Los jueces que hacen falta salen de las estaciones de cada escenario.",
+    lane: "Sala o escenario",
+    roundValue: "ronda",
+  },
   jobs: {
     range: "Entre {min} y {max} personas según la prueba",
     title: "Quién puede hacer cada tarea",

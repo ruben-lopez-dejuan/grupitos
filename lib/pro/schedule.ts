@@ -35,7 +35,10 @@ export type ProSchedule = {
 };
 
 /** `people` is absent until the PRO people panel is first used. */
-export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility };
+/** Per room or stage (lane key): stations and staff per group; empty means the round's value. */
+export type LaneStaffing = { stations?: number; scramblers?: number; runners?: number };
+
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing> };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**
@@ -392,6 +395,15 @@ export function setRoundGroups(schedule: ProSchedule, roundId: string, total: nu
     return { ...rest, groups };
   });
   return { ...schedule, blocks };
+}
+
+/** The staffing of the lane a group runs in, if that lane overrides anything. */
+export function staffingOf(slots: Map<string, GroupSlot[]>, staffing: Record<string, LaneStaffing> | undefined) {
+  return (roundId: string, group: number): LaneStaffing | undefined => {
+    const slot = slots.get(roundId)?.find(item => item.group === group);
+    const own = slot && staffing?.[targetKey(slot.roomId, slot.stageId)];
+    return own && Object.values(own).some(value => value !== undefined) ? own : undefined;
+  };
 }
 
 export function withScheduledGroups<T extends { id: string; groups: number }>(rounds: T[], slots: Map<string, GroupSlot[]>): T[] {

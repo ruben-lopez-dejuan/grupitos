@@ -46,6 +46,7 @@ export function generationSignature(settings: WorkspaceSettings) {
       unavailable: settings.pro.people?.unavailable,
       // Segment rules decide who may do each job, so they shape the proposal too.
       jobs: settings.pro.jobs,
+      staffing: settings.pro.staffing,
       segments: settings.pro.jobs && Object.keys(settings.pro.jobs).length ? settings.pro.segments : undefined,
       properties: settings.pro.jobs && Object.keys(settings.pro.jobs).length ? settings.pro.people?.properties : undefined,
     } : undefined,

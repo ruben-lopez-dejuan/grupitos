@@ -21,6 +21,7 @@ import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOption
 import { isDelegate, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { JOB_ROLES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
+import { staffingOf, type LaneStaffing } from "@/lib/pro/schedule";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
@@ -202,6 +203,14 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const segments = settings.pro?.segments ?? [];
   const setSegments = (next: Segment[]) => update({ pro: { ...settings.pro!, enabled: true, segments: next } });
   const jobs: JobEligibility = settings.pro?.jobs ?? {};
+  const staffing = settings.pro?.staffing ?? {};
+  const setStaffing = (lane: string, change: LaneStaffing) => {
+    const next = { ...staffing[lane], ...change };
+    for (const key of Object.keys(next) as Array<keyof LaneStaffing>) if (next[key] === undefined) delete next[key];
+    const { [lane]: _previous, ...rest } = staffing;
+    update({ pro: { ...settings.pro!, enabled: true, staffing: Object.keys(next).length ? { ...rest, [lane]: next } : rest } });
+  };
+  const staffingFor = pro && slots ? staffingOf(slots, staffing) : undefined;
   const setJob = (role: JobRole, segmentId: string) => {
     const { [role]: _previous, ...rest } = jobs;
     update({ pro: { ...settings.pro!, enabled: true, jobs: segmentId ? { ...rest, [role]: segmentId } : rest } });
@@ -236,7 +245,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -273,6 +282,16 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
               <label><span>{t("zone.stations")}</span><div className="number-field"><button aria-label={t("zone.removeStation")} onClick={() => changeZone({ stations: Math.max(1, stations - 1) })}>−</button><strong>{stations}</strong><button aria-label={t("zone.addStation")} onClick={() => changeZone({ stations: stations + 1 })}>+</button></div></label>
               <div className="preset-field"><span>{t("zone.entry")}</span><div className="segmented three">{ZONE_MODES.map(mode => <button key={mode} className={zoneMode === mode ? "selected" : ""} title={t(keyOf("zone.modes", `${mode}.help`))} onClick={() => changeZone({ zoneMode: mode })}>{t(keyOf("zone.modes", `${mode}.label`))}</button>)}</div><small>{t(keyOf("zone.modes", `${zoneMode}.help`))}</small></div>
             </div>
+            {pro && <>
+              <h3 className="panel-subheading">{t("staffing.title")} <Hint align="start" text={t("staffing.hint")} /></h3>
+              <table className="staffing-table">
+                <thead><tr><th>{t("staffing.lane")}</th><th>{t("zone.stations")}</th><th><i className="cell-chip mini scrambler" aria-hidden="true">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</th><th><i className="cell-chip mini runner" aria-hidden="true">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</th></tr></thead>
+                <tbody>{scheduleLanes(pro.schedule).map(lane => <tr key={lane.key}>
+                  <th scope="row"><i style={{ background: lane.color }} />{lane.name}{lane.stageId !== undefined && <small>{lane.roomName}</small>}</th>
+                  {(["stations", "scramblers", "runners"] as const).map(field => <td key={field}><input type="number" min={field === "stations" ? 1 : 0} value={staffing[lane.key]?.[field] ?? ""} placeholder={field === "stations" ? String(stations) : t("staffing.roundValue")} aria-label={`${lane.name} · ${field === "stations" ? t("zone.stations") : field === "scramblers" ? t("rounds.columnScramblers") : t("rounds.columnRunners")}`} onChange={event => setStaffing(lane.key, { [field]: event.target.value === "" ? undefined : Math.max(field === "stations" ? 1 : 0, Number(event.target.value)) })} /></td>)}
+                </tr>)}</tbody>
+              </table>
+            </>}
             {roomCount > 1 && !pro && <p className="setup-note">{t("zone.rooms", { count: roomCount })}</p>}
           </section>
         </>}
@@ -349,9 +368,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         {tab === "review" && <>
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro && Object.keys(eligible).length ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
-            return [id, { ...rules, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
+            const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
+            return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
           })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
         </>}
 

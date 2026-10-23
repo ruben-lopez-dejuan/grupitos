@@ -5,11 +5,11 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
-import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, minScheduledGroups, setRoundGroups, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
+import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, minScheduledGroups, setRoundGroups, scheduleProblems, splitBlock, staffingOf, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { roundScorecards } from "@/lib/scorecards/scorecards";
-import { validateTimes } from "@/lib/validation";
+import { groupLimits, validateRound, validateTimes } from "@/lib/validation";
 
 const stages = [{ id: 1, name: "Rojo", color: "#d93636" }, { id: 2, name: "Verde", color: "#2f9e44" }];
 const rooms = [{ id: 1, name: "Pabellón", color: "#2563eb", stages }, { id: 3, name: "Sala Blind", color: "#fc00df", stages: [] }];
@@ -223,5 +223,29 @@ describe("scorecards with a schedule", () => {
     expect(texts.every(text => text.includes("\"Verde\"") && !text.includes("\"Rojo\""))).toBe(true);
     // Verde's groups are G2 and G4 as columns, but people know them as groups 1 and 2.
     expect(new Set(texts.map(text => text.match(/"stack":\[\{"text":(\d+)\}/)?.[1]))).toEqual(new Set(["1", "2"]));
+  });
+});
+
+describe("staffing per room and stage", () => {
+  it("uses each stage's stations and staff for its groups", () => {
+    const competition = demoCompetition("small");
+    const proSchedule = schedule([block("a", "333-r1", 1, "10:00", "11:00", 2), block("b", "333-r1", 2, "10:00", "11:00", 2)]);
+    const slots = groupSlots(proSchedule);
+    const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots);
+    const staffing = staffingOf(slots, { [targetKey(1, 2)]: { stations: 3, scramblers: 0, runners: 0 } });
+    const verde = slots.get("333-r1")!.filter(slot => slot.stageId === 2).map(slot => slot.group);
+    expect(staffing("333-r1", verde[0])).toEqual({ stations: 3, scramblers: 0, runners: 0 });
+    expect(staffing("333-r1", slots.get("333-r1")!.find(slot => slot.stageId === 1)!.group)).toBeUndefined();
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots, staffing });
+    const inGroup = (group: number, role: string) => assignments.filter(item => item.roundId === "333-r1" && item.tasks.some(task => task.group === group && task.role === role)).length;
+    for (const group of verde) {
+      expect(inGroup(group, "judge")).toBeLessThanOrEqual(3);
+      expect(inGroup(group, "scrambler")).toBe(0);
+    }
+    const round = rounds.find(item => item.id === "333-r1")!;
+    const rules = { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations: 12, fixedStations: false, checkJudges: true, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set<string>(), byGroup: Object.fromEntries(verde.map(group => [group, staffing("333-r1", group)!])) };
+    expect(groupLimits(rules, verde[0])).toEqual({ stations: 3, scramblers: 0, runners: 0 });
+    const issues = validateRound("333-r1", assignments.filter(item => item.roundId === "333-r1"), rules);
+    expect(issues.some(issue => issue.code === "missing-scramblers" && verde.includes(issue.group!))).toBe(false);
   });
 });

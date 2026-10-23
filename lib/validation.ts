@@ -60,7 +60,15 @@ export type RoundRules = {
   noNormalTasks: Set<string>;
   /** PRO mode: who may do each job, from segments. */
   eligible?: Partial<Record<string, Set<string>>>;
+  /** PRO mode: groups whose room or stage has its own stations or staff. */
+  byGroup?: Record<number, { stations?: number; scramblers?: number; runners?: number }>;
 };
+
+/** Stations and staff needed in one group: the room or stage's values, else the round's. */
+export function groupLimits(rules: RoundRules, group: number) {
+  const own = rules.byGroup?.[group];
+  return { stations: own?.stations ?? rules.stations, scramblers: own?.scramblers ?? rules.scramblers, runners: own?.runners ?? rules.runners };
+}
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1 };
 const NORMAL_DUTIES = new Set(["judge", "scrambler", "runner"]);
@@ -105,8 +113,8 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       for (const item of members) {
         if (item.station === undefined) {
           add({ severity: "error", code: "missing-station", group, assignmentId: item.id, params: { name: item.name, group } });
-        } else if (item.station < 1 || item.station > rules.stations) {
-          add({ severity: "error", code: "station-out-of-range", group, assignmentId: item.id, params: { name: item.name, station: item.station, total: rules.stations } });
+        } else if (item.station < 1 || item.station > groupLimits(rules, group).stations) {
+          add({ severity: "error", code: "station-out-of-range", group, assignmentId: item.id, params: { name: item.name, station: item.station, total: groupLimits(rules, group).stations } });
         } else {
           byStation.set(item.station, [...(byStation.get(item.station) ?? []), item]);
         }
@@ -117,8 +125,8 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
           add({ severity: "error", code: "duplicate-station", group, assignmentId: item.id, params: { station, group, names: holders.map(holder => holder.name) } });
         }
       }
-      if (members.length > rules.stations) {
-        add({ severity: "error", code: "over-capacity", group, params: { group, count: members.length, total: rules.stations } });
+      if (members.length > groupLimits(rules, group).stations) {
+        add({ severity: "error", code: "over-capacity", group, params: { group, count: members.length, total: groupLimits(rules, group).stations } });
       }
     }
   }
@@ -128,13 +136,14 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       add({ severity: "warning", code: "empty-group", group, params: { group } });
       continue;
     }
-    if (counts.scrambler < rules.scramblers) {
-      add({ severity: "warning", code: "missing-scramblers", group, params: { group, count: counts.scrambler, need: rules.scramblers } });
+    const limits = groupLimits(rules, group);
+    if (counts.scrambler < limits.scramblers) {
+      add({ severity: "warning", code: "missing-scramblers", group, params: { group, count: counts.scrambler, need: limits.scramblers } });
     }
     if (rules.checkJudges) {
-      const judges = judgesNeeded(counts.competitor, rules.stations);
+      const judges = judgesNeeded(counts.competitor, limits.stations);
       if (counts.judge < judges) add({ severity: "warning", code: "missing-judges", group, params: { group, count: counts.judge, need: judges } });
-      if (counts.runner < rules.runners) add({ severity: "warning", code: "missing-runners", group, params: { group, count: counts.runner, need: rules.runners } });
+      if (counts.runner < limits.runners) add({ severity: "warning", code: "missing-runners", group, params: { group, count: counts.runner, need: limits.runners } });
     }
     if (rules.checkDelegates && counts.delegate === 0) add({ severity: "warning", code: "missing-delegate", group, params: { group } });
     if (rules.checkDataEntry && counts.dataentry === 0) add({ severity: "warning", code: "missing-dataentry", group, params: { group } });

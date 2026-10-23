@@ -253,6 +253,12 @@ export const en: Messages = {
     stepperScramblers: "scramblers",
     stepperRunners: "runners",
   },
+  staffing: {
+    title: "Per room and stage",
+    hint: "Stations, scramblers and runners per group in each room or stage. Empty: the general value (stations) or each round's (scramblers and runners). Judges needed follow each stage's stations.",
+    lane: "Room or stage",
+    roundValue: "round",
+  },
   jobs: {
     range: "Between {min} and {max} people depending on the event",
     title: "Who can do each task",
