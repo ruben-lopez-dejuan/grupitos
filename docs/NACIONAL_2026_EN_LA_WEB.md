@@ -15,7 +15,7 @@ En **Zona → Plantillas** elige «Campeonato de España 2026» y pulsa **Aplica
 8 de esta guía de una vez (`lib/pro/templates/spanish-championship-2026.ts`) y avisa de las salas,
 rondas o días que no encuentre. Después solo queda:
 
-- Ajustar en **Reglas** los números de «Destacados» (1) y «Top» (2), que son de prueba.
+- Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (18) por grupo de Bizkaia, que son de partida; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
 - Rellenar `delegate-cluster` si queréis los conjuntos de delegados.
 - Marcar los delegados de turno y, si lo queréis, activar «Delegado de turno».
 
@@ -78,8 +78,8 @@ Añade los conjuntos en este orden (todos con **Rondas: Primeras rondas** salvo 
 
 | # | Conjunto del script | Quién | Solo los mejores | Dónde | ★ |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `FeaturedSet` | Cualquiera | N **por grupo de la ronda** | Bizkaia | sí |
-| 2 | `TopSet` | Cualquiera | M **por grupo de la ronda** | Bizkaia | no |
+| 1 | `FeaturedSet` | Cualquiera | N **por grupo de este conjunto** | Bizkaia | sí |
+| 2 | `TopSet` | Cualquiera | M **por grupo de este conjunto** (y «Por prueba…» si cambia) | Bizkaia | no |
 | 3 | `CoreSet` | Equipo: Organizador | | Gipuzkoa | |
 | 4–9 | `DelegatesSet` | ver tabla de abajo | | | |
 | 10 | `AESSet` | Equipo: Registro / Stand AES | | Gipuzkoa | |
@@ -88,8 +88,11 @@ Añade los conjuntos en este orden (todos con **Rondas: Primeras rondas** salvo 
 | 13 | `EveryoneSet` | Cualquiera | | Araba y Gipuzkoa (todo menos Bizkaia) | |
 
 N y M son el tercer y cuarto argumento de `FirstRoundAssignGroups` en los scripts de primeras
-rondas (aún no subidos). «Por grupo de la ronda» cuenta todos los grupos de la ronda, como
-`NumberPerGroupToPerRound`.
+rondas (aún no subidos). Ojo con la unidad: el script los multiplica por **todos** los grupos de la
+ronda (`NumberPerGroupToPerRound`, en la app «por grupo de toda la ronda»), así que 4 y 18 allí
+serían 48 y 216 en 3x3: más que Bizkaia. Con «por grupo de este conjunto», 4 y 18 son 22 por grupo
+de Bizkaia. Un conjunto nunca llena un grupo por encima del reparto par de la ronda: quien no cabe
+pasa a los conjuntos siguientes.
 
 **Delegados** (`DelegateStage`): con «Rondas: Elegir rondas», un conjunto por día y grupo de
 delegados. Primeras rondas del sábado 5: clock, 7×7, Square-1, 6×6, 3BLD, 5×5 y Megaminx.
