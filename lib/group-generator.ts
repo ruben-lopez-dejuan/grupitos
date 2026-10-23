@@ -153,7 +153,7 @@ function overlapMinutes(a: GroupSlot, b: GroupSlot) {
   return total;
 }
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [] }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {} }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -168,6 +168,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   extraPeople?: WcifPerson[];
   /** PRO mode: times when people cannot be given tasks (needs `slots`). */
   unavailable?: Unavailability[];
+  /** PRO mode: only these people (keys) may judge, scramble or run; absent means the usual rules. */
+  eligible?: Partial<Record<"judge" | "scrambler" | "runner", Set<string>>>;
 }): GeneratedAssignment[] {
   const accepted = [...acceptedPeople(competition), ...extraPeople];
   const country = competitionCountry(competition);
@@ -297,6 +299,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const scramblerPool = accepted.filter(person => {
       const key = personKey(person);
       if (!normalTasksAllowed(key)) return false;
+      // A scrambler segment (PRO) replaces the built-in speed rule.
+      if (eligible.scrambler) return eligible.scrambler.has(key);
       if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
       return !strictScramblers || trusted.has(key) || (hasResult(person) && (seedIndex.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
@@ -351,8 +355,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           beforeOwn(key, group),
           role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
       };
-      fill("runner", () => round.runners, normalPool, othersKey("runner"));
-      fill("judge", (_, size) => judgesNeeded(size, stations), normalPool, othersKey("judge"));
+      const poolFor = (role: "runner" | "judge") => eligible[role] ? normalPool.filter(person => eligible[role]!.has(personKey(person))) : normalPool;
+      fill("runner", () => round.runners, poolFor("runner"), othersKey("runner"));
+      fill("judge", (_, size) => judgesNeeded(size, stations), poolFor("judge"), othersKey("judge"));
     }
 
     const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));

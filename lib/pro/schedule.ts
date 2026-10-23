@@ -4,7 +4,7 @@
  */
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
 import type { ProPeople } from "@/lib/pro/people";
-import type { Segment } from "@/lib/pro/segments";
+import type { JobEligibility, Segment } from "@/lib/pro/segments";
 
 export type LocalTime = string;
 export type TimeWindow = { start: LocalTime; end: LocalTime };
@@ -35,7 +35,7 @@ export type ProSchedule = {
 };
 
 /** `people` is absent until the PRO people panel is first used. */
-export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[] };
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**

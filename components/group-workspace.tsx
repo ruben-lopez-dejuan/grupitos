@@ -20,7 +20,7 @@ import { draftStorageKey, generationSignature, parseDraft, type Draft, type Work
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
-import { segmentMembers, type Segment } from "@/lib/pro/segments";
+import { JOB_ROLES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
@@ -201,6 +201,16 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const setProPeople = (next: ProPeople) => update({ pro: { ...settings.pro!, enabled: true, people: next } });
   const segments = settings.pro?.segments ?? [];
   const setSegments = (next: Segment[]) => update({ pro: { ...settings.pro!, enabled: true, segments: next } });
+  const jobs: JobEligibility = settings.pro?.jobs ?? {};
+  const setJob = (role: JobRole, segmentId: string) => {
+    const { [role]: _previous, ...rest } = jobs;
+    update({ pro: { ...settings.pro!, enabled: true, jobs: segmentId ? { ...rest, [role]: segmentId } : rest } });
+  };
+  // PRO: people allowed to do each job, from the chosen segments.
+  const eligible: Partial<Record<JobRole, Set<string>>> = pro ? Object.fromEntries(JOB_ROLES.flatMap(role => {
+    const segment = segments.find(item => item.id === jobs[role]);
+    return segment ? [[role, new Set(segmentMembers(segment, everyone(competition, proPeople), { people: settings.people, pro: proPeople, segments }).map(personKey))]] : [];
+  })) : {};
   const segmentFilters = pro && segments.length ? (() => {
     const context = { people: settings.people, pro: proPeople, segments };
     const all = everyone(competition, proPeople);
@@ -218,7 +228,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [] }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -267,6 +277,14 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           <div className="sorting-rules" role="radiogroup" aria-label={t("rules.sortingTitle")}>{SORTING_RULES.map(rule => <button key={rule} role="radio" aria-checked={options.sortingRule === rule} title={t(keyOf("rules.sorting", `${rule}.help`))} className={options.sortingRule === rule ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule } })}><span className="rule-title"><span className="preset-radio" /><SortingRuleIcon rule={rule} /></span><strong>{t(keyOf("rules.sorting", `${rule}.label`))}</strong><small>{t(keyOf("rules.sorting", `${rule}.short`))}</small>{rule === "scrambler-safe" && <em className="recommended">{t("rules.recommended")}</em>}</button>)}</div>
           <h3 className="panel-subheading">{t("rules.tasksTitle")}</h3>
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
+          {pro && <>
+            <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
+            <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
+              <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>
+              {eligible[role] && <small>{tp("segments.members", eligible[role]!.size)}</small>}
+            </label>)}</div>
+            {!segments.length && <p className="setup-note">{t("jobs.noSegments")}</p>}
+          </>}
           {delegatesWithoutDuties && <p className="setup-note warning-note">{t("rules.noDelegateDuties")}</p>}
           <button className="plain more-toggle" type="button" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions(value => !value)}>{showMoreOptions ? t("rules.lessOptions") : t("rules.moreOptions")}</button>
           {showMoreOptions && <div className="option-list">{MORE_OPTIONS.map(key => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>}
@@ -323,7 +341,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         {tab === "review" && <>
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro && Object.keys(eligible).length ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => [id, { ...rules, eligible }])) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
         </>}
 
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}

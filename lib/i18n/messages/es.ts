@@ -254,6 +254,12 @@ export const es = {
     stepperScramblers: "mezcladores",
     stepperRunners: "runners",
   },
+  jobs: {
+    title: "Quién puede hacer cada tarea",
+    hint: "Modo PRO: elige un segmento por tarea (por ejemplo «Pueden mezclar 3x3»). Solo esas personas la recibirán y la revisión avisará si alguien fuera del segmento la tiene. El segmento de mezcladores sustituye a la regla de la mitad más rápida.",
+    anyone: "Cualquiera (reglas normales)",
+    noSegments: "Crea segmentos en la pestaña Segmentos para usarlos aquí.",
+  },
   segments: {
     title: "Segmentos",
     hint: "Grupos de personas con nombre definidos por condiciones (como los Define de CompScript). Se usan para filtrar la revisión y, en las siguientes fases, para decidir quién puede hacer cada trabajo.",
@@ -367,6 +373,7 @@ export const es = {
   proPeople: {
     importTitle: "Importar de hoja de cálculo",
     importHint: "Lee el formulario de voluntarios (Google Sheets o CSV) y vuelca sus columnas como propiedades, como ReadSpreadsheet de CompScript.",
+    "not-eligible": "{name} tiene «{task}» en G{group}, pero no está en el segmento que puede hacerlo.",
     unavailable: "No disponibles",
     unavailableHint: "Franjas en las que alguien no puede recibir tareas, o «mientras compite» otra persona (un padre que acompaña a su hija). El generador lo respeta y la revisión avisa si no se cumple.",
     when: "Cuándo",

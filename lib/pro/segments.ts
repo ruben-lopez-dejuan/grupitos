@@ -118,6 +118,16 @@ export const SEGMENT_TEMPLATES: Array<{ id: "volunteers" | "runners" | "scramble
   { id: "scramblers", segment: { match: "any", rules: [{ kind: "pb", eventId: "333", type: "average", value: 2000 }, { kind: "role", role: "trusted" }] } },
 ];
 
+/** Jobs whose eligibility a segment can restrict (CompScript's Job(..., eligibility=...)). */
+export const JOB_ROLES = ["judge", "scrambler", "runner"] as const;
+export type JobRole = typeof JOB_ROLES[number];
+export type JobEligibility = Partial<Record<JobRole, string>>;
+
+export function normalizeJobs(value: unknown): JobEligibility {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(JOB_ROLES.flatMap(role => typeof (value as Record<string, unknown>)[role] === "string" ? [[role, (value as Record<string, string>)[role]]] : []));
+}
+
 export function normalizeSegments(value: unknown): Segment[] {
   return Array.isArray(value) ? value.filter((item): item is Segment => Boolean(item) && typeof item === "object" && typeof (item as Segment).id === "string" && Array.isArray((item as Segment).rules)) : [];
 }

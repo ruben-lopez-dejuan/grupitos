@@ -218,3 +218,11 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .sheet-columns{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:14px}
 .sheet-columns strong{display:inline-flex;align-items:center;gap:4px;width:100%}
 .sheet-columns label{display:inline-flex;align-items:center;gap:5px}
+
+/* PRO job eligibility */
+.job-eligibility{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0 22px 14px}
+.job-eligibility label{display:grid;align-content:start;gap:6px;padding:12px;border:1px solid var(--line);border-radius:6px}
+.job-eligibility label>span{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:700}
+.job-eligibility select{padding:7px 9px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.job-eligibility small{color:var(--muted);font-size:13px}
+@media (max-width:800px){.job-eligibility{grid-template-columns:1fr}}

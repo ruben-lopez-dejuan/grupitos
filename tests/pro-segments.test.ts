@@ -3,7 +3,10 @@ import { buildDemoCompetition } from "@/lib/demo-competition";
 import { peopleFromWcif } from "@/lib/people";
 import { everyone, normalizeProPeople } from "@/lib/pro/people";
 import { matchesSegment, SEGMENT_TEMPLATES, segmentMembers, type Segment } from "@/lib/pro/segments";
-import { personKey } from "@/lib/rounds";
+import { initialRounds, personKey } from "@/lib/rounds";
+import type { GeneratedAssignment } from "@/lib/assignments";
+import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
+import { validateRound } from "@/lib/validation";
 
 const competition = buildDemoCompetition({ id: "Seg", name: "Seg", people: 40, events: ["333", "222"], newcomerShare: 0.2, seed: 11 });
 const people = everyone(competition, normalizeProPeople({ volunteers: [{ key: "vol-1", name: "Volunteer" }] }));
@@ -48,5 +51,28 @@ describe("segments", () => {
     const volunteers = SEGMENT_TEMPLATES.find(template => template.id === "volunteers")!;
     const members = segmentMembers({ id: "t", name: "t", ...volunteers.segment }, people, { people: settings, pro, segments: [] });
     expect(members.every(person => person.wcaId && !settings.roles.organizer!.includes(personKey(person)))).toBe(true);
+  });
+});
+
+describe("job eligibility", () => {
+  const rounds = initialRounds(competition, 8, "fixed");
+  const base = { competition, rounds, stations: 8, zoneMode: "fixed" as const, people: settings, options: DEFAULT_OPTIONS };
+  const holders = (assignments: GeneratedAssignment[], role: string) => new Set(assignments.filter(item => item.tasks.some(task => task.role === role)).map(item => item.personId));
+
+  it("gives each job only to its segment, and the scrambler segment replaces the speed rule", () => {
+    const judges = new Set(keys.slice(0, 20));
+    const scramblers = new Set(keys.slice(30, 40));
+    const assignments = generateAssignments({ ...base, eligible: { judge: judges, scrambler: scramblers } });
+    expect([...holders(assignments, "judge")].every(key => judges.has(key))).toBe(true);
+    expect([...holders(assignments, "scrambler")].every(key => scramblers.has(key))).toBe(true);
+    expect(holders(assignments, "scrambler").size).toBeGreaterThan(0);
+  });
+
+  it("warns when someone outside the segment has the job", () => {
+    const rows = generateAssignments(base).filter(item => item.roundId === "333-r1");
+    const round = rounds.find(item => item.id === "333-r1")!;
+    const rules = { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations: 8, fixedStations: true, checkJudges: true, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set<string>(), eligible: { judge: new Set<string>() } };
+    const judging = rows.filter(item => item.tasks.some(task => task.role === "judge")).length;
+    expect(validateRound("333-r1", rows, rules).filter(issue => issue.code === "not-eligible").length).toBeGreaterThanOrEqual(judging);
   });
 });

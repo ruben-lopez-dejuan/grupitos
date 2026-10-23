@@ -28,7 +28,8 @@ export type IssueCode =
   | "role-with-normal-task"
   | "time-overlap"
   | "unavoidable-time-overlap"
-  | "unavailable";
+  | "unavailable"
+  | "not-eligible";
 
 export type Issue = {
   key: string;
@@ -57,6 +58,8 @@ export type RoundRules = {
   checkDataEntry: boolean;
   /** People who should not get judging, scrambling or running (data entry, and delegates/organizers unless allowed). */
   noNormalTasks: Set<string>;
+  /** PRO mode: who may do each job, from segments. */
+  eligible?: Partial<Record<string, Set<string>>>;
 };
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1 };
@@ -83,6 +86,9 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       }
     }
     for (const duty of duties(item)) {
+      if (rules.eligible?.[duty.role] && !rules.eligible[duty.role]!.has(item.personId)) {
+        add({ severity: "warning", code: "not-eligible", group: duty.group, assignmentId: item.id, params: { name: item.name, task: duty.role, group: duty.group } });
+      }
       if (duty.role === "scrambler" && item.seedResult === undefined) {
         add({ severity: "warning", code: "scrambler-without-result", group: duty.group, assignmentId: item.id, params: { name: item.name, group: duty.group } });
       }

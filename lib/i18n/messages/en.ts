@@ -252,6 +252,12 @@ export const en: Messages = {
     stepperScramblers: "scramblers",
     stepperRunners: "runners",
   },
+  jobs: {
+    title: "Who can do each task",
+    hint: "PRO mode: pick a segment per task (for example \"Can scramble 3x3\"). Only those people get it, and the review warns when someone outside the segment has it. The scrambler segment replaces the faster-half rule.",
+    anyone: "Anyone (usual rules)",
+    noSegments: "Create segments in the Segments tab to use them here.",
+  },
   segments: {
     title: "Segments",
     hint: "Named groups of people defined by conditions (like CompScript's Define). They filter the review and, in the next phases, decide who can do each job.",
@@ -365,6 +371,7 @@ export const en: Messages = {
   proPeople: {
     importTitle: "Import from a spreadsheet",
     importHint: "Reads the volunteer form (Google Sheets or CSV) and turns its columns into properties, like CompScript's ReadSpreadsheet.",
+    "not-eligible": "{name} has “{task}” in G{group} but is not in the segment allowed to do it.",
     unavailable: "Unavailable",
     unavailableHint: "Times when someone cannot be given tasks, or \"while someone else competes\" (a parent with their child). The generator respects it and the review warns when it is not met.",
     when: "When",
