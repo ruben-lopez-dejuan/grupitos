@@ -46,7 +46,7 @@ Preferencias firmes del usuario:
 - Comandos:
   - `npm run dev`. El usuario suele tenerlo ya abierto en el puerto 3000, y un segundo `next dev` en la misma carpeta no arranca.
   - `npm run typecheck`.
-  - `npm test`: Vitest, con 183 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
+  - `npm test`: Vitest, con 191 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
   - `npm run build`.
 - Demo sin login, solo en desarrollo:
   - `/demo?size=small`: 34 personas y una sala.
@@ -67,11 +67,11 @@ Preferencias firmes del usuario:
 
 ## 4. Estado actual
 
-Último commit al actualizar este documento: `ad46b27 Restrict judging, scrambling and running to segments`. Las fases 1 y 2 del modo PRO están hechas y la 3 empezada (sección 6). Lo hecho sin aprobación expresa del usuario está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md).
+Último commit al actualizar este documento: `6c0a76e Print registrant ids on the back and make the stage optional`. Las fases 1 y 2 del modo PRO están hechas y la 3 casi (sección 6). Lo hecho sin aprobación expresa del usuario está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md).
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 
-No hay barra lateral: la barra superior lleva la marca, la competición, el interruptor PRO y la cuenta, y las pestañas van numeradas (un ✓ en «Revisar» cuando hay propuesta, y el paso «Publicar» al final, aún no disponible). La pestaña activa se sincroniza con el hash de la URL. Con PRO apagado no aparecen Horario ni Segmentos.
+No hay barra lateral: la barra superior lleva la marca, la competición con «Cambiar competición» al lado, el interruptor PRO y la cuenta. El pie lleva el botón «Siguiente: …» de cada paso; **los grupos solo se generan desde el paso Grupos**. Además, y las pestañas van numeradas (un ✓ en «Revisar» cuando hay propuesta, y el paso «Publicar» al final, aún no disponible). La pestaña activa se sincroniza con el hash de la URL. Con PRO apagado no aparecen Horario ni Segmentos.
 
 1. **Zona:** número de estaciones y modo de entrada (puestos fijos, sala de espera o mixto, que usa sala de espera en primeras rondas y puestos fijos después).
 2. **Horario** (solo PRO): ver sección 6.
@@ -90,7 +90,7 @@ No hay barra lateral: la barra superior lleva la marca, la competición, el inte
    - Validación en línea, con avisos y errores por ronda, por grupo y por fila. Pulsar «N errores» o «N avisos» despliega esa lista.
    - Los totales de cada grupo cuentan la ronda entera, aunque haya filtro o búsqueda.
    - Selector de rondas en rejilla alineada.
-8. **Hojas de tiempos** (`components/printing-panel.tsx` y `lib/scorecards/*`): scorecards de Groupifier en PDF con `pdfmake`, rellenadas o en blanco, en varios idiomas y con comprobación de mezcla. Cada scorecard ajusta su texto (`fitText`) para no salirse de su cuarto de página. En PRO se puede imprimir por escenario o grupo a grupo; las hojas llevan el número de grupo compartido y el nombre del escenario.
+8. **Hojas de tiempos** (en PRO se eligen los escenarios dentro de la tabla de rondas, nunca grupos sueltos; opciones de escenario en la casilla de grupo y de número de inscripción por detrás para doble cara) (`components/printing-panel.tsx` y `lib/scorecards/*`): scorecards de Groupifier en PDF con `pdfmake`, rellenadas o en blanco, en varios idiomas y con comprobación de mezcla. Cada scorecard ajusta su texto (`fitText`) para no salirse de su cuarto de página. En PRO se puede imprimir por escenario o grupo a grupo; las hojas llevan el número de grupo compartido y el nombre del escenario.
 
 La lista de competiciones (`components/competition-list.tsx`) muestra bandera y ciudad, ordena las próximas primero y guarda las pasadas detrás de un botón. La interfaz está en español e inglés.
 
@@ -163,14 +163,13 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
   - **Importación de hoja de cálculo** (`lib/pro/sheet-import.ts`, `components/sheet-import-panel.tsx`): Google Sheets por servidor (`app/api/sheets/route.ts`, `lib/google-sheets.ts`, cuenta de servicio; ver [`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md)) o CSV pegado o subido. Identifica por WCA ID, nº de inscripción, correo o nombre (sin tildes), elige columnas como propiedades y puede crear voluntarios con las filas sin inscripción. **La cuenta de servicio aún no existe**: hasta que el usuario la cree y ponga `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` en Vercel, la app lo dice y funciona con CSV.
 - `lib/pro/segments.ts`, pestaña Segmentos (`components/pro-segments-panel.tsx`): segmentos con nombre que cumplen todas o alguna de una lista de condiciones (rol, propiedad, edad, inscrito en, marca personal por debajo de un tiempo, newcomer, país, otro segmento), cada una negable; recuento y lista en vivo; plantillas sacadas de los scripts (voluntarios elegibles, runners, mezcladores de 3x3). La revisión filtra por segmento.
 
-### 6.3. Fase 3: motor de personal (empezada)
+### 6.3. Fase 3: motor de personal (casi completa)
 
-- Hecho: **quién puede hacer cada tarea** (pestaña Reglas, PRO): un segmento para jueces, otro para scramblers y otro para runners (`settings.pro.jobs`). El generador solo da la tarea a sus miembros (el segmento de scramblers sustituye a la regla de la mitad más rápida) y la revisión avisa (`not-eligible`).
-- Pendiente, en este orden recomendado:
-  1. **Elegibilidad por prueba**: el `CanScramble` real del usuario usa un límite de marca por prueba con correspondencias (BLD y OH → 3x3). Hoy un único segmento vale para todas las pruebas, y por eso «Pueden mezclar 3x3» da avisos en Megaminx. Propuesta: una condición «marca en la prueba de la ronda por debajo de su límite» con una tabla de límites por prueba, o elegibilidad por ronda.
-  2. **Trabajos por ronda × escenario** con cantidades (hoy: scramblers y runners por ronda, jueces = estaciones).
-  3. **Puntuación con pesos** (los scorers de CompScript: JobCount, SameJob, Consecutive, FollowingGroup, PersonProperty, Preference…) y perfiles; el motor actual es voraz con claves lexicográficas, así que esto lleva al **ILP por grupo** (`javascript-lp-solver`, MIT, como CompScript).
-  4. **«¿Por qué esta persona?»**: guardar por asignación qué reglas cumplió y cuánto sumó cada criterio.
+- **Quién puede hacer cada tarea** (pestaña Reglas, PRO): un segmento para jueces, otro para scramblers y otro para runners (`settings.pro.jobs`). La elegibilidad se calcula **por prueba**, porque hay condiciones que dependen de la ronda: «inscrito en la prueba de la ronda» y «marca por debajo del límite de la prueba», con una tabla de límites por prueba y correspondencias (3BLD y OH usan la marca de 3x3), que es el `CanScramble` de los scripts del usuario. La plantilla «Mezcladores por prueba» trae los límites del Amore Open 2026. El segmento de scramblers sustituye a la regla de la mitad más rápida; la revisión avisa con `not-eligible`.
+- **Personal por sala y escenario** (pestaña Zona, PRO): estaciones, scramblers y runners por grupo para cada sala o escenario (`settings.pro.staffing`); vacío es el valor general o el de la ronda. Los jueces que hacen falta salen de las estaciones del escenario. Lo usan el generador, la validación (`groupLimits()`) y las cabeceras de la matriz.
+- **«¿Por qué esta persona?»**: cada tarea generada guarda `why` (cuántas personas estaban libres y permitidas, cuántas tareas llevaba y los motivos: staff, voluntario, confianza, segmento, mitad más rápida, no compite en la ronda, trabaja justo antes de competir). Se ve al pasar el ratón por la celda y en la ficha de la persona.
+- **Solapes encadenados**: competir en dos pruebas cuyos grupos se solapan hasta 10 minutos (`COMPETING_OVERLAP_TOLERANCE`) cuenta como ir de una a otra (5×5 G1 hasta las 15:22 y multi desde las 15:15). Con el WCIF del Nacional no queda ningún aviso de solape.
+- **Pendiente**: puntuación con pesos y perfiles (los scorers de CompScript) y, con ella, el ILP por grupo con `javascript-lp-solver`. El motor actual sigue siendo voraz con claves lexicográficas.
 
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
@@ -187,6 +186,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 2. **Fase 4, reparto avanzado en grupos:** conjuntos ordenados de personas (por segmento) asignados a escenarios y grupos, reglas de estación y competidores destacados.
 3. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.
 4. **Fase 6, publicación e informes:**
+   - **WCIF v2**: la importación ya pide `GET /api/v0/competitions/{id}/wcif/version/2` (formato 2.2; con el token del organizador devuelve el WCIF privado). Para publicar, `PATCH /api/v0/competitions/{id}/wcif` y **hay que mandar siempre `formatVersion` e `id`** (recomendación de la WCA que trasladó el usuario).
    - Escribir actividades y `assignments` en el WCIF, conservando las extensiones desconocidas.
    - Escribir las extensiones natshelper de sala y grupo, con el número de grupo compartido en `-g{n}`.
    - Mostrar el diff, pedir confirmación explícita, hacer el PATCH y volver a leer el WCIF para comprobarlo.
@@ -194,7 +194,6 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 
 Pendientes conocidos:
 
-- Estaciones distintas en cada escenario (hoy todas usan el mismo número).
 - Leer `groupifier.CompetitionConfig` para rellenar las opciones de impresión.
 - La configuración PRO no se exporta todavía como plantilla JSON.
 
