@@ -62,7 +62,8 @@ describe("job eligibility", () => {
   it("gives each job only to its segment, and the scrambler segment replaces the speed rule", () => {
     const judges = new Set(keys.slice(0, 20));
     const scramblers = new Set(keys.slice(30, 40));
-    const assignments = generateAssignments({ ...base, eligible: { judge: judges, scrambler: scramblers } });
+    const perEvent = (set: Set<string>) => new Map(["333", "222"].map(eventId => [eventId, set]));
+    const assignments = generateAssignments({ ...base, eligible: { judge: perEvent(judges), scrambler: perEvent(scramblers) } });
     expect([...holders(assignments, "judge")].every(key => judges.has(key))).toBe(true);
     expect([...holders(assignments, "scrambler")].every(key => scramblers.has(key))).toBe(true);
     expect(holders(assignments, "scrambler").size).toBeGreaterThan(0);
@@ -74,5 +75,27 @@ describe("job eligibility", () => {
     const rules = { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations: 8, fixedStations: true, checkJudges: true, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set<string>(), eligible: { judge: new Set<string>() } };
     const judging = rows.filter(item => item.tasks.some(task => task.role === "judge")).length;
     expect(validateRound("333-r1", rows, rules).filter(issue => issue.code === "not-eligible").length).toBeGreaterThanOrEqual(judging);
+  });
+});
+
+describe("per-event scrambling limits (CanScramble)", () => {
+  const rule = { kind: "roundPb" as const, limits: { "333": 1500, "222": 500 }, mapping: { "333oh": "333" } };
+  const canScramble = segment([{ kind: "roundRegistered" }, rule]);
+  const average = (person: (typeof people)[number], eventId: string) => person.personalBests?.find(best => best.eventId === eventId && best.type === "average")?.best ?? Infinity;
+
+  it("uses the round's event, its mapping and its limit", () => {
+    const inEvent = (eventId: string) => segmentMembers(canScramble, people, { people: settings, pro, segments: [canScramble], eventId });
+    expect(inEvent("333").every(person => average(person, "333") < 1500 && person.registration?.eventIds?.includes("333"))).toBe(true);
+    expect(inEvent("333").length).toBe(people.filter(person => average(person, "333") < 1500 && person.registration?.eventIds?.includes("333")).length);
+    expect(inEvent("222").every(person => average(person, "222") < 500)).toBe(true);
+    // OH maps to 3x3 results; an event without a limit takes nobody.
+    const oh = segmentMembers(segment([rule]), people, { people: settings, pro, segments: [], eventId: "333oh" });
+    expect(oh.length).toBe(people.filter(person => average(person, "333") < 1500).length);
+    expect(segmentMembers(segment([rule]), people, { people: settings, pro, segments: [], eventId: "pyram" })).toEqual([]);
+  });
+
+  it("counts people who meet it in any event when there is no round", () => {
+    const any = segmentMembers(segment([rule]), people, { people: settings, pro, segments: [] }).length;
+    expect(any).toBe(people.filter(person => average(person, "333") < 1500 || average(person, "222") < 500).length);
   });
 });

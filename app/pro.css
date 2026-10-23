@@ -226,3 +226,10 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .job-eligibility select{padding:7px 9px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
 .job-eligibility small{color:var(--muted);font-size:13px}
 @media (max-width:800px){.job-eligibility{grid-template-columns:1fr}}
+
+.limit-table{display:grid;gap:4px;flex-basis:100%;padding:6px 0 2px 2px}
+.limit-table strong{font-size:13px;color:var(--muted)}
+.limit-row{display:grid;grid-template-columns:150px minmax(0,220px) 110px;align-items:center;gap:8px;font-size:14px}
+.limit-row small{color:var(--muted)}
+.round-note{color:var(--muted);font-size:15px}
+.segment-members strong small{color:var(--muted);font-weight:500}

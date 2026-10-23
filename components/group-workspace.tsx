@@ -206,11 +206,19 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     const { [role]: _previous, ...rest } = jobs;
     update({ pro: { ...settings.pro!, enabled: true, jobs: segmentId ? { ...rest, [role]: segmentId } : rest } });
   };
-  // PRO: people allowed to do each job, from the chosen segments.
-  const eligible: Partial<Record<JobRole, Set<string>>> = pro ? Object.fromEntries(JOB_ROLES.flatMap(role => {
+  // PRO: people allowed to do each job, per event (segments can depend on the round's event).
+  const eventIds = (competition.events ?? []).map(event => event.id);
+  const eligible: Partial<Record<JobRole, Map<string, Set<string>>>> = pro ? Object.fromEntries(JOB_ROLES.flatMap(role => {
     const segment = segments.find(item => item.id === jobs[role]);
-    return segment ? [[role, new Set(segmentMembers(segment, everyone(competition, proPeople), { people: settings.people, pro: proPeople, segments }).map(personKey))]] : [];
+    if (!segment) return [];
+    const all = everyone(competition, proPeople);
+    return [[role, new Map(eventIds.map(eventId => [eventId, new Set(segmentMembers(segment, all, { people: settings.people, pro: proPeople, segments, eventId }).map(personKey))]))]];
   })) : {};
+  /** Smallest and largest number of eligible people over the events, for the rules tab. */
+  const eligibleRange = (role: JobRole) => {
+    const sizes = [...(eligible[role]?.values() ?? [])].map(set => set.size);
+    return sizes.length ? [Math.min(...sizes), Math.max(...sizes)] : undefined;
+  };
   const segmentFilters = pro && segments.length ? (() => {
     const context = { people: settings.people, pro: proPeople, segments };
     const all = everyone(competition, proPeople);
@@ -281,7 +289,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
             <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
               <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>
-              {eligible[role] && <small>{tp("segments.members", eligible[role]!.size)}</small>}
+              {eligibleRange(role) && <small>{eligibleRange(role)![0] === eligibleRange(role)![1] ? tp("segments.members", eligibleRange(role)![0]) : t("jobs.range", { min: eligibleRange(role)![0], max: eligibleRange(role)![1] })}</small>}
             </label>)}</div>
             {!segments.length && <p className="setup-note">{t("jobs.noSegments")}</p>}
           </>}
@@ -341,7 +349,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         {tab === "review" && <>
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro && Object.keys(eligible).length ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => [id, { ...rules, eligible }])) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro && Object.keys(eligible).length ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
+            const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
+            return [id, { ...rules, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
+          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
         </>}
 
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}

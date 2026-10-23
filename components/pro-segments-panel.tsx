@@ -7,7 +7,7 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
 import type { PeopleSettings } from "@/lib/people";
 import type { ProPeople } from "@/lib/pro/people";
-import { CONDITION_KINDS, defaultRule, newSegmentId, PROPERTY_OPS, SEGMENT_ROLES, SEGMENT_TEMPLATES, segmentMembers, type Condition, type Segment, type SegmentRule } from "@/lib/pro/segments";
+import { CONDITION_KINDS, ROUND_KINDS, defaultRule, newSegmentId, PROPERTY_OPS, SEGMENT_ROLES, SEGMENT_TEMPLATES, segmentMembers, type Condition, type Segment, type SegmentRule } from "@/lib/pro/segments";
 import { personKey } from "@/lib/rounds";
 
 /** Events whose personal bests are not times. */
@@ -84,6 +84,32 @@ export function ProSegmentsPanel({ people, eventIds, settings, proPeople, segmen
         <input key={`${rule.value}`} defaultValue={formatTime(rule.value)} onBlur={event => { const value = parseTime(event.target.value); if (value) set({ value }); else event.target.value = formatTime(rule.value); }} aria-label={t("segments.time")} className="time-input" />
       </>;
       case "newcomer": return null;
+      case "roundRegistered": return <small className="round-note" title={t("segments.roundDependent")}>↻</small>;
+      case "roundPb": {
+        const events = eventIds.filter(eventId => !NOT_TIMED.includes(eventId));
+        const setLimit = (eventId: string, text: string) => {
+          const { [eventId]: _old, ...limits } = rule.limits;
+          const value = parseTime(text);
+          set({ limits: value ? { ...limits, [eventId]: value } : limits });
+        };
+        const setMapping = (eventId: string, source: string) => {
+          const { [eventId]: _old, ...mapping } = rule.mapping;
+          set({ mapping: source && source !== eventId ? { ...mapping, [eventId]: source } : mapping });
+        };
+        return <div className="limit-table" title={t("segments.roundDependent")}>
+          <strong>{t("segments.limitsTitle")}</strong>
+          {events.map(eventId => {
+            const source = rule.mapping[eventId] || eventId;
+            return <div key={eventId} className="limit-row">
+              <span>{eventName(eventId)}</span>
+              <select value={rule.mapping[eventId] ?? ""} onChange={event => setMapping(eventId, event.target.value)} aria-label={`${eventName(eventId)} · ${t("segments.useResultOf")}`}><option value="">{t("segments.sameEvent")}</option>{events.filter(other => other !== eventId).map(other => <option key={other} value={other}>{t("segments.useResultOf")} {eventName(other)}</option>)}</select>
+              {source === eventId
+                ? <input key={`${eventId}:${rule.limits[eventId] ?? ""}`} defaultValue={rule.limits[eventId] ? formatTime(rule.limits[eventId]) : ""} placeholder={t("segments.noLimit")} onBlur={event => setLimit(eventId, event.target.value)} aria-label={`${eventName(eventId)} · ${t("segments.time")}`} className="time-input" />
+                : <small>{rule.limits[source] ? `< ${formatTime(rule.limits[source])}` : t("segments.noLimit")}</small>}
+            </div>;
+          })}
+        </div>;
+      }
       case "country": return <select value={rule.iso2} onChange={event => set({ iso2: event.target.value })} aria-label={t("segments.kinds.country")}>{[...new Set([rule.iso2, ...countries])].map(iso2 => <option key={iso2} value={iso2}>{iso2}</option>)}</select>;
       case "segment": return <select value={rule.id} onChange={event => set({ id: event.target.value })} aria-label={t("segments.kinds.segment")}>{!rule.id && <option value="">—</option>}{segments.filter(segment => segment.id !== selected?.id).map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>;
     }
@@ -115,7 +141,7 @@ export function ProSegmentsPanel({ people, eventIds, settings, proPeople, segmen
         </li>)}</ol>
         <button type="button" className="button secondary add-rule" onClick={() => save({ ...selected, rules: [...selected.rules, defaultRule("role", options)] })}>+ {t("segments.addRule")}</button>
         <div className="segment-members">
-          <strong>{tp("segments.members", members.length)}</strong>
+          <strong>{tp("segments.members", members.length)}{selected.rules.some(rule => ROUND_KINDS.includes(rule.kind)) && <small> · {t("segments.roundDependent")}</small>}</strong>
           <div>{members.slice(0, PREVIEW).map(person => <span key={personKey(person)}>{person.name}</span>)}{members.length > PREVIEW && <em>{t("segments.more", { count: members.length - PREVIEW })}</em>}</div>
         </div>
       </div>}

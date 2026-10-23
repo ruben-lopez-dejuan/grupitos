@@ -256,12 +256,18 @@ export const es = {
     stepperRunners: "runners",
   },
   jobs: {
+    range: "Entre {min} y {max} personas según la prueba",
     title: "Quién puede hacer cada tarea",
     hint: "Modo PRO: elige un segmento por tarea (por ejemplo «Pueden mezclar 3x3»). Solo esas personas la recibirán y la revisión avisará si alguien fuera del segmento la tiene. El segmento de mezcladores sustituye a la regla de la mitad más rápida.",
     anyone: "Cualquiera (reglas normales)",
     noSegments: "Crea segmentos en la pestaña Segmentos para usarlos aquí.",
   },
   segments: {
+    limitsTitle: "Límite por prueba (vacío: nadie de esa prueba)",
+    useResultOf: "usa la marca de",
+    sameEvent: "la misma prueba",
+    noLimit: "nadie",
+    roundDependent: "Depende de la prueba de cada ronda; aquí cuenta quien la cumple en alguna.",
     title: "Segmentos",
     hint: "Grupos de personas con nombre definidos por condiciones (como los Define de CompScript). Se usan para filtrar la revisión y, en las siguientes fases, para decidir quién puede hacer cada trabajo.",
     new: "Segmento",
@@ -273,6 +279,7 @@ export const es = {
     empty: "Crea un segmento o empieza con una plantilla.",
     templatesTitle: "Plantillas",
     templates: {
+      eventScramblers: "Mezcladores por prueba",
       volunteers: "Voluntarios elegibles",
       runners: "Pueden hacer de runner",
       scramblers: "Pueden mezclar 3x3",
@@ -297,6 +304,8 @@ export const es = {
     members_other: "{count} personas",
     more: "y {count} más",
     kinds: {
+      roundRegistered: "Inscrito en la prueba de la ronda",
+      roundPb: "Marca por debajo del límite de la prueba",
       role: "Tiene el rol",
       property: "Propiedad",
       age: "Edad",

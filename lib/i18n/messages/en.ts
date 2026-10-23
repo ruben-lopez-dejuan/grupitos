@@ -254,12 +254,18 @@ export const en: Messages = {
     stepperRunners: "runners",
   },
   jobs: {
+    range: "Between {min} and {max} people depending on the event",
     title: "Who can do each task",
     hint: "PRO mode: pick a segment per task (for example \"Can scramble 3x3\"). Only those people get it, and the review warns when someone outside the segment has it. The scrambler segment replaces the faster-half rule.",
     anyone: "Anyone (usual rules)",
     noSegments: "Create segments in the Segments tab to use them here.",
   },
   segments: {
+    limitsTitle: "Limit per event (empty: nobody for that event)",
+    useResultOf: "uses the result of",
+    sameEvent: "the same event",
+    noLimit: "nobody",
+    roundDependent: "Depends on each round's event; here it counts people who meet it in any event.",
     title: "Segments",
     hint: "Named groups of people defined by conditions (like CompScript's Define). They filter the review and, in the next phases, decide who can do each job.",
     new: "Segment",
@@ -271,6 +277,7 @@ export const en: Messages = {
     empty: "Create a segment or start from a template.",
     templatesTitle: "Templates",
     templates: {
+      eventScramblers: "Scramblers per event",
       volunteers: "Eligible volunteers",
       runners: "Can run",
       scramblers: "Can scramble 3x3",
@@ -295,6 +302,8 @@ export const en: Messages = {
     members_other: "{count} people",
     more: "and {count} more",
     kinds: {
+      roundRegistered: "Registered for the round's event",
+      roundPb: "Personal best under the event's limit",
       role: "Has the role",
       property: "Property",
       age: "Age",
