@@ -171,3 +171,34 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .absence-list button{margin-left:auto;width:20px;height:20px;color:var(--muted);background:transparent;border:0;border-radius:4px;cursor:pointer}
 .absence-list button:hover{color:var(--error);background:var(--surface)}
 .absence-form select{max-width:220px;padding:7px 9px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+
+/* PRO segments */
+.segments-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;padding:16px 22px 22px}
+.segment-list{display:grid;align-content:start;gap:4px}
+.segment-list>button{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;color:var(--ink);text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;font-size:14px;font-weight:650;cursor:pointer}
+.segment-list>button.active{background:var(--surface-subtle);border-color:var(--line)}
+.segment-list>button small{color:var(--muted);font-size:12px;font-weight:700}
+.segment-list .segment-new{color:var(--blue);border:1px dashed var(--line)}
+.segment-templates{display:grid;justify-items:start;gap:2px;margin-top:10px}
+.segment-templates small{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase}
+.segment-editor{display:grid;align-content:start;gap:12px;min-width:0}
+.segment-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.segment-name{flex:1;min-width:0;padding:6px 8px;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:5px;font:inherit;font-size:17px;font-weight:750}
+.segment-name:hover,.segment-name:focus{background:var(--surface);border-color:var(--line);outline:0}
+.segment-match{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px}
+.segment-rules{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.segment-rules li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px;font-size:14px}
+.segment-editor select,.segment-editor input:not([type=checkbox]){padding:6px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.segment-rules input[type=number]{width:70px}
+.segment-rules .time-input{width:90px;font-variant-numeric:tabular-nums}
+.negate{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;color:var(--muted);border:1px solid var(--line);border-radius:4px;font-size:12px;font-weight:800;cursor:pointer}
+.negate input{margin:0}
+.negate.on{color:var(--error);border-color:var(--error)}
+.rule-remove{margin-left:auto;width:22px;height:22px;color:var(--muted);background:transparent;border:0;border-radius:4px;cursor:pointer}
+.rule-remove:hover{color:var(--error);background:var(--surface)}
+.add-rule{justify-self:start;padding:6px 12px;font-size:14px}
+.segment-members{display:grid;gap:8px;padding-top:10px;border-top:1px solid var(--line);font-size:14px}
+.segment-members>div{display:flex;flex-wrap:wrap;gap:4px}
+.segment-members span{padding:2px 7px;background:var(--surface-subtle);border-radius:4px;font-size:13px}
+.segment-members em{color:var(--muted);font-size:13px}
+@media (max-width:800px){.segments-layout{grid-template-columns:1fr}}

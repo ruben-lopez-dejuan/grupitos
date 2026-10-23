@@ -2,6 +2,7 @@ import { normalizeAssignments, type GeneratedAssignment } from "@/lib/assignment
 import type { AssignmentOptions } from "@/lib/group-generator";
 import type { PeopleSettings } from "@/lib/people";
 import { normalizeProPeople } from "@/lib/pro/people";
+import { normalizeSegments } from "@/lib/pro/segments";
 import { normalizeProSchedule, type ProConfig } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
@@ -60,7 +61,7 @@ export function parseDraft(raw: string | null): Draft | undefined {
       const draft = data as { version?: number; assignments?: unknown[] };
       if (draft.version === 3) {
         const current = data as Draft;
-        const settings = current.settings?.pro ? { ...current.settings, pro: { ...current.settings.pro, schedule: normalizeProSchedule(current.settings.pro.schedule), ...(current.settings.pro.people ? { people: normalizeProPeople(current.settings.pro.people) } : {}) } } : current.settings;
+        const settings = current.settings?.pro ? { ...current.settings, pro: { ...current.settings.pro, schedule: normalizeProSchedule(current.settings.pro.schedule), ...(current.settings.pro.people ? { people: normalizeProPeople(current.settings.pro.people) } : {}), segments: normalizeSegments(current.settings.pro.segments) } } : current.settings;
         return { ...current, settings, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
       }
       if (draft.version === 2) return { version: 3, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };

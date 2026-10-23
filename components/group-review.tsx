@@ -18,7 +18,8 @@ type HistoryAction = { type: "commit"; next: GeneratedAssignment[] } | { type: "
 
 const HISTORY_LIMIT = 200;
 
-type RowFilter = "all" | "issues" | "scramblers" | "newcomers" | "staff-only";
+/** Built-in filters, or `segment:<id>` for a PRO segment. */
+type RowFilter = "all" | "issues" | "scramblers" | "newcomers" | "staff-only" | `segment:${string}`;
 type RowSort = "seed" | "name" | "group" | "load";
 const FILTERS: RowFilter[] = ["all", "issues", "scramblers", "newcomers", "staff-only"];
 const SORTS: RowSort[] = ["seed", "name", "group", "load"];
@@ -75,8 +76,11 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
 
 /** Stable default, so validation is not redone on every render. */
 const NO_UNAVAILABILITY: Unavailability[] = [];
+const NO_SEGMENTS: SegmentFilter[] = [];
 
-export function GroupReview({ unavailable = NO_UNAVAILABILITY,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
+export type SegmentFilter = { id: string; name: string; members: Set<string> };
+
+export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -91,6 +95,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY,  initialAssignmen
   rooms?: ProRoom[];
   /** PRO mode: people's unavailabilities, checked against what they are given. */
   unavailable?: Unavailability[];
+  /** PRO mode: segments offered as row filters. */
+  segmentFilters?: SegmentFilter[];
   onChange: (assignments: GeneratedAssignment[]) => void;
 }) {
   const { t, tp } = useI18n();
@@ -170,6 +176,7 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY,  initialAssignmen
       if (filter === "scramblers") return duties(item).some(duty => duty.role === "scrambler");
       if (filter === "newcomers") return !item.wcaId;
       if (filter === "staff-only") return !item.inRound;
+      if (filter.startsWith("segment:")) return !!segmentFilters.find(segment => `segment:${segment.id}` === filter)?.members.has(item.personId);
       return true;
     };
     const bySeed = (a: GeneratedAssignment, b: GeneratedAssignment) => (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER);
@@ -180,7 +187,7 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY,  initialAssignmen
       load: (a, b) => (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
     };
     return roundRows.filter(keep).sort((a, b) => order[sortBy](a, b) || a.name.localeCompare(b.name));
-  }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads]);
+  }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads, segmentFilters]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);
   // Group totals count the whole round, whatever the filter or search shows.
@@ -433,7 +440,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
       <span className="review-status" role="status">{status}</span>
       <div className="row-controls">
         <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t("review.search")} aria-label={t("review.search")} />
-        <select value={filter} onChange={event => setFilter(event.target.value as RowFilter)} aria-label={t("review.filter")}>{FILTERS.map(key => <option key={key} value={key}>{t(keyOf("review.filters", key))}</option>)}</select>
+        <select value={filter} onChange={event => setFilter(event.target.value as RowFilter)} aria-label={t("review.filter")}>{FILTERS.map(key => <option key={key} value={key}>{t(keyOf("review.filters", key))}</option>)}{segmentFilters.length > 0 && <optgroup label={t("segments.title")}>{segmentFilters.map(segment => <option key={segment.id} value={`segment:${segment.id}`}>{segment.name}</option>)}</optgroup>}</select>
         <select value={sortBy} onChange={event => setSortBy(event.target.value as RowSort)} aria-label={t("review.sort")}>{SORTS.map(key => <option key={key} value={key}>{t(keyOf("review.sorts", key))}</option>)}</select>
       </div>
     </div>

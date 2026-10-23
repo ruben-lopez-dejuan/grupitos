@@ -10,6 +10,7 @@ import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
 import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
+import { ProSegmentsPanel } from "@/components/pro-segments-panel";
 import { SortingRuleIcon } from "@/components/rule-icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TASK_CODES, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
@@ -19,6 +20,7 @@ import { draftStorageKey, generationSignature, parseDraft, type Draft, type Work
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
+import { segmentMembers, type Segment } from "@/lib/pro/segments";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
@@ -26,10 +28,10 @@ import type { RoundRules } from "@/lib/validation";
 
 const DEFAULT_STATIONS = 12;
 
-type Tab = "zone" | "schedule" | "rules" | "people" | "rounds" | "review" | "print";
-const TABS: Tab[] = ["zone", "schedule", "rules", "people", "rounds", "review", "print"];
+type Tab = "zone" | "schedule" | "rules" | "people" | "segments" | "rounds" | "review" | "print";
+const TABS: Tab[] = ["zone", "schedule", "rules", "people", "segments", "rounds", "review", "print"];
 /** Only in PRO mode. */
-const PRO_TABS: Tab[] = ["schedule"];
+const PRO_TABS: Tab[] = ["schedule", "segments"];
 const PHOTOS_KEY = "wca-easy-groups:show-photos";
 
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
@@ -197,6 +199,13 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   // Until first edited, PRO people start from the properties already in the WCIF.
   const proPeople: ProPeople = settings.pro?.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
   const setProPeople = (next: ProPeople) => update({ pro: { ...settings.pro!, enabled: true, people: next } });
+  const segments = settings.pro?.segments ?? [];
+  const setSegments = (next: Segment[]) => update({ pro: { ...settings.pro!, enabled: true, segments: next } });
+  const segmentFilters = pro && segments.length ? (() => {
+    const context = { people: settings.people, pro: proPeople, segments };
+    const all = everyone(competition, proPeople);
+    return segments.map(segment => ({ id: segment.id, name: segment.name, members: new Set(segmentMembers(segment, all, context).map(personKey)) }));
+  })() : undefined;
 
   const activeRounds = rounds.filter(round => round.enabled);
   const firstRounds = rounds.filter(round => round.roundNumber === 1);
@@ -267,6 +276,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
         </>}
 
+        {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={settings.people} proPeople={proPeople} segments={segments} onChange={setSegments} />}
+
         {tab === "rounds" && <>
           {outdatedNote}
           <section className="round-section" id="groups">
@@ -312,7 +323,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         {tab === "review" && <>
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} />}
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? proPeople.unavailable : undefined} segmentFilters={segmentFilters} />}
         </>}
 
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
