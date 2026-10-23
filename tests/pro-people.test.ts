@@ -4,7 +4,7 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { nonCompetingStaff, peopleFromWcif } from "@/lib/people";
-import { applyTeamRoles, everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, suggestTeamRole, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
+import { applyTeamRoles, suggestTeamLane, everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, suggestTeamRole, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
 import { validateAvailability } from "@/lib/validation";
@@ -131,5 +131,16 @@ describe("teams and non-competing staff", () => {
     const quiet = competition.persons!.slice(0, 8).map(personKey);
     const assignments = generateAssignments({ competition, rounds: initialRounds(competition, 8, "fixed"), stations: 8, zoneMode: "fixed", people: { ...people, roles: { ...people.roles, notasks: quiet } }, options: DEFAULT_OPTIONS });
     expect(assignments.filter(item => quiet.includes(item.personId)).every(item => item.tasks.every(task => task.role === "competitor"))).toBe(true);
+  });
+});
+
+describe("teams dedicated to a room", () => {
+  it("suggests the side room for the side room team, and keeps lane choices out of the role lists", () => {
+    const lanes = [{ key: "0:0", name: "Araba", hasStages: true }, { key: "0:1", name: "Bizkaia", hasStages: true }, { key: "1:room", name: "Sala Auxiliar", hasStages: false }];
+    expect(suggestTeamLane("Side room", lanes)).toBe("1:room");
+    expect(suggestTeamLane("Voluntario normal", lanes)).toBeUndefined();
+    const pro = normalizeProPeople({ propertyKeys: ["team"], properties: { a: { team: "Side room" }, b: { team: "Voluntario normal" } } });
+    const result = applyTeamRoles({ roles: {}, trustedIds: [], delegateDutyIds: [] }, pro, { property: "team", map: { "Side room": "lane:1:room", "Voluntario normal": "staff" } });
+    expect(result.settings.roles).toEqual({ staff: ["b"] });
   });
 });

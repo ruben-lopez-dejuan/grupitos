@@ -22,8 +22,8 @@ import { draftStorageKey, generationSignature, parseDraft, type Draft, type Work
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
-import { JOB_ROLES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
-import { staffingOf, type LaneStaffing } from "@/lib/pro/schedule";
+import { JOB_ROLES, newSegmentId, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
+import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
@@ -194,6 +194,11 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const { stations, zoneMode, options } = settings;
   const rounds = effectiveRounds;
   const update = (change: Partial<WorkspaceSettings>) => setSettings(current => current && { ...current, ...change });
+  /** Changes part of the PRO setup from the latest state, so several changes in one click all stay. */
+  const updatePro = (change: (pro: ProConfig) => Partial<ProConfig>) => setSettings(current => {
+    if (!current?.pro) return current;
+    return { ...current, pro: { ...current.pro, enabled: true, ...change(current.pro) } };
+  });
   const setOption = (key: OptionKey, value: boolean) => update({ options: { ...options, [key]: value } });
   const changeZone = (next: { stations?: number; zoneMode?: ZoneMode }) => {
     const nextStations = next.stations ?? stations;
@@ -206,19 +211,34 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     update({ pro: { ...settings.pro, enabled, schedule: settings.pro?.schedule ?? freshSchedule() } });
     if (!enabled && PRO_TABS.includes(tab)) changeTab("zone");
   };
-  const setSchedule = (schedule: ProSchedule) => update({ pro: { ...settings.pro, enabled: true, schedule } });
+  const setSchedule = (schedule: ProSchedule) => updatePro(() => ({ schedule }));
   // Until first edited, PRO people start from the properties already in the WCIF.
   const proPeople: ProPeople = settings.pro?.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
-  const setProPeople = (next: ProPeople) => update({ pro: { ...settings.pro!, enabled: true, people: next } });
+  const setProPeople = (next: ProPeople) => updatePro(() => ({ people: next }));
   const segments = settings.pro?.segments ?? [];
-  const setSegments = (next: Segment[]) => update({ pro: { ...settings.pro!, enabled: true, segments: next } });
+  const setSegments = (next: Segment[]) => updatePro(() => ({ segments: next }));
+  /** Teams → rooms: each team becomes a cluster ("Team: Side room") dedicated to its room or stage. */
+  const applyLaneTeams = (items: Array<{ lane: string; property: string; value: string }>) => updatePro(current => {
+    const nextSegments = [...(current.segments ?? [])];
+    const nextStaffing = { ...(current.staffing ?? {}) };
+    for (const { lane, property, value } of items) {
+      const name = t("proPeople.teamCluster", { team: value });
+      let segment = nextSegments.find(item => item.name === name);
+      if (!segment) {
+        segment = { id: newSegmentId(nextSegments), name, match: "all", rules: [{ kind: "property", key: property, op: "eq", value }] };
+        nextSegments.push(segment);
+      }
+      nextStaffing[lane] = { ...nextStaffing[lane], team: segment.id };
+    }
+    return { segments: nextSegments, staffing: nextStaffing };
+  });
   const jobs: JobEligibility = settings.pro?.jobs ?? {};
   const staffing = settings.pro?.staffing ?? {};
   const setStaffing = (lane: string, change: LaneStaffing) => {
     const next = { ...staffing[lane], ...change };
     for (const key of Object.keys(next) as Array<keyof LaneStaffing>) if (next[key] === undefined) delete next[key];
     const { [lane]: _previous, ...rest } = staffing;
-    update({ pro: { ...settings.pro!, enabled: true, staffing: Object.keys(next).length ? { ...rest, [lane]: next } : rest } });
+    updatePro(() => ({ staffing: Object.keys(next).length ? { ...rest, [lane]: next } : rest }));
   };
   // Stage values are defaults: a round whose scramblers or runners were changed in Groups keeps its own.
   const laneStaffing = pro && slots ? staffingOf(slots, staffing) : undefined;
@@ -235,10 +255,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     return own.stations === undefined ? undefined : { stations: own.stations };
   });
   const scoring = settings.pro?.scoring ?? DEFAULT_SCORING;
-  const setScoring = (next: ScoringConfig) => update({ pro: { ...settings.pro!, enabled: true, scoring: next } });
+  const setScoring = (next: ScoringConfig) => updatePro(() => ({ scoring: next }));
   const setJob = (role: JobRole, segmentId: string) => {
     const { [role]: _previous, ...rest } = jobs;
-    update({ pro: { ...settings.pro!, enabled: true, jobs: segmentId ? { ...rest, [role]: segmentId } : rest } });
+    updatePro(() => ({ jobs: segmentId ? { ...rest, [role]: segmentId } : rest }));
   };
   // PRO: people allowed to do each job, per event (segments can depend on the round's event).
   const eventIds = (competition.events ?? []).map(event => event.id);
@@ -372,7 +392,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         </section>}
 
         {tab === "people" && <><PeoplePanel people={rolePeople} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
-          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} peopleSettings={settings.people} onPeopleSettingsChange={next => update({ people: next })} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
+          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} peopleSettings={settings.people} onPeopleSettingsChange={next => update({ people: next })} lanes={scheduleLanes(pro.schedule).map(lane => ({ key: lane.key, name: lane.name, hasStages: lane.stageId !== undefined || (pro.schedule.rooms.find(room => room.id === lane.roomId)?.stages.length ?? 0) > 0 }))} onLaneTeams={applyLaneTeams} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
         </>}
 
         {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={settings.people} proPeople={proPeople} segments={segments} onChange={setSegments} />}

@@ -18,7 +18,9 @@ export type Unavailability = { id: string; personKey: string; note?: string } & 
 /** What a team (a property value such as natshelper's `team`) means for the app. */
 export const TEAM_ROLES = ["staff", "dataentry", "notasks"] as const;
 export type TeamRole = typeof TEAM_ROLES[number];
-export type TeamRoles = { property: string; map: Record<string, TeamRole | "none"> };
+/** `lane:<key>`: the team is dedicated to that room or stage. */
+export type TeamChoice = TeamRole | "none" | `lane:${string}`;
+export type TeamRoles = { property: string; map: Record<string, TeamChoice> };
 
 export type ProPeople = {
   /** Column order of the properties table. */
@@ -94,6 +96,13 @@ export function suggestTeamRole(team: string): TeamRole | "none" {
   return "none";
 }
 
+/** A side-room team goes to a room without stages whose name sounds auxiliary, if there is one. */
+export function suggestTeamLane(team: string, lanes: Array<{ key: string; name: string; hasStages?: boolean }>) {
+  if (!/side|aux|blind|ciega|sala/.test(plain(team))) return undefined;
+  const side = lanes.filter(lane => !lane.hasStages && /aux|side|blind|ciega/.test(plain(lane.name)));
+  return side.length === 1 ? side[0].key : undefined;
+}
+
 /** Distinct values of a property, with how many people have each. */
 export function propertyValues(people: ProPeople, property: string) {
   const counts = new Map<string, number>();
@@ -110,10 +119,10 @@ export function applyTeamRoles(settings: PeopleSettings, people: ProPeople, team
   let added = 0;
   for (const [key, own] of Object.entries(people.properties)) {
     const role = teamRoles.map[own[teamRoles.property]?.trim() ?? ""];
-    if (!role || role === "none") continue;
-    const list = roles[role] ?? [];
+    if (!role || role === "none" || role.startsWith("lane:")) continue;
+    const list = roles[role as TeamRole] ?? [];
     if (list.includes(key)) continue;
-    roles[role] = [...list, key];
+    roles[role as TeamRole] = [...list, key];
     added += 1;
   }
   return { settings: { ...settings, roles }, added };
