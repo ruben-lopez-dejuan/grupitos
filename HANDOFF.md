@@ -219,6 +219,14 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - Plantilla incluida «Campeonato de España 2026» (`lib/pro/templates/spanish-championship-2026.ts`), con los valores de prueba destacados 1 y top 2 por grupo de la ronda.
 - Interfaz: Zona → Plantillas (`components/pro-template-panel.tsx`). Comprobado con el WCIF del Nacional: todo se encuentra.
 
+### 6.8. Importador sin copias, empezar de cero y grupos del WCIF (24/10/2026)
+
+- **Incidencia del usuario**: tras importar la hoja, la gente salía dos veces («vol-100… Data entry»). El importador antiguo creaba por defecto un voluntario por cada fila que no emparejaba, sin buscar entre los voluntarios ya creados, y la lista de roles no sabía mostrar el nombre de un voluntario.
+- **Importador** (`lib/pro/sheet-import.ts`): cada fila se empareja por WCA ID, luego ID, correo y nombre contra todos (también voluntarios); un nombre compartido no empareja. Lee las cabeceras de CompScript (`identifier:`, `property:`, `ignore:`) y, como ReadSpreadsheet, puede quitar las propiedades importadas a quien no esté en la hoja. Solo crea voluntarios si se marca, y enseña antes cómo empareja cada fila.
+- **Reparación** (`findVolunteerCopies`, `mergeVolunteerCopies` en `lib/pro/people.ts`): «Fusionar duplicados» en Personas junta cada voluntario copia de una persona inscrita (mismo WCA ID o nombre único) con ella, con sus propiedades, horas y roles, y quita propiedades de claves que ya no son nadie.
+- **Empezar de cero** (junto al nombre de la competición): vuelve a descargar el WCIF si puede y borra el borrador de esa competición en el navegador; PRO sigue activo si lo estaba.
+- **Grupos del WCIF** (`lib/wcif-groups.ts`): si el WCIF ya tiene asignaciones de grupo (CompScript, Groupifier…), al abrir la competición por primera vez o al empezar de cero se cargan como propuesta y se abre Revisar. En PRO cada grupo va a la columna de su sala, escenario y hora; si hay escenarios se activa PRO con el horario del WCIF. Lee estaciones y la estrella de Groupifier (`featuredCompetitorWcaUserIds`).
+
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
 Archivo local del usuario (**no commitear: tiene datos personales**). Estructura:
