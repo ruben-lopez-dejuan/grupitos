@@ -1,12 +1,10 @@
 "use client";
 
-import { EventIcon } from "@/components/event-icon";
-import { useEventName, useI18n } from "@/components/i18n";
+import { ScopeFields, ScopeRows, type ScopeLane, type ScopeRound } from "@/components/group-scope";
+import { useI18n } from "@/components/i18n";
 import { keyOf } from "@/lib/i18n";
-import { appliesToRound, formatGroupNumbers, newSetId, parseGroupNumbers, SET_TEMPLATES, type AssignmentSetConfig, type SetTemplate } from "@/lib/pro/assignment-sets";
+import { newSetId, SET_TEMPLATES, type AssignmentSetConfig, type SetTemplate } from "@/lib/pro/assignment-sets";
 
-type Lane = { key: string; name: string; color: string };
-type Round = { id: string; eventId: string; roundNumber: number };
 
 /**
  * PRO: ordered assignment sets for the competitor groups (CompScript's AssignmentSet). The first
@@ -16,13 +14,12 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
   sets: AssignmentSetConfig[];
   onChange: (sets: AssignmentSetConfig[]) => void;
   segments: Array<{ id: string; name: string; size: number }>;
-  lanes: Lane[];
-  rounds: Round[];
+  lanes: ScopeLane[];
+  rounds: ScopeRound[];
   /** Finds or creates the cluster of a template (organizers, delegates on duty) and gives its id. */
   onCluster: (template: "organizers" | "delegating") => string;
 }) {
-  const { t, tp } = useI18n();
-  const eventName = useEventName();
+  const { t } = useI18n();
   const save = (set: AssignmentSetConfig) => onChange(sets.map(item => item.id === set.id ? set : item));
   const move = (index: number, step: -1 | 1) => {
     const next = [...sets];
@@ -44,8 +41,6 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
   return <div className="assignment-sets">
     {sets.length === 0 && <p className="setup-note">{t("sets.empty")}</p>}
     <ol>{sets.map((set, index) => {
-      const roundCount = rounds.filter(round => appliesToRound({ ...set, off: false }, round)).length;
-      const groupMode = Array.isArray(set.groups) ? "numbers" : set.groups;
       return <li key={set.id} className={set.off ? "off" : ""}>
         <div className="set-head">
           <span className="task-order-position">{index + 1}</span>
@@ -72,33 +67,9 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
               <select value={set.perGroup ? "group" : "round"} onChange={event => save({ ...set, perGroup: event.target.value === "group" })} aria-label={t("sets.topUnit")}><option value="group">{t("sets.perGroup")}</option><option value="round">{t("sets.perRound")}</option></select>
             </>}
           </label>
-          <label><span>{t("sets.rounds")}</span>
-            <select value={Array.isArray(set.rounds) ? "pick" : set.rounds} onChange={event => save({ ...set, rounds: event.target.value === "pick" ? rounds.filter(round => appliesToRound({ ...set, off: false }, round)).map(round => round.id) : event.target.value as "first" | "all" })}>
-              <option value="first">{t("sets.firstRounds")}</option><option value="all">{t("sets.allRounds")}</option><option value="pick">{t("sets.pickRounds")}</option>
-            </select>
-            <small>{tp("sets.roundCount", roundCount)}</small>
-          </label>
-          <label><span>{t("sets.groups")}</span>
-            <select value={groupMode} onChange={event => save({ ...set, groups: event.target.value === "numbers" ? [1] : event.target.value as "any" | "first" | "last" })}>
-              <option value="any">{t("sets.anyGroup")}</option><option value="first">{t("sets.firstGroup")}</option><option value="last">{t("sets.lastGroup")}</option><option value="numbers">{t("sets.groupNumbers")}</option>
-            </select>
-            {Array.isArray(set.groups) && <input key={formatGroupNumbers(set.groups)} className="set-numbers" defaultValue={formatGroupNumbers(set.groups)} placeholder="1, 3-4" onBlur={event => { const numbers = parseGroupNumbers(event.target.value); save({ ...set, groups: numbers.length ? numbers : "any" }); }} aria-label={t("sets.groupNumbers")} />}
-          </label>
+          <ScopeFields value={set} onChange={change => save({ ...set, ...change })} rounds={rounds} />
         </div>
-        {lanes.length > 1 && <div className="set-lanes" role="group" aria-label={t("sets.where")}>
-          <span>{t("sets.where")}</span>
-          {lanes.map(lane => {
-            const on = set.lanes.includes(lane.key);
-            return <button key={lane.key} type="button" aria-pressed={on} className={on ? "on" : ""} onClick={() => save({ ...set, lanes: on ? set.lanes.filter(key => key !== lane.key) : [...set.lanes, lane.key] })}><i style={{ background: lane.color }} />{lane.name}</button>;
-          })}
-          {!set.lanes.length && <small>{t("sets.anyLane")}</small>}
-        </div>}
-        {Array.isArray(set.rounds) && <div className="set-rounds" role="group" aria-label={t("sets.pickRounds")}>
-          {rounds.map(round => {
-            const on = (set.rounds as string[]).includes(round.id);
-            return <button key={round.id} type="button" aria-pressed={on} className={on ? "on" : ""} onClick={() => save({ ...set, rounds: on ? (set.rounds as string[]).filter(id => id !== round.id) : [...(set.rounds as string[]), round.id] })} title={`${eventName(round.eventId)} · ${t("sets.roundNumber", { number: round.roundNumber })}`}><EventIcon eventId={round.eventId} />{round.roundNumber > 1 && <small>R{round.roundNumber}</small>}</button>;
-          })}
-        </div>}
+        <ScopeRows value={set} onChange={change => save({ ...set, ...change })} lanes={lanes} rounds={rounds} />
       </li>;
     })}</ol>
     <div className="set-templates">

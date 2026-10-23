@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { AssignmentSetsPanel } from "@/components/assignment-sets-panel";
+import { StationRulesPanel } from "@/components/station-rules-panel";
 import { EventIcon } from "@/components/event-icon";
 import { LanguageSwitcher, useEventName, useI18n } from "@/components/i18n";
 import { GroupReview } from "@/components/group-review";
@@ -24,6 +25,7 @@ import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOption
 import { isDelegate, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
+import { resolveStationRules, type StationRuleConfig } from "@/lib/pro/station-rules";
 import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
@@ -236,6 +238,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   });
   const sets = settings.pro?.sets ?? [];
   const setSets = (next: AssignmentSetConfig[]) => updatePro(() => ({ sets: next }));
+  const stationRuleList = settings.pro?.stationRules ?? [];
+  const setStationRules = (next: StationRuleConfig[]) => updatePro(() => ({ stationRules: next }));
   /** The cluster of a template (same rules), created when missing. */
   const clusterFor = (templateId: "organizers" | "delegating") => {
     const template = SEGMENT_TEMPLATES.find(item => item.id === templateId)!;
@@ -302,19 +306,21 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
       members: new Set([...byLane.values()].flatMap(members => [...members])),
     };
   })() : undefined;
-  // PRO: ordered assignment sets, resolved per round (a cluster may depend on the round's event).
-  const assignmentSets = pro && sets.some(set => !set.off) ? (() => {
-    const all = everyone(competition, proPeople);
+  // PRO: ordered assignment sets and station rules, resolved per round (a cluster may depend on the round's event).
+  const membersOf = (() => {
     const cache = new Map<string, Set<string>>();
-    const membersOf = (segmentId: string, eventId: string) => {
+    let all: ReturnType<typeof everyone> | undefined;
+    return (segmentId: string, eventId: string) => {
       const segment = segments.find(item => item.id === segmentId);
       if (!segment) return undefined;
       const key = `${segmentId}|${eventId}`;
+      all ??= everyone(competition, proPeople);
       if (!cache.has(key)) cache.set(key, new Set(segmentMembers(segment, all, { people: settings.people, pro: proPeople, segments, eventId }).map(personKey)));
       return cache.get(key);
     };
-    return (round: GenerationRound) => resolveSets(sets, round, slots?.get(round.id), membersOf);
-  })() : undefined;
+  })();
+  const assignmentSets = pro && sets.some(set => !set.off) ? (round: GenerationRound) => resolveSets(sets, round, slots?.get(round.id), membersOf) : undefined;
+  const stationRules = pro && stationRuleList.some(rule => !rule.off) ? (round: GenerationRound) => resolveStationRules(stationRuleList, round, slots?.get(round.id), membersOf) : undefined;
   const segmentFilters = pro && segments.length ? (() => {
     const context = { people: settings.people, pro: proPeople, segments };
     const all = everyone(competition, proPeople);
@@ -332,7 +338,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -403,6 +409,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           {pro && <>
             <h3 className="panel-subheading">{t("sets.title")} <Hint align="start" text={t("sets.hint")} /></h3>
             <AssignmentSetsPanel sets={sets} onChange={setSets} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} onCluster={clusterFor} />
+            <h3 className="panel-subheading">{t("stationRules.title")} <Hint align="start" text={t("stationRules.hint")} /></h3>
+            <StationRulesPanel rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} propertyKeys={proPeople.propertyKeys} />
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
             <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
               <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>

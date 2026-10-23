@@ -327,3 +327,8 @@ button.plain.danger{justify-self:start;color:var(--error)}
 @media (max-width:700px){.set-fields,.set-lanes,.set-rounds{padding-left:0}.set-star span{display:none}}
 .featured-star{margin-left:5px;color:#c99400;font-size:13px}
 .sheet-import-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.sheet-import-head .round-subtabs{margin-right:auto}.template-link{color:var(--blue);font-size:14px;font-weight:650;text-decoration:none}.template-link:hover{text-decoration:underline}
+.station-rules .set-head .set-fields{flex:1;min-width:0;padding-left:0}
+.station-order>span,.station-exclusion>span{color:var(--muted);font-size:13px;font-weight:700}
+.station-exclusion{padding-left:28px}
+.station-exclusion-add{padding-left:22px}
+@media (max-width:700px){.station-exclusion,.station-exclusion-add{padding-left:0}.station-rules .set-head{flex-wrap:wrap}}

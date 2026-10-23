@@ -4,6 +4,7 @@
  */
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
 import type { AssignmentSetConfig } from "@/lib/pro/assignment-sets";
+import type { StationRuleConfig } from "@/lib/pro/station-rules";
 import type { ProPeople } from "@/lib/pro/people";
 import type { ScoringConfig } from "@/lib/pro/scoring";
 import type { JobEligibility, Segment } from "@/lib/pro/segments";
@@ -46,8 +47,8 @@ export type LaneStaffing = {
   team?: string;
 };
 
-/** `sets`: ordered assignment sets for the competitor groups (lib/pro/assignment-sets.ts). */
-export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig; sets?: AssignmentSetConfig[] };
+/** `sets`: ordered assignment sets for the competitor groups (lib/pro/assignment-sets.ts); `stations`: station rules (lib/pro/station-rules.ts). */
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig; sets?: AssignmentSetConfig[]; stationRules?: StationRuleConfig[] };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**

@@ -41,7 +41,7 @@ export function newSetId(sets: AssignmentSetConfig[]) {
   return `set-${index}`;
 }
 
-export function appliesToRound(set: AssignmentSetConfig, round: { id: string; roundNumber: number }) {
+export function appliesToRound(set: Pick<AssignmentSetConfig, "rounds" | "off">, round: { id: string; roundNumber: number }) {
   if (set.off) return false;
   if (set.rounds === "all") return true;
   if (set.rounds === "first") return round.roundNumber === 1;

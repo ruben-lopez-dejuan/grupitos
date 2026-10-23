@@ -33,7 +33,7 @@ export function draftStorageKey(competitionId: string) {
 
 function usesSegments(settings: WorkspaceSettings) {
   const pro = settings.pro;
-  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && set.segment));
+  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && set.segment) || (pro.stationRules ?? []).some(rule => !rule.off && rule.exclusions.some(item => item.segment)));
 }
 
 /** Only the settings that change what the generator produces. */
@@ -54,6 +54,9 @@ export function generationSignature(settings: WorkspaceSettings) {
       jobs: settings.pro.jobs,
       staffing: settings.pro.staffing,
       sets: settings.pro.sets?.filter(set => !set.off).map(({ name: _name, ...set }) => set),
+      stationRules: settings.pro.stationRules?.filter(rule => !rule.off),
+      // A station rule by property reads people's properties.
+      stationProperties: settings.pro.stationRules?.some(rule => !rule.off && rule.sortBy === "property") ? settings.pro.people?.properties : undefined,
       scoring: settings.pro.scoring?.enabled ? settings.pro.scoring : undefined,
       preferences: settings.pro.scoring?.enabled && settings.pro.scoring.weights.preferences ? settings.pro.people?.properties : undefined,
       // Segments shape the proposal when they decide who may do a job or who staffs a room.

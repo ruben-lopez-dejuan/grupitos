@@ -7,6 +7,7 @@
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type PickReason, type Task, type TaskRole, type Why } from "@/lib/assignments";
 import type { ResolvedSet } from "@/lib/pro/assignment-sets";
+import { assignStations, type ResolvedStationRule } from "@/lib/pro/station-rules";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
@@ -169,7 +170,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -199,6 +200,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   laneTeams?: { forGroup: (roundId: string, group: number) => Set<string> | undefined; members: Set<string> };
   /** PRO mode: ordered assignment sets of each round (CompScript's AssignmentSet). */
   assignmentSets?: (round: GenerationRound) => ResolvedSet[];
+  /** PRO mode: station rule of each group of a round (CompScript's StationAssignmentRule), for fixed stations. */
+  stationRules?: (round: GenerationRound) => Map<number, ResolvedStationRule>;
 }): GeneratedAssignment[] {
   const accepted = [...acceptedPeople(competition), ...nonCompetingStaff(competition), ...extraPeople];
   const country = competitionCountry(competition);
@@ -337,10 +340,14 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const busyDuring = (key: string, group: number) => windowsOf(group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
     const stationsIn = (group: number) => staffing?.(round.id, group)?.stations ?? stations;
+    const stationRule = fixed ? stationRules?.(round) : undefined;
     groups.forEach((members, groupIndex) => {
+      const rule = stationRule?.get(groupIndex + 1);
+      const ruled = rule && assignStations(members.map(person => ({ key: personKey(person), seed: seedIndex.get(personKey(person))!, registrantId: person.registrantId, name: person.name, property: rule.property ? personProperties[personKey(person)]?.[rule.property] : undefined })), stationsIn(groupIndex + 1), rule);
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
-        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined, why: [] });
+        const station = ruled ? ruled.get(key) : fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined;
+        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station, why: [] });
       });
     });
     const rowFor = (person: WcifPerson) => {
