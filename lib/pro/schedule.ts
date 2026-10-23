@@ -41,6 +41,8 @@ export type ProSchedule = {
 /** Per room or stage (lane key): stations and staff per group; empty means the round's value. */
 export type LaneStaffing = {
   stations?: number;
+  /** Most competitors in one group of this room or stage; the others take the rest. */
+  maxPerGroup?: number;
   scramblers?: number;
   runners?: number;
   /** Segment of people dedicated to this room or stage (a side room team). */

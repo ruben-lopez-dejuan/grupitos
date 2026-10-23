@@ -18,6 +18,7 @@ export type IssueCode =
   | "station-out-of-range"
   | "duplicate-station"
   | "over-capacity"
+  | "over-group-limit"
   | "empty-group"
   | "missing-scramblers"
   | "missing-judges"
@@ -63,13 +64,13 @@ export type RoundRules = {
   /** PRO mode: who may do each job, from segments. */
   eligible?: Partial<Record<string, Set<string>>>;
   /** PRO mode: groups whose room or stage has its own stations or staff. */
-  byGroup?: Record<number, { stations?: number; scramblers?: number; runners?: number }>;
+  byGroup?: Record<number, { stations?: number; scramblers?: number; runners?: number; maxPerGroup?: number }>;
 };
 
 /** Stations and staff needed in one group: the room or stage's values, else the round's. */
 export function groupLimits(rules: RoundRules, group: number) {
   const own = rules.byGroup?.[group];
-  return { stations: own?.stations ?? rules.stations, scramblers: own?.scramblers ?? rules.scramblers, runners: own?.runners ?? rules.runners };
+  return { stations: own?.stations ?? rules.stations, scramblers: own?.scramblers ?? rules.scramblers, runners: own?.runners ?? rules.runners, maxPerGroup: own?.maxPerGroup };
 }
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1 };
@@ -140,6 +141,9 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       continue;
     }
     const limits = groupLimits(rules, group);
+    if (limits.maxPerGroup !== undefined && counts.competitor > limits.maxPerGroup) {
+      add({ severity: "warning", code: "over-group-limit", group, params: { group, count: counts.competitor, total: limits.maxPerGroup } });
+    }
     if (counts.scrambler < limits.scramblers) {
       add({ severity: "warning", code: "missing-scramblers", group, params: { group, count: counts.scrambler, need: limits.scramblers } });
     }

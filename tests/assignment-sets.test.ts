@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildDemoCompetition } from "@/lib/demo-competition";
-import { DEFAULT_OPTIONS, generateAssignments, splitWithSets } from "@/lib/group-generator";
+import { DEFAULT_OPTIONS, generateAssignments, groupTargets, splitWithSets } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { allowedGroups, formatGroupNumbers, parseGroupNumbers, resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { previewSets } from "@/lib/pro/sets-preview";
 import { groupSlots, targetKey, withScheduledGroups } from "@/lib/pro/schedule";
-import { initialRounds, personKey, roundCompetitors } from "@/lib/rounds";
+import { initialRounds, personKey, roundCompetitors, type GenerationRound } from "@/lib/rounds";
 
 const competition = buildDemoCompetition({ id: "Sets", name: "Sets", people: 40, events: ["333", "222"], newcomerShare: 0, seed: 11 });
 const bestFirst = roundCompetitors(competition, "333-r1").people;
@@ -126,5 +126,33 @@ describe("sets never overfill a group", () => {
     const preview = previewSets({ competition, rounds, membersOf: () => undefined, sets: [{ id: "big", name: "Big", top: 30, perGroup: false, rounds: "first", lanes: [], groups: [1] }] });
     // 40 people in four groups: group 1 has ten seats.
     expect(preview.get("big")).toEqual([{ roundId: "333-r1", wanted: 30, seats: 10, placed: 10 }]);
+  });
+});
+
+describe("a maximum per group on some stages", () => {
+  it("gives capped groups at most their maximum and the rest to the others", () => {
+    expect(groupTargets(30, [undefined, 5, undefined])).toEqual([13, 5, 12]);
+    expect(groupTargets(12, [undefined, undefined])).toEqual([6, 6]);
+    // Nothing fits: the emptiest groups take the rest and the review warns.
+    expect(groupTargets(10, [2, 2])).toEqual([5, 5]);
+  });
+
+  it("keeps the middle stage small in the proposal, with or without sets", () => {
+    const schedule = {
+      timeZone: "UTC", days: ["2026-02-21"], activities: [],
+      rooms: [{ id: 1, name: "Main", color: "#d93636", stages: [{ id: 1, name: "Left", color: "#d93636" }, { id: 2, name: "Middle", color: "#2563eb" }, { id: 3, name: "Right", color: "#2f9e44" }] }],
+      blocks: [1, 2, 3].map(stageId => ({ id: `b${stageId}`, activityCode: "333-r1", roomId: 1, stageId, start: "2026-02-21T10:00", end: "2026-02-21T11:00", groups: 1 })),
+    };
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(initialRounds(competition, 20, "waiting"), slots).filter(round => round.id === "333-r1");
+    const middle = slots.get("333-r1")!.find(slot => slot.stageId === 2)!.group;
+    const staffing = (_roundId: string, group: number) => group === middle ? { maxPerGroup: 6 } : undefined;
+    for (const assignmentSets of [undefined, (round: GenerationRound) => resolveSets([{ id: "top", name: "Top", top: 10, rounds: "first", lanes: [targetKey(1, 1)], groups: "any" }], round, slots.get(round.id), () => undefined)]) {
+      const assignments = generateAssignments({ competition, rounds, stations: 20, zoneMode: "waiting", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots, staffing, assignmentSets });
+      const sizes = [1, 2, 3].map(group => assignments.filter(item => item.tasks.some(task => task.role === "competitor" && task.group === group)).length);
+      expect(sizes[middle - 1]).toBe(6);
+      expect(sizes.reduce((a, b) => a + b, 0)).toBe(bestFirst.length);
+      expect(Math.abs(sizes.filter((_, index) => index !== middle - 1)[0] - sizes.filter((_, index) => index !== middle - 1)[1])).toBeLessThanOrEqual(1);
+    }
   });
 });

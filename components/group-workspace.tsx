@@ -365,7 +365,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const staffingFor = laneStaffing && ((roundId: string, group: number) => {
     const own = laneStaffing(roundId, group);
     if (!own || !settings.rounds.find(round => round.id === roundId)?.staffSetByHand) return own;
-    return own.stations === undefined ? undefined : { stations: own.stations };
+    // A round set by hand keeps its own scramblers and runners; stations and group sizes stay the stage's.
+    return own.stations === undefined && own.maxPerGroup === undefined ? undefined : { stations: own.stations, maxPerGroup: own.maxPerGroup };
   });
   const scoring = settings.pro?.scoring ?? DEFAULT_SCORING;
   const setScoring = (next: ScoringConfig) => updatePro(() => ({ scoring: next }));
@@ -492,13 +493,16 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
               <h3 className="panel-subheading">{t("staffing.title")} <Hint align="start" text={t("staffing.hint")} /></h3>
               <p className="setup-note staffing-note">{t("staffing.note")}</p>
               <div className="round-table staffing-grid">
-                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span>{t("staffing.team")} <Hint text={t("staffing.teamHint")} /></span></div>
+                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span>{t("staffing.maxPerGroup")} <Hint text={t("staffing.maxPerGroupHint")} /></span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span>{t("staffing.team")} <Hint text={t("staffing.teamHint")} /></span></div>
                 {scheduleLanes(pro.schedule).map(lane => {
                   const own = staffing[lane.key] ?? {};
                   const laneStations = own.stations ?? stations;
                   return <div key={lane.key} className="round-row">
                     <div><i className="lane-dot" style={{ background: lane.color }} /><div className="round-name"><strong>{lane.name}</strong>{lane.stageId !== undefined && <small>{lane.roomName}</small>}</div></div>
                     <Stepper label={t("zone.stations")} value={laneStations} min={1} big onChange={value => setStaffing(lane.key, { stations: value })} />
+                    {own.maxPerGroup === undefined
+                      ? <button type="button" className="plain max-per-group-off" onClick={() => setStaffing(lane.key, { maxPerGroup: laneStations })} title={t("staffing.maxPerGroupSet")}>{t("staffing.noMax")}</button>
+                      : <span className="max-per-group"><Stepper label={t("staffing.maxPerGroup")} value={own.maxPerGroup} min={1} onChange={value => setStaffing(lane.key, { maxPerGroup: value })} /><button type="button" className="rule-remove" onClick={() => setStaffing(lane.key, { maxPerGroup: undefined })} aria-label={t("staffing.clearMax", { lane: lane.name })}>×</button></span>}
                     {/* Without a value of its own, each round keeps its suggestion; a click starts from the usual one per five or eight stations. */}
                     <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={own.scramblers ?? suggestScramblers(laneStations, 1, laneStations)} auto={own.scramblers === undefined} min={0} onChange={value => setStaffing(lane.key, { scramblers: value })} />
                     <Stepper label={t("rounds.stepperRunners")} variant="runner" value={own.runners ?? suggestRunners(laneStations, 1, laneStations)} auto={own.runners === undefined} min={0} onChange={value => setStaffing(lane.key, { runners: value })} />
@@ -521,7 +525,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
           {pro && <>
             <h3 className="panel-subheading">{t("sets.title")} <Hint align="start" text={t("sets.hint")} /></h3>
-            <AssignmentSetsPanel sets={sets} onChange={setSets} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} onCluster={clusterFor} preview={sets.length ? previewSets({ competition, sets, rounds, slots, membersOf }) : undefined} />
+            <AssignmentSetsPanel sets={sets} onChange={setSets} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} onCluster={clusterFor} preview={sets.length ? previewSets({ competition, sets, rounds, slots, membersOf, maxPerGroup: (roundId, group) => staffingFor?.(roundId, group)?.maxPerGroup }) : undefined} />
             <h3 className="panel-subheading">{t("stationRules.title")} <Hint align="start" text={t("stationRules.hint")} /></h3>
             <StationRulesPanel rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} propertyKeys={proPeople.propertyKeys} />
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>

@@ -290,7 +290,7 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .team-roles small{color:var(--muted);font-weight:600}
 .team-roles select{padding:5px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:13px}
 
-.staffing-grid .round-table-head,.staffing-grid .round-row{grid-template-columns:minmax(170px,1.2fr) 140px 130px 130px minmax(150px,1fr)}
+.staffing-grid .round-table-head,.staffing-grid .round-row{grid-template-columns:minmax(140px,1.1fr) 116px 136px 112px 112px minmax(140px,1fr)}
 .staffing-grid .round-table-head span{display:flex;align-items:center;gap:4px}
 .lane-team{width:100%;min-width:0;padding:6px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:13px}
 
@@ -394,3 +394,7 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .set-preview.short{color:#a35d00;font-weight:650}
 :root[data-theme="dark"] .set-preview.short{color:#f3c27a}
 @media (max-width:700px){.set-events,.set-preview{padding-left:0}}
+
+/* Zone: max people per group per stage */
+.max-per-group{display:inline-flex;align-items:center;gap:2px}
+.max-per-group-off{color:var(--muted);font-size:13px}

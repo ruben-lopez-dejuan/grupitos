@@ -70,6 +70,8 @@ type CompetitorPlan = {
   allowed?: Map<string, Set<number>>;
   /** People marked as featured on their scorecard. */
   featured?: Set<string>;
+  /** Group sizes to keep when some stages have a maximum per group (otherwise groups stay even). */
+  targets?: number[];
 };
 
 const allowedIn = (plan: Pick<CompetitorPlan, "allowed">, person: WcifPerson, group: number) => plan.allowed?.get(personKey(person))?.has(group) ?? true;
@@ -136,7 +138,9 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
     for (const targetGroup of targets) {
       const target = plan.groups[targetGroup - 1];
       const nextSizes = plan.groups.map((members, index) => members.length + (index === fromGroup - 1 ? -1 : index === targetGroup - 1 ? 1 : 0));
-      if (Math.max(...nextSizes) - Math.min(...nextSizes) <= 1) {
+      // A move keeps groups even, or within their target sizes when stages have a maximum.
+      const fits = plan.targets ? nextSizes[targetGroup - 1] <= plan.targets[targetGroup - 1] : Math.max(...nextSizes) - Math.min(...nextSizes) <= 1;
+      if (fits) {
         source.splice(sourceIndex, 1);
         target.push(person);
         return true;
@@ -200,7 +204,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   /** PRO mode: who (keys) may judge, scramble or run, per event; absent means the usual rules. */
   eligible?: Partial<Record<"judge" | "scrambler" | "runner", Map<string, Set<string>>>>;
   /** PRO mode: stations and staff per group where a room or stage overrides the round's values. */
-  staffing?: (roundId: string, group: number) => { stations?: number; scramblers?: number; runners?: number } | undefined;
+  staffing?: (roundId: string, group: number) => { stations?: number; scramblers?: number; runners?: number; maxPerGroup?: number } | undefined;
   /** PRO mode: weighted criteria; scramblers, runners and judges are then chosen per group by an integer program. */
   scoring?: ScoringConfig;
   /** PRO mode: person properties, for preference weights (`weight-judge`…). */
@@ -260,13 +264,17 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
     const rule = firstRound ? options.sortingRule : "ranks";
     const primary = Math.max(1, round.groups - linkedColumns(round.id).length);
+    // Stages with a maximum per group keep to it; the other groups take the rest.
+    const caps = Array.from({ length: primary }, (_, index) => staffing?.(round.id, index + 1)?.maxPerGroup);
+    const targets = caps.some(cap => cap !== undefined) ? groupTargets(competitors.length, caps) : undefined;
     const sets = assignmentSets?.({ ...round, groups: primary }) ?? [];
-    const { groups, allowed, featured } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId) : { groups: splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined };
+    const { groups, allowed, featured } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
+      : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined };
     if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group));
     const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     const preferredGroup = new Map<string, number>();
     groups.forEach((members, groupIndex) => members.forEach(person => preferredGroup.set(personKey(person), groupIndex + 1)));
-    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured }];
+    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured, targets }];
   });
   // Room teams (the side room team) are kept free to work in their room when that is possible.
   const reserved = new Map<string, Array<{ roundId: string; window: TimeWindow }>>();
@@ -781,21 +789,23 @@ export type SetStats = { id: string; name: string; wanted: number; seats: number
  * are left to the next sets and to the sorting rule, and the stats say how many. Whoever is left
  * fills the remaining seats so that groups stay even, following the sorting rule.
  */
-export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets: ResolvedSet[], rule: SortingRule, eventId: string) {
+export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets: ResolvedSet[], rule: SortingRule, eventId: string, targets?: number[]) {
   const groups: WcifPerson[][] = Array.from({ length: groupCount }, () => []);
   const allowed = new Map<string, Set<number>>();
   const featured = new Set<string>();
   const stats: SetStats[] = [];
-  const limit = Math.ceil(bestFirst.length / Math.max(1, groupCount));
+  const even = Math.ceil(bestFirst.length / Math.max(1, groupCount));
+  /** Seats of each group: its target size when stages have a maximum, else the even size. */
+  const seatsOf = (group: number) => targets?.[group - 1] ?? even;
   for (const set of sets) {
     const eligible = set.groups.filter(group => group >= 1 && group <= groupCount);
     // A set with no group in this round (its stage is not used) does not apply here.
     if (!eligible.length) continue;
     const queue = bestFirst.filter((person, index) => !allowed.has(personKey(person)) && (set.top === undefined || index < set.top) && (!set.members || set.members.has(personKey(person))));
-    const seats = eligible.reduce((sum, group) => sum + Math.max(0, limit - groups[group - 1].length), 0);
+    const seats = eligible.reduce((sum, group) => sum + Math.max(0, seatsOf(group) - groups[group - 1].length), 0);
     let placed = 0;
     for (let pass = 0; queue.length; pass += 1) {
-      const open = eligible.filter(group => groups[group - 1].length < limit);
+      const open = eligible.filter(group => groups[group - 1].length < seatsOf(group));
       if (!open.length) break;
       // Alternating the tie order snakes the best people over the groups.
       open.sort((a, b) => groups[a - 1].length - groups[b - 1].length || (pass % 2 ? b - a : a - b));
@@ -810,16 +820,38 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
     }
     stats.push({ id: set.id, name: set.name, wanted: placed + queue.length, seats, placed });
   }
-  if (!allowed.size) return { groups: splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined, stats };
+  if (!allowed.size) return { groups: targets ? fillByRule(bestFirst, targets, rule, eventId) : splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined, stats };
   const rest = bestFirst.filter(person => !allowed.has(personKey(person)));
   const sizes = groups.map(members => members.length);
-  for (let left = rest.length; left > 0; left -= 1) sizes[sizes.indexOf(Math.min(...sizes))] += 1;
+  // Groups below their target first (fewest people first); past every target, the smallest.
+  for (let left = rest.length; left > 0; left -= 1) {
+    const below = sizes.map((size, index) => ({ size, index })).filter(item => !targets || item.size < targets[item.index]);
+    const pool = below.length ? below : sizes.map((size, index) => ({ size, index }));
+    const pick = pool.reduce((best, item) => item.size < best.size ? item : best);
+    sizes[pick.index] += 1;
+  }
   fillByRule(rest, sizes.map((size, index) => size - groups[index].length), rule, eventId).forEach((members, index) => groups[index].push(...members));
   return { groups, allowed, featured, stats };
 }
 
+/**
+ * Group sizes when some groups have a maximum (`caps`): people go to the emptiest group still below
+ * its maximum, the first ones first, so uncapped groups share what capped ones cannot take. When
+ * every group is full, the rest go to the emptiest groups and the review warns.
+ */
+export function groupTargets(count: number, caps: Array<number | undefined>) {
+  const sizes = caps.map(() => 0);
+  for (let left = count; left > 0; left -= 1) {
+    const open = sizes.map((size, index) => ({ size, index })).filter(item => caps[item.index] === undefined || item.size < caps[item.index]!);
+    const pool = open.length ? open : sizes.map((size, index) => ({ size, index }));
+    const pick = pool.reduce((best, item) => item.size < best.size ? item : best);
+    sizes[pick.index] += 1;
+  }
+  return sizes;
+}
+
 /** Splits people (best first) into groups of the given sizes, as `splitIntoGroups` would. */
-function fillByRule(bestFirst: WcifPerson[], capacities: number[], rule: SortingRule, eventId: string) {
+export function fillByRule(bestFirst: WcifPerson[], capacities: number[], rule: SortingRule, eventId: string) {
   const groups: WcifPerson[][] = capacities.map(() => []);
   const symmetric = rule === "symmetric" || rule === "scrambler-safe" || (rule === "balanced" && !BALANCED_BY_RANKS.includes(eventId));
   if (symmetric) {
