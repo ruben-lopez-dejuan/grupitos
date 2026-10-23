@@ -3,7 +3,7 @@ import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
-import { nonCompetingStaff, peopleFromWcif } from "@/lib/people";
+import { hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, staffRoleFromWcif } from "@/lib/people";
 import { applyTeamRoles, suggestTeamLane, everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, suggestTeamRole, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
@@ -142,5 +142,26 @@ describe("teams dedicated to a room", () => {
     const pro = normalizeProPeople({ propertyKeys: ["team"], properties: { a: { team: "Side room" }, b: { team: "Voluntario normal" } } });
     const result = applyTeamRoles({ roles: {}, trustedIds: [], delegateDutyIds: [] }, pro, { property: "team", map: { "Side room": "lane:1:room", "Voluntario normal": "staff" } });
     expect(result.settings.roles).toEqual({ staff: ["b"] });
+  });
+});
+
+describe("WCA staff roles", () => {
+  it("follow Groupifier's meaning", () => {
+    expect(staffRoleFromWcif(["staff-judge"])).toBe("staff");
+    expect(staffRoleFromWcif(["staff-other"])).toBe("avoid");
+    expect(staffRoleFromWcif(["staff-other", "staff-scrambler"])).toBe("staff");
+    expect(staffRoleFromWcif(["staff-dataentry", "staff-judge"])).toBe("dataentry");
+    expect(staffRoleFromWcif(["organizer"])).toBeUndefined();
+    expect(hasWcaJob({ roles: ["staff-runner"] }, "runner")).toBe(true);
+    expect(hasWcaJob({ roles: ["staff-runner"] }, "judge")).toBe(false);
+  });
+
+  it("move staff-other people out of staff in older drafts, once", () => {
+    const competition = { id: "X", name: "X", persons: [{ registrantId: 1, name: "A", roles: ["staff-other"] }, { registrantId: 2, name: "B", roles: ["staff-judge"] }] } as unknown as StoredCompetition;
+    const old = { roles: { staff: ["1", "2"] }, trustedIds: [], delegateDutyIds: [] };
+    const migrated = migrateWcaStaffRoles(old, competition);
+    expect(migrated.roles).toEqual({ staff: ["2"], avoid: ["1"] });
+    // A later manual change is kept.
+    expect(migrateWcaStaffRoles({ ...migrated, roles: { staff: ["1", "2"] } }, competition).roles.staff).toEqual(["1", "2"]);
   });
 });

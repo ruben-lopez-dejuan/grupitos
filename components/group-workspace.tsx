@@ -22,7 +22,7 @@ import { keyOf } from "@/lib/i18n";
 import { getCompetition, type StoredCompetition } from "@/lib/competition-store";
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
-import { isDelegate, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
+import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { resolveStationRules, type StationRuleConfig } from "@/lib/pro/station-rules";
@@ -88,7 +88,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
       if (!data) return;
       const draft = parseDraft(localStorage.getItem(draftStorageKey(data.id)));
       const defaults = defaultSettings(data);
-      setSettings(draft?.settings ? { ...defaults, ...draft.settings, options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
+      setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
       if (draft) {
         setProposal(draft.assignments);
         setGeneratedWith(draft.generatedWith);
@@ -156,6 +156,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     add(settings.people.roles.organizer, t("people.roleTags.organizer"));
     add(settings.people.roles.staff, t("people.roleTags.staff"));
     add(settings.people.roles.dataentry, t("people.roleTags.dataentry"));
+    add(settings.people.roles.avoid, t("people.roleTags.avoid"));
     add(settings.people.roles.notasks, t("people.roleTags.notasks"));
     add(settings.people.trustedIds, t("people.roleTags.trusted"));
     if (settings.pro?.enabled) add(settings.pro.people?.volunteers.map(volunteer => volunteer.key), t("proPeople.volunteerTag"));

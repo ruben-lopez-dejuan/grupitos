@@ -9,7 +9,7 @@ import { solveGroupStaff } from "@/lib/pro/staff-ilp";
 import { initialRounds, judgesNeeded } from "@/lib/rounds";
 import { validateTimes } from "@/lib/validation";
 
-const facts = (change: Partial<ScoringFacts> = {}): ScoringFacts => ({ load: 0, hoursToday: 0, sameJobStreak: 0, staffStreak: 20, competesRightAfter: false, competesInEvent: false, canScramble: false, isStaff: false, isTrusted: false, speed: 0, preference: 0, youngerThan10: false, ...change });
+const facts = (change: Partial<ScoringFacts> = {}): ScoringFacts => ({ load: 0, hoursToday: 0, sameJobStreak: 0, staffStreak: 20, competesRightAfter: false, competesInEvent: false, canScramble: false, isStaff: false, wcaJob: false, isTrusted: false, speed: 0, preference: 0, youngerThan10: false, ...change });
 
 describe("criteria", () => {
   it("turns facts into values like CompScript's scorers", () => {
@@ -89,5 +89,12 @@ describe("weighted engine on a two-stage schedule", () => {
   it("keeps the order of rounds and runs in reasonable time", () => {
     expect([...new Set(assignments.map(item => item.roundId))]).toEqual(rounds.filter(item => item.enabled && item.competitorsKnown).map(item => item.id));
     expect(elapsed).toBeLessThan(15000);
+  });
+});
+
+describe("criteria added later", () => {
+  it("keep a saved preset a preset", () => {
+    const { wcaJob: _wcaJob, ...savedAmore } = PROFILE_WEIGHTS.amore;
+    expect(matchingProfile(normalizeScoring({ enabled: true, weights: savedAmore })!.weights)).toBe("amore");
   });
 });

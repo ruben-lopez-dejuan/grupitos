@@ -6,7 +6,7 @@
  */
 import type { TaskRole } from "@/lib/assignments";
 
-export const CRITERIA = ["load", "hoursToday", "keepSameJob", "longStreak", "beforeCompeting", "competesInEvent", "reserveScramblers", "staff", "trusted", "speed", "preferences", "young"] as const;
+export const CRITERIA = ["load", "hoursToday", "keepSameJob", "longStreak", "beforeCompeting", "competesInEvent", "reserveScramblers", "staff", "wcaJob", "trusted", "speed", "preferences", "young"] as const;
 export type Criterion = typeof CRITERIA[number];
 export type Weights = Record<Criterion, number>;
 
@@ -29,6 +29,8 @@ export type ScoringFacts = {
   /** Could scramble this event (scrambler segment or the faster half). */
   canScramble: boolean;
   isStaff: boolean;
+  /** Has the WCA role for this job (`staff-judge`, `staff-scrambler`, `staff-runner`). */
+  wcaJob: boolean;
   isTrusted: boolean;
   /** 0–1: 1 for the fastest in the round, 0 without a result. */
   speed: number;
@@ -52,6 +54,7 @@ export function criterionValues(facts: ScoringFacts, job: TaskRole): Record<Crit
     competesInEvent: facts.competesInEvent ? 1 : 0,
     reserveScramblers: facts.canScramble && (job === "judge" || job === "runner") ? 1 : 0,
     staff: facts.isStaff ? 1 : 0,
+    wcaJob: facts.wcaJob ? 1 : 0,
     trusted: facts.isTrusted && job === "scrambler" ? 1 : 0,
     speed: job === "scrambler" ? facts.speed : 0,
     preferences: facts.preference,
@@ -75,8 +78,8 @@ export type ScoringProfile = typeof SCORING_PROFILES[number];
 
 /** Presets. "amore" mirrors the VolunteerScorers of the Amore Open 2026 scripts. */
 export const PROFILE_WEIGHTS: Record<ScoringProfile, Weights> = {
-  balanced: { load: -10, hoursToday: -4, keepSameJob: 10, longStreak: -20, beforeCompeting: -50, competesInEvent: 20, reserveScramblers: -20, staff: 30, trusted: 30, speed: 10, preferences: 10, young: -40 },
-  amore: { load: -10, hoursToday: -5, keepSameJob: 4, longStreak: -3, beforeCompeting: -50, competesInEvent: 50, reserveScramblers: -50, staff: 0, trusted: 0, speed: 0, preferences: 0, young: 0 },
+  balanced: { load: -10, hoursToday: -4, keepSameJob: 10, longStreak: -20, beforeCompeting: -50, competesInEvent: 20, reserveScramblers: -20, staff: 30, wcaJob: 40, trusted: 30, speed: 10, preferences: 10, young: -40 },
+  amore: { load: -10, hoursToday: -5, keepSameJob: 4, longStreak: -3, beforeCompeting: -50, competesInEvent: 50, reserveScramblers: -50, staff: 0, wcaJob: 0, trusted: 0, speed: 0, preferences: 0, young: 0 },
 };
 
 export const DEFAULT_SCORING: ScoringConfig = { enabled: false, weights: PROFILE_WEIGHTS.balanced };
@@ -89,7 +92,10 @@ export function matchingProfile(weights: Weights): ScoringProfile | undefined {
 export function normalizeScoring(value: unknown): ScoringConfig | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Partial<ScoringConfig>;
-  const weights = { ...DEFAULT_SCORING.weights };
+  // Criteria added later take the value of the preset the saved weights match, so a preset stays one.
+  const saved = (criterion: Criterion) => raw.weights?.[criterion];
+  const preset = SCORING_PROFILES.find(profile => CRITERIA.every(criterion => saved(criterion) === undefined || saved(criterion) === PROFILE_WEIGHTS[profile][criterion]));
+  const weights = { ...(preset ? PROFILE_WEIGHTS[preset] : DEFAULT_SCORING.weights) };
   for (const criterion of CRITERIA) {
     const weight = raw.weights?.[criterion];
     if (typeof weight === "number" && Number.isFinite(weight)) weights[criterion] = weight;

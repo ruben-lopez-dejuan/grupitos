@@ -186,7 +186,9 @@ describe("generateAssignments — reglas concretas", () => {
     const settings = { ...people, roles: { ...people.roles, staff: [staffKey] } };
     const result = run({}, settings);
     const load = (key: string) => result.filter(item => item.personId === key).flatMap(duties).length;
-    const others = result.filter(item => item.inRound && !settings.roles.staff.includes(item.personId)).map(item => duties(item).length);
+    // People with a WCA job role (staff-judge) are preferred for that job too, so they are left out.
+    const withJobRole = new Set(acceptedPeople(competition).filter(person => person.roles?.some(role => role.startsWith("staff-"))).map(personKey));
+    const others = result.filter(item => item.inRound && !settings.roles.staff.includes(item.personId) && !withJobRole.has(item.personId)).map(item => duties(item).length);
     expect(load(staffKey)).toBeGreaterThan(Math.max(...others));
   });
 

@@ -12,7 +12,7 @@ import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
-import { ageOf, competitionCountry, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
+import { ageOf, competitionCountry, hasWcaJob, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, SCRAMBLE_EVENT, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
@@ -212,6 +212,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const staff = new Set([...set(people.roles.staff), ...extraPeople.map(personKey)]);
   const dataEntry = set(people.roles.dataentry);
   const noTasks = set(people.roles.notasks);
+  const avoid = set(people.roles.avoid);
   const trusted = set(people.trustedIds);
   const delegateDuty = set(people.delegateDutyIds);
   const globalLoad = new Map<string, number>();
@@ -229,7 +230,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   /** Start minutes of the groups each person competes in. */
   const competingStarts = new Map<string, number[]>();
 
-  const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0);
+  // People with another job: tasks only when nobody else can (Groupifier's busy roles and staff-other).
+  const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0) + (avoid.has(key) ? 1 : 0);
   const normalTasksAllowed = (key: string) => !dataEntry.has(key) && !noTasks.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
   const othersCount = Math.max(1, accepted.filter(person => normalTasksAllowed(personKey(person)) && !staff.has(personKey(person))).length);
 
@@ -413,6 +415,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       if (role === "dataentry") reasons.push("dataEntry");
       if (volunteers.has(key)) reasons.push("volunteer");
       else if (staff.has(key) && role !== "delegate" && role !== "dataentry") reasons.push("staff");
+      const person = accepted.find(candidate => personKey(candidate) === key);
+      if (person && hasWcaJob(person, role)) reasons.push("wcaJob");
+      if (avoid.has(key)) reasons.push("avoided");
       if (trusted.has(key) && role === "scrambler") reasons.push("trusted");
       if ((role === "judge" || role === "scrambler" || role === "runner") && allowed(role)) reasons.push("segment");
       else if (role === "scrambler" && strictScramblers && !trusted.has(key)) reasons.push("fastHalf");
@@ -439,7 +444,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       if (!normalTasksAllowed(key)) return false;
       // A scrambler segment (PRO) replaces the built-in speed rule.
       if (allowed("scrambler")) return allowed("scrambler")!.has(key);
-      if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
+      if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key) && !hasWcaJob(person, "scrambler")) return false;
       return !strictScramblers || trusted.has(key) || (canScrambleHere(person) && (scrambleRank.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
     // Reserve: people outside the pool with a result in the event scrambled for this one (4BLD
@@ -456,10 +461,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     fill("scrambler", scramblersNeeded, scramblerPool, (person, group) => {
       const key = personKey(person);
       // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
-      if (strictScramblers) return [roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
+      // People with the WCA role staff-scrambler are tried first, as in Groupifier.
+      const wcaJob = hasWcaJob(person, "scrambler") && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2 ? 0 : 1;
+      if (strictScramblers) return [wcaJob, roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
       // Groupifier's criteria. Staff are generic here (not scrambling specialists), so they only
       // win among equally suitable people, like trusted people do.
       return [
+        wcaJob,
         options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
         youngerThan10(person),
         -suitability(person),
@@ -554,6 +562,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           competesInEvent: registeredForEvent(person) && !delegates.has(key),
           canScramble: scramblerKeys.has(key),
           isStaff: staff.has(key),
+          wcaJob: hasWcaJob(person, job),
           isTrusted: trusted.has(key),
           speed: hasResult(person) && seedIndex.has(key) ? 1 - seedIndex.get(key)! / Math.max(1, competitors.length) : 0,
           preference: Number.isFinite(preference) ? preference : 0,
@@ -602,7 +611,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const staffPreferred = (key: string) => staff.has(key) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
     const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
       const key = personKey(person);
-      if (staffPreferred(key)) return [0, load(key), beforeOwn(key, group)];
+      // staff-judge / staff-runner (WCA roles) come first for their job, then the rest of the staff.
+      const wcaJob = hasWcaJob(person, role) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
+      if (wcaJob || staffPreferred(key)) return [0, wcaJob ? 0 : 1, load(key), beforeOwn(key, group)];
       return [1,
         role === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country ? 1 : 0,
         options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
