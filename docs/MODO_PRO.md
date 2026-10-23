@@ -92,7 +92,7 @@ Cada fase deja algo usable.
    - Pendiente para fases siguientes: estaciones por escenario, nombres de escenario en las hojas de tiempos y publicación del horario al WCIF.
 2. **Personas y segmentos.** Etiquetas, importación de CSV, voluntarios extra, indisponibilidades y constructor de filtros. *Hecha (23/10/2026):* propiedades (con las de natshelper), voluntarios, indisponibilidades (franja o «mientras compite X»), importación de Google Sheets (cuenta de servicio, pendiente de crear) o CSV, segmentos con constructor visual y plantillas, filtro por segmento en la revisión.
 3. **Motor de personal.** Trabajos por escenario, elegibilidad, puntuación con pesos y «¿por qué?». *Hecha (23/10/2026):* elegibilidad por segmento y por prueba (límites de marca por prueba con correspondencias, como `CanScramble`), personal predeterminado por sala y escenario, puntuación con pesos y perfiles e ILP por grupo, «¿por qué esta persona?» con la puntuación desglosada y solapes cortos encadenados.
-4. **Reparto de grupos avanzado.** Conjuntos ordenados, estaciones y destacados.
+4. **Reparto de grupos avanzado.** Conjuntos ordenados, estaciones y destacados. *Conjuntos y destacados hechos (23/10/2026):* lista ordenada en Reglas con cluster y/o «los mejores N» (por grupo o por ronda), rondas, salas o escenarios, números de grupo y estrella en la hoja de tiempos; el resto sigue la regla de orden. Pendiente: reglas de estación.
 5. **Equipos.** Rotación por día y equipos equilibrados automáticos.
 6. **Publicación e informes.** Escribir en el WCIF (también para el modo normal) e informes exportables.
 

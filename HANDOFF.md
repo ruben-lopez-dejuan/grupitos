@@ -71,7 +71,7 @@ Preferencias firmes del usuario:
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 
-No hay barra lateral: la barra superior lleva la marca, la competición con «Cambiar competición» al lado, el interruptor PRO y la cuenta. El pie lleva el botón «Siguiente: …» de cada paso; **los grupos solo se generan desde el paso Grupos**. Además, y las pestañas van numeradas (un ✓ en «Revisar» cuando hay propuesta, y el paso «Publicar» al final, aún no disponible). La pestaña activa se sincroniza con el hash de la URL. Con PRO apagado no aparecen Horario ni Segmentos.
+No hay barra lateral: la barra superior lleva la marca, la competición con «Cambiar competición» al lado, el interruptor PRO y la cuenta. El pie lleva el botón «Siguiente: …» de cada paso; **los grupos solo se generan desde el paso Grupos**. Además, y las pestañas van numeradas (un ✓ en «Revisar» cuando hay propuesta, y el paso «Publicar» al final, aún no disponible). La pestaña activa se sincroniza con el hash de la URL. Con PRO apagado no aparecen Horario ni Clusters.
 
 1. **Zona:** número de estaciones y modo de entrada (puestos fijos, sala de espera o mixto, que usa sala de espera en primeras rondas y puestos fijos después).
 2. **Horario** (solo PRO): ver sección 6.
@@ -80,7 +80,7 @@ No hay barra lateral: la barra superior lleva la marca, la competición con «Ca
    - Opciones de tareas: asignar jueces y runners, evitar trabajar justo antes del propio grupo, repartir delegados, permitir tareas normales a delegados y organizadores, tareas de delegado y data entry.
    - Otras opciones: sin tareas para newcomers, tareas solo en las propias pruebas, sin runners extranjeros.
 4. **Personas** (`components/people-panel.tsx`): roles (delegado, delegado en prácticas, organizador, staff, data entry), personal de confianza, quién hace tareas de delegado, fotos y marca de newcomer. En PRO, además, voluntarios, indisponibilidades, importación de hoja de cálculo y tabla de propiedades (sección 6).
-5. **Segmentos** (solo PRO): sección 6.
+5. **Clusters** (solo PRO; en el código siguen llamándose `segments`): sección 6.
 6. **Grupos:** primeras rondas y rondas siguientes; para cada ronda, grupos totales, scramblers y runners con steppers; botón para excluir una ronda o reactivarla. En PRO, el total se reparte entre los bloques del horario y se ve el reparto por escenario.
 7. **Revisar** (`components/group-review.tsx`): matriz al estilo Delegate Dashboard.
    - Una persona por fila y un grupo por columna.
@@ -144,7 +144,7 @@ Referencias. Clonarlas si hace falta; están fuera del repo.
 
 ## 6. Modo PRO: estado (23/10/2026)
 
-Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segments?, jobs? }` (`lib/pro/*`), guardada con el borrador. `parseDraft()` normaliza borradores antiguos (incluido el de la fase 1, que guardaba salas como escenarios).
+Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segments?, jobs?, staffing?, scoring?, sets? }` (`lib/pro/*`), guardada con el borrador. `parseDraft()` normaliza borradores antiguos (incluido el de la fase 1, que guardaba salas como escenarios).
 
 ### 6.1. Fase 1: horario, salas y escenarios (hecha)
 
@@ -180,7 +180,24 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
 - **Mezcladores de reserva**: si un grupo no se cubre con el grupo habitual (rondas de un solo grupo en sala auxiliar, escenarios en paralelo), entra gente que no compite en la ronda pero tiene marca en la prueba que se mezcla (`SCRAMBLE_EVENT`: 4BLD → 4x4, 5BLD → 5x5, BLD/OH/multi → 3x3).
 - **Equipo por sala o escenario** (Zona, PRO, `LaneStaffing.team`): un segmento dedicado a esa sala; sus miembros van primero allí y no trabajan en ningún otro sitio.
 - Con el WCIF del Nacional ya no queda ningún grupo sin delegado ni sin mezcladores, con reglas o con puntuación.
-- **Prioridad de asignación** (Reglas, todos los modos, `options.taskOrder`, `components/task-order-panel.tsx`): lista ordenable con flechas de delegado de turno, mezcladores, data entry, runners y jueces. Con reglas, cada tarea elige en ese orden dentro de cada ronda; con el delegado primero (por defecto) sus horas se reservan para toda la competición. Con puntuación, mezcladores, runners y jueces se resuelven juntos y los puestos de las primeras tareas valen más en el ILP (`solveGroupStaff(…, priority)`), así que se cubren antes si falta gente.
+- **Prioridad de tareas de staff** (Reglas → «Más opciones», todos los modos, `options.taskOrder`, `components/task-order-panel.tsx`): lista ordenable con flechas de delegado de turno, mezcladores, data entry, runners y jueces. Con reglas, cada tarea elige en ese orden dentro de cada ronda; con el delegado primero (por defecto) sus horas se reservan para toda la competición. Con puntuación, mezcladores, runners y jueces se resuelven juntos y los puestos de las primeras tareas valen más en el ILP (`solveGroupStaff(…, priority)`), así que se cubren antes si falta gente. El usuario aclaró que lo que quería era el orden de los conjuntos de la sección 6.5; este panel se quedó en «Más opciones».
+- **Data entry**: una persona por franja horaria, no por escenario; se asigna en el primer grupo que se encuentra a esa hora y la validación da por cubiertos los grupos paralelos (`dataEntryCovered`).
+- **CanScramble**: una prueba sin límite acepta a cualquiera con marca en la prueba que se mezcla, y la correspondencia incluye 4BLD → 4x4 y 5BLD → 5x5 (`SCRAMBLE_EVENT`). La plantilla «Pueden mezclar» ya no exige estar inscrito en la ronda. Los mezcladores de 4BLD/5BLD con marca solo en 4x4/5x5 no dan aviso (`scrambleResult`).
+- **Equipo → sala** (Personas, PRO): en «Equipos» un equipo puede ir a una sala o escenario («Equipo de Sala Auxiliar»); al aplicar se crea el cluster «Equipo: X» y se pone como equipo de esa sala en Zona. Se sugiere solo para equipos tipo «side/aux» y salas sin escenarios.
+- **Clusters**: los segmentos se llaman clusters en la interfaz y hay más plantillas (delegados de servicio, organizadores, delegados y en prácticas, newcomers, mayores de edad, equipo side room, staff y voluntarios).
+
+### 6.5. Fase 4: orden de asignación de grupos y destacados (23/10/2026)
+
+- **Conjuntos de asignación** (Reglas, PRO, `settings.pro.sets`, `lib/pro/assignment-sets.ts`, `components/assignment-sets-panel.tsx`): el `AssignmentSet` de CompScript, leído en `groups/assign.js` y en los scripts del Amore y de los nacionales de EE. UU. Lista ordenada; cada conjunto tiene:
+  - **Quién**: un cluster y/o «solo los mejores N» (por grupo permitido, como `TopCompetitorsPerRound` = 4 × grupos del Rojo, o por ronda). «Los mejores» es el orden del psych sheet en primeras rondas y la clasificación de la ronda anterior después (`roundCompetitors`).
+  - **Rondas**: primeras rondas, todas o elegidas.
+  - **Dónde**: salas o escenarios (una sala incluye sus escenarios) y números de grupo (cualquiera, el primero, el último o una lista «1, 3-4»), con el número que ve la gente.
+  - **Destacado**: estrella en la revisión y en la hoja de tiempos (arriba a la derecha, como Groupifier; Roboto no tiene ★, así que es un SVG).
+- **Algoritmo** (`splitWithSets()` en `lib/group-generator.ts`): como `Assign` de CompScript, cada conjunto toma a su gente aún sin colocar, de mejor a peor, y la reparte una por grupo y pasada, el grupo más vacío primero (el desempate alterna para hacer serpiente), sin pasar del tamaño par `ceil(n / grupos)` salvo que todos sus grupos estén llenos. Los conjuntos posteriores no mueven a nadie. El resto rellena los huecos con la regla de orden (simétrica: de uno en uno desde el último grupo; por ranking: tramos consecutivos) de forma que los grupos quedan parejos. Si ningún conjunto coloca a nadie, se usa el reparto de siempre. El arreglo de solapes y el reparto de delegados solo mueven a la gente de un conjunto entre los grupos de ese conjunto.
+- Diferencias con CompScript: no hay scorers por grupo (`ByMatchingValue`, `RecentlyCompeted`…) ni reglas de estación; el reparto dentro de un conjunto es determinista en vez de un ILP; el destacado no se escribe aún en `groupifier.ActivityConfig.featuredCompetitorWcaUserIds` (se hará con la publicación al WCIF).
+- Plantillas: «Destacados (streaming)» (top 4 por grupo en el primer escenario, primeras rondas), «Organizadores» y «Delegados de servicio» (crean su cluster si no existe, reutilizándolo si ya hay uno con las mismas reglas) y «Un cluster».
+- Comprobado con el WCIF del Nacional: con «top 4 por grupo en Araba» salen 144 destacados en 13 primeras rondas, todos en Araba y sin ningún solape.
+- **Plantilla CSV de pesos** (Personas → importar hoja): un enlace descarga un CSV con una fila por persona (ID, WCA ID, nombre), las columnas `weight-judge`, `weight-scrambler`, `weight-runner` y `team` y las propiedades existentes con sus valores. Una columna «ID» empareja por número de inscripción, así que al reimportarla también encuentra a los newcomers.
 
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
@@ -193,7 +210,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 
 ## 7. Siguientes fases
 
-1. **Fase 4, reparto avanzado en grupos:** conjuntos ordenados de personas (por segmento) asignados a escenarios y grupos, reglas de estación y competidores destacados.
+1. **Fase 4, reparto avanzado en grupos:** hechos los conjuntos ordenados y los destacados (6.5). Faltan las reglas de estación (`StationAssignmentRule`: estaciones por psych sheet o por posición de la ronda anterior, con exclusiones como las estaciones del streaming) y, quizá, scorers por grupo (nombres parecidos, mismo país, «ha competido hace poco»).
 2. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.
 3. **Fase 6, publicación e informes:**
    - **WCIF v2**: la importación ya pide `GET /api/v0/competitions/{id}/wcif/version/2` (formato 2.2; con el token del organizador devuelve el WCIF privado). Para publicar, `PATCH /api/v0/competitions/{id}/wcif` y **hay que mandar siempre `formatVersion` e `id`** (recomendación de la WCA que trasladó el usuario).
