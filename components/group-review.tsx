@@ -504,7 +504,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
       const load = loads.get(item.personId) ?? 0;
       return <tr key={item.id} className={item.inRound ? "" : "staff-row"}>
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
-        <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issueText).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title={t("review.openCard")}>{item.name}</button><small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
+        <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issueText).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title={t("review.openCard")}>{item.name}</button>{item.featured && <span className="featured-star" title={t("sets.featuredHelp")} aria-label={t("sets.featured")}>★</span>}<small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
         <td>{formatSeed(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label={t("review.competesHere")}>✓</span> : <span className="muted-mark" aria-label={t("review.onlyWorks")}>—</span>}</td>

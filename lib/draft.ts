@@ -33,7 +33,7 @@ export function draftStorageKey(competitionId: string) {
 
 function usesSegments(settings: WorkspaceSettings) {
   const pro = settings.pro;
-  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team));
+  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && set.segment));
 }
 
 /** Only the settings that change what the generator produces. */
@@ -53,6 +53,7 @@ export function generationSignature(settings: WorkspaceSettings) {
       // Segment rules decide who may do each job, so they shape the proposal too.
       jobs: settings.pro.jobs,
       staffing: settings.pro.staffing,
+      sets: settings.pro.sets?.filter(set => !set.off).map(({ name: _name, ...set }) => set),
       scoring: settings.pro.scoring?.enabled ? settings.pro.scoring : undefined,
       preferences: settings.pro.scoring?.enabled && settings.pro.scoring.weights.preferences ? settings.pro.people?.properties : undefined,
       // Segments shape the proposal when they decide who may do a job or who staffs a room.

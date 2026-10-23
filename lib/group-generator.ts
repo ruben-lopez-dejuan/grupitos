@@ -6,6 +6,7 @@
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type PickReason, type Task, type TaskRole, type Why } from "@/lib/assignments";
+import type { ResolvedSet } from "@/lib/pro/assignment-sets";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
@@ -64,7 +65,13 @@ type CompetitorPlan = {
   fixed: boolean;
   seedIndex: Map<string, number>;
   preferredGroup: Map<string, number>;
+  /** People placed by an assignment set may only move among that set's groups. */
+  allowed?: Map<string, Set<number>>;
+  /** People marked as featured on their scorecard. */
+  featured?: Set<string>;
 };
+
+const allowedIn = (plan: Pick<CompetitorPlan, "allowed">, person: WcifPerson, group: number) => plan.allowed?.get(personKey(person))?.has(group) ?? true;
 
 type Placement = { plan: CompetitorPlan; planIndex: number; group: number; person: WcifPerson };
 
@@ -119,7 +126,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
     const current = cost(byPerson, person, planIndex, fromGroup);
     const costs = new Map(plan.groups.map((_, index) => [index + 1, cost(byPerson, person, planIndex, index + 1)]));
     const targets = plan.groups.map((_, index) => index + 1)
-      .filter(group => group !== fromGroup && costs.get(group)! < current)
+      .filter(group => group !== fromGroup && costs.get(group)! < current && allowedIn(plan, person, group))
       .sort((a, b) => costs.get(a)! - costs.get(b)! || moveCost(plan, person, a) - moveCost(plan, person, b) || a - b);
     for (const targetGroup of targets) {
       const target = plan.groups[targetGroup - 1];
@@ -137,6 +144,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       for (const swapper of swappers) {
         // The swapper must not end up worse off, so the total overlap still goes down.
         if (cost(byPerson, swapper, planIndex, fromGroup) > cost(byPerson, swapper, planIndex, targetGroup)) continue;
+        if (!allowedIn(plan, swapper, fromGroup)) continue;
         const targetIndex = target.findIndex(candidate => personKey(candidate) === personKey(swapper));
         source[sourceIndex] = swapper;
         target[targetIndex] = person;
@@ -161,7 +169,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -189,6 +197,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
    * room's tasks and get no tasks anywhere else.
    */
   laneTeams?: { forGroup: (roundId: string, group: number) => Set<string> | undefined; members: Set<string> };
+  /** PRO mode: ordered assignment sets of each round (CompScript's AssignmentSet). */
+  assignmentSets?: (round: GenerationRound) => ResolvedSet[];
 }): GeneratedAssignment[] {
   const accepted = [...acceptedPeople(competition), ...nonCompetingStaff(competition), ...extraPeople];
   const country = competitionCountry(competition);
@@ -227,12 +237,14 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     if (!known || competitors.length === 0) return [];
     const firstRound = round.roundNumber === 1;
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
-    const groups = splitIntoGroups(competitors, round.groups, firstRound ? options.sortingRule : "ranks", round.eventId);
-    if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)));
+    const rule = firstRound ? options.sortingRule : "ranks";
+    const sets = assignmentSets?.(round) ?? [];
+    const { groups, allowed, featured } = sets.length ? splitWithSets(competitors, round.groups, sets, rule, round.eventId) : { groups: splitIntoGroups(competitors, round.groups, rule, round.eventId), allowed: undefined, featured: undefined };
+    if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group));
     const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     const preferredGroup = new Map<string, number>();
     groups.forEach((members, groupIndex) => members.forEach(person => preferredGroup.set(personKey(person), groupIndex + 1)));
-    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup }];
+    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured }];
   });
   if (slots) resolveCompetitorOverlaps(plans, slots);
 
@@ -315,7 +327,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const dataEntryTimes: TimeWindow[] = [];
 
   for (const plan of staffingOrder) {
-    const { round, competitors, groups, fixed, seedIndex } = plan;
+    const { round, competitors, groups, fixed, seedIndex, featured } = plan;
     const roundOutput: GeneratedAssignment[] = [];
     outputByRound.set(round.id, roundOutput);
 
@@ -628,6 +640,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         seedResult: seedResult(row.person, round.eventId),
         ...(scrambleEvent !== round.eventId && row.tasks.some(task => task.role === "scrambler") ? { scrambleResult: seedResult(row.person, scrambleEvent) } : {}),
         inRound: row.inRound,
+        ...(row.inRound && featured?.has(row.key) ? { featured: true } : {}),
         station: row.station,
         tasks: row.tasks,
         ...(row.why.length ? { why: row.why } : {}),
@@ -701,6 +714,67 @@ export function splitIntoGroups(bestFirst: WcifPerson[], groupCount: number, rul
   return groups;
 }
 
+/**
+ * CompScript's AssignGroups with ordered assignment sets. Each set, in order, takes its people
+ * not placed yet (best first) and deals them over its groups one per group and pass, emptiest
+ * first, never above the even group size (raised only when a set's groups are all full). Whoever
+ * is left fills the remaining seats so that groups stay even, following the sorting rule.
+ */
+export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets: ResolvedSet[], rule: SortingRule, eventId: string) {
+  const groups: WcifPerson[][] = Array.from({ length: groupCount }, () => []);
+  const allowed = new Map<string, Set<number>>();
+  const featured = new Set<string>();
+  let limit = Math.ceil(bestFirst.length / Math.max(1, groupCount));
+  for (const set of sets) {
+    const eligible = set.groups.filter(group => group >= 1 && group <= groupCount);
+    if (!eligible.length) continue;
+    const queue = bestFirst.filter((person, index) => !allowed.has(personKey(person)) && (set.top === undefined || index < set.top) && (!set.members || set.members.has(personKey(person))));
+    for (let pass = 0; queue.length; pass += 1) {
+      const open = eligible.filter(group => groups[group - 1].length < limit);
+      if (!open.length) { limit += 1; continue; }
+      // Alternating the tie order snakes the best people over the groups.
+      open.sort((a, b) => groups[a - 1].length - groups[b - 1].length || (pass % 2 ? b - a : a - b));
+      for (const group of open) {
+        const person = queue.shift();
+        if (!person) break;
+        groups[group - 1].push(person);
+        allowed.set(personKey(person), new Set(eligible));
+        if (set.featured) featured.add(personKey(person));
+      }
+    }
+  }
+  if (!allowed.size) return { groups: splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined };
+  const rest = bestFirst.filter(person => !allowed.has(personKey(person)));
+  const sizes = groups.map(members => members.length);
+  for (let left = rest.length; left > 0; left -= 1) sizes[sizes.indexOf(Math.min(...sizes))] += 1;
+  fillByRule(rest, sizes.map((size, index) => size - groups[index].length), rule, eventId).forEach((members, index) => groups[index].push(...members));
+  return { groups, allowed, featured };
+}
+
+/** Splits people (best first) into groups of the given sizes, as `splitIntoGroups` would. */
+function fillByRule(bestFirst: WcifPerson[], capacities: number[], rule: SortingRule, eventId: string) {
+  const groups: WcifPerson[][] = capacities.map(() => []);
+  const symmetric = rule === "symmetric" || rule === "scrambler-safe" || (rule === "balanced" && !BALANCED_BY_RANKS.includes(eventId));
+  if (symmetric) {
+    // One per group from the last group down, as the symmetric split does.
+    let group = capacities.length - 1;
+    for (const person of bestFirst) {
+      while (groups[group].length >= capacities[group]) group = (group - 1 + capacities.length) % capacities.length;
+      groups[group].push(person);
+      group = (group - 1 + capacities.length) % capacities.length;
+    }
+    return groups;
+  }
+  const worstFirst = [...bestFirst].reverse();
+  const ordered = rule === "name-optimised" ? separateSameFirstNames(worstFirst) : worstFirst;
+  let start = 0;
+  capacities.forEach((capacity, index) => {
+    groups[index] = ordered.slice(start, start + capacity);
+    start += capacity;
+  });
+  return groups;
+}
+
 /** Spreads people sharing a first name as far apart as possible in the list, keeping everyone. */
 function separateSameFirstNames(people: WcifPerson[]) {
   const byName = new Map<string, WcifPerson[]>();
@@ -722,15 +796,16 @@ function separateSameFirstNames(people: WcifPerson[]) {
 }
 
 /** Moves people matching `hasRole` into groups that have none of them, swapping with someone of close seed. */
-export function spreadRole(groups: WcifPerson[][], hasRole: (person: WcifPerson) => boolean) {
+export function spreadRole(groups: WcifPerson[][], hasRole: (person: WcifPerson) => boolean, canMove: (person: WcifPerson, group: number) => boolean = () => true) {
   for (let guard = 0; guard < groups.length * 4; guard += 1) {
     const counts = groups.map(members => members.filter(hasRole).length);
     const crowded = counts.findIndex(count => count >= 2);
     const empty = counts.findIndex(count => count === 0);
     if (crowded < 0 || empty < 0) return;
-    const mover = groups[crowded].find(hasRole)!;
+    const mover = groups[crowded].find(person => hasRole(person) && canMove(person, empty + 1));
+    if (!mover) return;
     const position = groups[crowded].indexOf(mover);
-    const swapIndex = groups[empty].reduce((closest, person, index) => !hasRole(person) && (closest < 0 || Math.abs(index - position) < Math.abs(closest - position)) ? index : closest, -1);
+    const swapIndex = groups[empty].reduce((closest, person, index) => !hasRole(person) && canMove(person, crowded + 1) && (closest < 0 || Math.abs(index - position) < Math.abs(closest - position)) ? index : closest, -1);
     if (swapIndex < 0) return;
     const other = groups[empty][swapIndex];
     groups[crowded][position] = other;

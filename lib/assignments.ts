@@ -43,6 +43,8 @@ export type GeneratedAssignment = {
   scrambleResult?: number;
   /** Whether the person takes part in this round as a competitor (registered or advanced). */
   inRound: boolean;
+  /** Featured competitor (streaming): a star on the scorecard. */
+  featured?: boolean;
   station?: number;
   /** At most one task per group. Anything is allowed here; the validator reports what is wrong. */
   tasks: Task[];

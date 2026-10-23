@@ -32,7 +32,10 @@ const EVENT_NAMES_EN: Record<string, string> = { "333": "3x3x3 Cube", "222": "2x
 /** Languages whose texts need a CJK font, which is not bundled. */
 export const UNSUPPORTED_SCORECARD_LANGUAGES = ["cn", "zh"];
 
-type CardCompetitor = { name: string | null; registrantId: number | null; wcaId: string | null; personalBests?: WcifPerson["personalBests"] };
+type CardCompetitor = { name: string | null; registrantId: number | null; wcaId: string | null; personalBests?: WcifPerson["personalBests"]; featured?: boolean };
+
+/** Groupifier prints featured competitors with a star; Roboto has no ★, so it is drawn. */
+const STAR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#000" d="M12 1.5l3.1 6.9 7.4.7-5.6 5 1.7 7.4L12 17.6l-6.6 3.9 1.7-7.4-5.6-5 7.4-.7z"/></svg>';
 const NAMELESS: CardCompetitor = { name: null, registrantId: null, wcaId: null };
 
 const parseActivityCode = (code: string) => {
@@ -255,7 +258,7 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
   const limitText = timeLimit ? `${t("timeLimit")}: ${timeLimitToString(timeLimit, t("total"))}` : "";
 
   return [
-    { fontSize: 10, columns: [{ text: scorecardNumber ? `${scorecardNumber}` : "", alignment: "left" }, {}] },
+    { fontSize: 10, columns: [{ text: scorecardNumber ? `${scorecardNumber}` : "", alignment: "left" }, competitor.featured ? { svg: STAR_SVG, width: 10, height: 10, alignment: "right" } : {}] },
     { ...fitText(competitionName, scorecardWidth, 15, { bold: true, min: 9 }), bold: true, margin: [0, 0, 0, 6], alignment: "center" },
     {
       margin: [25, 0, 0, 0],
@@ -406,7 +409,7 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
           .sort((a, b) => (b.seedResult ?? Number.MAX_SAFE_INTEGER) - (a.seedResult ?? Number.MAX_SAFE_INTEGER) || (a.station ?? 0) - (b.station ?? 0) || a.name.localeCompare(b.name))
           .map(item => {
             const person = persons.get(item.personId);
-            return { competitor: { name: item.name, registrantId: person?.registrantId ?? null, wcaId: item.wcaId ?? null, personalBests: person?.personalBests }, station: item.station };
+            return { competitor: { name: item.name, registrantId: person?.registrantId ?? null, wcaId: item.wcaId ?? null, personalBests: person?.personalBests, featured: item.featured }, station: item.station };
           }),
       }))
       : groupSizes(config.competitors, config.groups).map((size, index) => ({ group: index + 1, competitors: times(size, () => ({ competitor: NAMELESS })) }));

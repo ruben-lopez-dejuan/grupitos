@@ -84,3 +84,16 @@ describe("fitText", () => {
     expect(cut.text.endsWith("...")).toBe(true);
   });
 });
+
+describe("featured competitors", () => {
+  it("draws a star on their card without changing the layout", async () => {
+    const competition = worstCase();
+    const rounds = initialRounds(competition, 12, "fixed");
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS })
+      .map((item, index) => item.roundId === "333-r1" && index % 3 === 0 ? { ...item, featured: true } : item);
+    const printing = { ...DEFAULT_PRINTING, order: "natural" as const };
+    const cards = roundScorecards({ competition, assignments, rounds, stations: 12, zoneMode: "fixed", printing }, ["333-r1"]);
+    expect(JSON.stringify(cards)).toContain("<svg");
+    expect(await pageCount(scorecardsPdfDefinition(cards, null, "a4"))).toBe(cards.length / PER_PAGE.a4);
+  }, 30000);
+});

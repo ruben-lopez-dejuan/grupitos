@@ -3,6 +3,7 @@
  * declared by natshelper. Times are venue-local wall-clock values, YYYY-MM-DDTHH:mm.
  */
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
+import type { AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import type { ProPeople } from "@/lib/pro/people";
 import type { ScoringConfig } from "@/lib/pro/scoring";
 import type { JobEligibility, Segment } from "@/lib/pro/segments";
@@ -45,7 +46,8 @@ export type LaneStaffing = {
   team?: string;
 };
 
-export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig };
+/** `sets`: ordered assignment sets for the competitor groups (lib/pro/assignment-sets.ts). */
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig; sets?: AssignmentSetConfig[] };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**

@@ -293,3 +293,36 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .staffing-grid .round-table-head,.staffing-grid .round-row{grid-template-columns:minmax(170px,1.2fr) 140px 130px 130px minmax(150px,1fr)}
 .staffing-grid .round-table-head span{display:flex;align-items:center;gap:4px}
 .lane-team{width:100%;min-width:0;padding:6px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:13px}
+
+/* PRO assignment sets (Rules tab) */
+.assignment-sets{display:grid;gap:8px;padding:0 22px 16px}
+.assignment-sets .setup-note{margin:0}
+.assignment-sets ol{display:grid;gap:6px;max-width:860px;margin:0;padding:0;list-style:none}
+.assignment-sets li{display:grid;gap:8px;padding:8px 10px;background:var(--surface-subtle);border:1px solid var(--line);border-radius:6px;font-size:14px}
+.assignment-sets li.off>:not(.set-head){opacity:.5}
+.assignment-sets select,.assignment-sets input:not([type=checkbox]){padding:5px 7px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.set-head{display:flex;align-items:center;gap:8px}
+.assignment-sets .set-name{flex:1;min-width:0;padding:4px 6px;background:transparent;border-color:transparent;font-weight:750}
+.assignment-sets .set-name:hover,.assignment-sets .set-name:focus{background:var(--surface);border-color:var(--line);outline:0}
+.set-star{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;font-size:13px;font-weight:700;cursor:pointer}
+.set-star.on{color:#8a5a00;background:#fff3cf;border-color:#e8c25a}
+:root[data-theme="dark"] .set-star.on{color:#ffd77a;background:#3b3220;border-color:#7a6327}
+.set-on{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:13px}
+.set-fields{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding-left:28px}
+.set-fields label{display:inline-flex;align-items:center;gap:6px}
+.set-fields label>span{color:var(--muted);font-size:13px;font-weight:700}
+.set-fields small{color:var(--muted);font-size:12px}
+.set-top input[type=number]{width:62px}
+.assignment-sets .set-numbers{width:80px}
+.set-lanes,.set-rounds{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding-left:28px}
+.set-lanes>span{margin-right:4px;color:var(--muted);font-size:13px;font-weight:700}
+.set-lanes small{color:var(--muted);font-size:12px}
+.set-lanes button,.set-rounds button{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:5px;font-size:13px;cursor:pointer}
+.set-lanes button i{width:9px;height:9px;border-radius:50%}
+.set-lanes button.on,.set-rounds button.on{color:var(--ink);border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.set-rounds button{padding:3px 6px}
+.set-rounds button small{font-size:11px;font-weight:700}
+.set-templates{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.set-templates small{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase}
+@media (max-width:700px){.set-fields,.set-lanes,.set-rounds{padding-left:0}.set-star span{display:none}}
+.featured-star{margin-left:5px;color:#c99400;font-size:13px}
