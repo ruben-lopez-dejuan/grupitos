@@ -176,3 +176,33 @@ describe("WCA staff roles", () => {
     expect(migrateWcaStaffRoles({ ...migrated, roles: { staff: ["1", "2"] } }, competition).roles.staff).toEqual(["1", "2"]);
   });
 });
+
+describe("a room team", () => {
+  it("works in its room while it runs, not on the other stages", () => {
+    const competition = buildDemoCompetition({ id: "Side", name: "Side", people: 40, events: ["333", "222"], newcomerShare: 0, seed: 9 });
+    const schedule: ProSchedule = {
+      timeZone: "UTC", days: ["2026-02-21"], activities: [],
+      rooms: [{ id: 1, name: "Main", color: "#d93636", stages: [] }, { id: 2, name: "Side", color: "#681da8", stages: [] }],
+      blocks: [
+        { id: "m", activityCode: "333-r1", roomId: 1, start: "2026-02-21T10:00", end: "2026-02-21T12:00", groups: 4 },
+        { id: "s", activityCode: "222-r1", roomId: 2, start: "2026-02-21T10:00", end: "2026-02-21T10:30", groups: 1 },
+      ],
+    };
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(initialRounds(competition, 8, "fixed"), slots);
+    const inSide = new Set(roundCompetitorsKeys(competition, "222"));
+    // People without other duties (delegates and organizers do no normal tasks by default).
+    const team = competition.persons!.filter(person => !person.roles?.length).map(personKey).filter(key => !inSide.has(key)).slice(0, 4);
+    const laneTeams = { forGroup: (roundId: string) => roundId === "222-r1" ? new Set(team) : undefined, members: new Set<string>() };
+    const assignments = generateAssignments({ competition, rounds, stations: 8, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots, laneTeams });
+    const sideTime = slots.get("222-r1")![0].windows[0];
+    const busyInMain = assignments.filter(item => item.roundId === "333-r1" && team.includes(item.personId)).flatMap(item => item.tasks.filter(task => task.role !== "competitor" && overlaps(slots.get("333-r1")!.find(slot => slot.group === task.group)!.windows[0], sideTime)));
+    expect(busyInMain).toEqual([]);
+    const working = assignments.filter(item => item.roundId === "222-r1" && team.includes(item.personId) && item.tasks.some(task => task.role !== "competitor"));
+    expect(working.length).toBe(4);
+  });
+});
+
+function roundCompetitorsKeys(competition: StoredCompetition, eventId: string) {
+  return (competition.persons ?? []).filter(person => person.registration?.eventIds?.includes(eventId)).map(personKey);
+}

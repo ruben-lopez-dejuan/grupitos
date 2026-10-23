@@ -92,3 +92,10 @@ describe("group numbers", () => {
     expect(formatGroupNumbers([1, 3, 4, 5, 7])).toBe("1, 3-5, 7");
   });
 });
+
+describe("top per group of the whole round", () => {
+  it("counts every group of the round, as the Spanish Championship 2026 scripts do", () => {
+    const set: AssignmentSetConfig = { id: "s", name: "Featured", top: 1, perGroup: "round", rounds: "first", lanes: ["1:1"], groups: "any", featured: true };
+    expect(resolveSets([set], { id: "333-r1", eventId: "333", roundNumber: 1, groups: 12 }, undefined, () => undefined)[0].top).toBe(12);
+  });
+});

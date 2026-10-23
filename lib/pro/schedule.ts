@@ -285,7 +285,7 @@ export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
  */
 export const COMPETING_OVERLAP_TOLERANCE = 10;
 
-export function overlapMinutes(a: GroupSlot, b: GroupSlot) {
+export function overlapMinutes(a: Pick<GroupSlot, "windows">, b: Pick<GroupSlot, "windows">) {
   let total = 0;
   for (const x of a.windows) for (const y of b.windows) {
     const start = Math.max(toMinutes(x.start), toMinutes(y.start));

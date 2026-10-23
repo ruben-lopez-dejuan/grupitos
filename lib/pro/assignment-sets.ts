@@ -19,8 +19,11 @@ export type AssignmentSetConfig = {
   segment?: string;
   /** Only the best `top` of the round (psych sheet in first rounds, previous round after). */
   top?: number;
-  /** `top` counts per allowed group (Amore: 4 per group of the main stage). */
-  perGroup?: boolean;
+  /**
+   * `top` counts per group: of the set (Amore: 4 per group of the main stage), or of the whole
+   * round with "round" (the Spanish Championship 2026: per group of the round, all stages).
+   */
+  perGroup?: boolean | "round";
   rounds: SetRounds;
   /** Rooms or stages (lane keys); empty: any. A room's key includes its stages. */
   lanes: string[];
@@ -76,7 +79,7 @@ export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id
     const groups = allowedGroups(set, round.groups, slots);
     // A cluster that no longer exists takes nobody rather than everyone.
     const members = set.segment ? membersOf(set.segment, round.eventId) ?? new Set<string>() : undefined;
-    const top = set.top === undefined ? undefined : set.perGroup ? set.top * groups.length : set.top;
+    const top = set.top === undefined ? undefined : set.perGroup === "round" ? set.top * round.groups : set.perGroup ? set.top * groups.length : set.top;
     return { id: set.id, name: set.name, members, top, groups, featured: !!set.featured };
   });
 }

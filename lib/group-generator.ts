@@ -83,7 +83,7 @@ type Placement = { plan: CompetitorPlan; planIndex: number; group: number; perso
  * leaves each person in the group that overlaps least. Every step lowers the total overlap, so
  * it ends. This runs before any staff duties are assigned.
  */
-export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<string, GroupSlot[]>) {
+export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<string, GroupSlot[]>, reserved?: Map<string, Array<{ roundId: string; window: TimeWindow }>>) {
   const placements = () => {
     const byPerson = new Map<string, Placement[]>();
     plans.forEach((plan, planIndex) => plan.groups.forEach((members, groupIndex) => members.forEach(person => {
@@ -115,6 +115,10 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       // A short overlap is going from one event to the next: nearly free, but a clean gap still wins.
       const minutes = overlapMinutes(candidate, occupied);
       return sum + (minutes <= COMPETING_OVERLAP_TOLERANCE ? minutes / 1000 : minutes);
+    }, 0) + (reserved?.get(personKey(person)) ?? []).reduce((sum, { roundId, window }) => {
+      // A room team's working times weigh less than competing twice, and never in the room's own rounds.
+      if (roundId === plans[planIndex].round.id) return sum;
+      return sum + overlapMinutes(candidate, { windows: [window] }) / 10;
     }, 0);
   };
   const flexibility = (byPerson: Map<string, Placement[]>, placement: Placement) => placement.plan.groups.reduce((count, _, index) => count + (cost(byPerson, placement.person, placement.planIndex, index + 1) === 0 ? 1 : 0), 0);
@@ -155,13 +159,21 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
     return false;
   };
 
+  /** Placements of room-team members that overlap their room's working times (outside its own rounds). */
+  const reservedClashes = (byPerson: Map<string, Placement[]>) => [...(reserved?.keys() ?? [])].flatMap(key => (byPerson.get(key) ?? []).filter(placement => {
+    const slot = slotOf(placement);
+    return !!slot && reserved!.get(key)!.some(({ roundId, window }) => roundId !== placement.plan.round.id && overlapMinutes(slot, { windows: [window] }) > 0);
+  }).map(placement => [placement]));
+
   const limit = Math.max(1, plans.reduce((sum, plan) => sum + plan.competitors.length, 0) * 4);
   for (let iteration = 0; iteration < limit; iteration += 1) {
     const byPerson = placements();
     const conflicts = clashes(byPerson);
-    if (!conflicts.length) return;
+    // Competing twice first; then keeping room teams free, when a move makes nobody worse off.
+    const candidates: Placement[][] = [...conflicts, ...reservedClashes(byPerson)];
+    if (!candidates.length) return;
     let repaired = false;
-    for (const conflict of conflicts) {
+    for (const conflict of candidates) {
       const choices = [...conflict].sort((a, b) => flexibility(byPerson, b) - flexibility(byPerson, a) || b.plan.groups.length - a.plan.groups.length || a.planIndex - b.planIndex);
       if (choices.some(choice => tryRelocate(byPerson, choice))) { repaired = true; break; }
     }
@@ -251,7 +263,14 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     groups.forEach((members, groupIndex) => members.forEach(person => preferredGroup.set(personKey(person), groupIndex + 1)));
     return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured }];
   });
-  if (slots) resolveCompetitorOverlaps(plans, slots);
+  // Room teams (the side room team) are kept free to work in their room when that is possible.
+  const reserved = new Map<string, Array<{ roundId: string; window: TimeWindow }>>();
+  if (slots && laneTeams) for (const plan of plans) plan.groups.forEach((members, index) => {
+    if (!members.length) return;
+    const windows = slots.get(plan.round.id)?.find(slot => slot.group === index + 1)?.windows ?? [];
+    for (const key of laneTeams.forGroup(plan.round.id, index + 1) ?? []) reserved.set(key, [...(reserved.get(key) ?? []), ...windows.map(window => ({ roundId: plan.round.id, window }))]);
+  });
+  if (slots) resolveCompetitorOverlaps(plans, slots, reserved);
 
   // Every competition slot is occupied before staff allocation starts. Staff selection therefore
   // sees future rounds as well as earlier ones and cannot hide a competitor clash through ordering.
@@ -358,7 +377,10 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       return rows.get(key)!;
     };
     const ownGroup = (key: string) => rows.get(key)?.tasks.find(task => task.role === "competitor")?.group;
-    const freeIn = (key: string, group: number) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group) && !blockedHere(round.id, group, key);
+    // While their room is running, a room team works there (the side room is staffed first, as in
+    // the Spanish Championship scripts), not on the other stages.
+    const neededInOwnRoom = (key: string, group: number) => !teamHere(round.id, group, key) && windowsOf(group).some(window => reserved.get(key)?.some(item => overlaps(item.window, window)));
+    const freeIn = (key: string, group: number) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group) && !blockedHere(round.id, group, key) && !neededInOwnRoom(key, group);
     const roundLoad = (key: string) => rows.get(key)?.tasks.filter(task => task.role !== "competitor").length ?? 0;
     const load = (key: string) => globalLoad.get(key) ?? 0;
     const loadInEvent = (key: string) => eventLoad.get(`${key}|${round.eventId}`) ?? 0;

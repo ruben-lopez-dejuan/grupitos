@@ -64,7 +64,7 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
           <label className="set-top"><input type="checkbox" checked={set.top !== undefined} onChange={event => save({ ...set, top: event.target.checked ? 4 : undefined })} /><span>{t("sets.onlyTop")}</span>
             {set.top !== undefined && <>
               <input type="number" min={1} max={999} value={set.top} onChange={event => save({ ...set, top: Math.max(1, Number(event.target.value) || 1) })} aria-label={t("sets.topCount")} />
-              <select value={set.perGroup ? "group" : "round"} onChange={event => save({ ...set, perGroup: event.target.value === "group" })} aria-label={t("sets.topUnit")}><option value="group">{t("sets.perGroup")}</option><option value="round">{t("sets.perRound")}</option></select>
+              <select value={set.perGroup === "round" ? "roundGroup" : set.perGroup ? "group" : "round"} onChange={event => save({ ...set, perGroup: event.target.value === "roundGroup" ? "round" : event.target.value === "group" })} aria-label={t("sets.topUnit")}><option value="group">{t("sets.perGroup")}</option><option value="roundGroup">{t("sets.perRoundGroup")}</option><option value="round">{t("sets.perRound")}</option></select>
             </>}
           </label>
           <ScopeFields value={set} onChange={change => save({ ...set, ...change })} rounds={rounds} />
