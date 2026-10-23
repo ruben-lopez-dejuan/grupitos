@@ -234,6 +234,12 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Intentos de multi** (`GroupSlot.attempt`, `linkedTo`): cada intento posterior es una columna propia con el mismo número de grupo. Los competidores se reparten en las columnas del intento 1 (contando las horas de todos los intentos) y luego compiten en todos (`Task.attempt`); cada intento tiene su propio personal. `competingGroups` solo cuenta el intento 1, así que hojas y validación no cambian. Revisar muestra «intento 2» en la cabecera; Grupos cuenta grupos del intento 1.
 - **Exportar WCIF** (paso Publicar, `lib/wcif-export.ts`, `components/publish-panel.tsx`): descarga el WCIF guardado con la propuesta, sin enviarlo a la WCA. Reutiliza los grupos del WCIF que coinciden en sala, escenario y hora, crea los demás (horas PRO, o la ronda partida en partes iguales sin PRO) y quita los que ya no se usan; escribe asignaciones con estación, destacados de Groupifier, propiedades natshelper y escenarios. Conserva `formatVersion`, `id` y lo demás. Con el Nacional: 112 grupos reutilizados, 4611 asignaciones, ida y vuelta idéntica.
 
+### 6.10. Máximo por escenario, mezcla del multi y mitad de competición (24/10/2026)
+
+- **Máx. por grupo** por sala o escenario (Zona, `LaneStaffing.maxPerGroup`): los grupos de ese escenario tienen como mucho ese número y los demás se reparten el resto (`groupTargets`). Lo respetan el reparto, los conjuntos, el arreglo de solapes y la vista previa; la revisión avisa (`over-group-limit`).
+- **Mezcla del multi** (actividad de Horario `multi-scramble`; se reconoce al importar por el nombre): los mezcladores de cada intento trabajan en la mezcla que acaba justo antes de ese intento, el mismo día (`GroupSlot.scrambleWindow`, `windowsForTask`). Generador y validación usan esa hora.
+- **Mitad de competición**: «Actualizar desde la WCA» (barra superior) vuelve a descargar el WCIF sin tocar configuración ni propuesta y activa las rondas que ya tienen competidores. «Generar rondas nuevas» (Grupos) genera solo esas rondas con `fixedAssignments`: las horas, cargas y rachas de lo ya asignado cuentan, y los nuevos competidores evitan los grupos donde ya compiten o trabajan.
+
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
 Archivo local del usuario (**no commitear: tiene datos personales**). Estructura:
