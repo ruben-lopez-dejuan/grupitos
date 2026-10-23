@@ -39,6 +39,8 @@ export type GeneratedAssignment = {
   wcaId?: string | null;
   birthdate?: string;
   seedResult?: number;
+  /** Scramblers of blindfolded and one-handed rounds: their result in the event scrambled (444 for 444bf…). */
+  scrambleResult?: number;
   /** Whether the person takes part in this round as a competitor (registered or advanced). */
   inRound: boolean;
   station?: number;

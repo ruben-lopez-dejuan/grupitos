@@ -86,6 +86,9 @@ export function bestAverageAndSingle(person: WcifPerson, eventId: string) {
   return BLIND_EVENTS.includes(eventId) ? [single, average] : [average, single];
 }
 
+/** The event whose results tell who can scramble another one (blindfolded and one-handed use the cube). */
+export const SCRAMBLE_EVENT: Record<string, string> = { "333bf": "333", "333oh": "333", "333ft": "333", "333mbf": "333", "444bf": "444", "555bf": "555" };
+
 export function seedResult(person: WcifPerson, eventId: string) {
   const [first, second] = bestAverageAndSingle(person, eventId);
   const value = Number.isFinite(first) ? first : second;

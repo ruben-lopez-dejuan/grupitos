@@ -289,10 +289,10 @@ export const en: Messages = {
     noSegments: "Create segments in the Segments tab to use them here.",
   },
   segments: {
-    limitsTitle: "Limit per event (empty: nobody for that event)",
+    limitsTitle: "Limit per event (empty: anyone with a result)",
     useResultOf: "uses the result of",
     sameEvent: "the same event",
-    noLimit: "nobody",
+    noLimit: "no limit",
     roundDependent: "Depends on each round's event; here it counts people who meet it in any event.",
     title: "Segments",
     hint: "Named groups of people defined by conditions (like CompScript's Define). They filter the review and, in the next phases, decide who can do each job.",

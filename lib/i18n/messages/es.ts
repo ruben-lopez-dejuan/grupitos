@@ -291,10 +291,10 @@ export const es = {
     noSegments: "Crea segmentos en la pestaña Segmentos para usarlos aquí.",
   },
   segments: {
-    limitsTitle: "Límite por prueba (vacío: nadie de esa prueba)",
+    limitsTitle: "Límite por prueba (vacío: cualquiera con marca)",
     useResultOf: "usa la marca de",
     sameEvent: "la misma prueba",
-    noLimit: "nadie",
+    noLimit: "sin límite",
     roundDependent: "Depende de la prueba de cada ronda; aquí cuenta quien la cumple en alguna.",
     title: "Segmentos",
     hint: "Grupos de personas con nombre definidos por condiciones (como los Define de CompScript). Se usan para filtrar la revisión y, en las siguientes fases, para decidir quién puede hacer cada trabajo.",

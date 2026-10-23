@@ -97,7 +97,7 @@ describe("per-event scrambling limits (CanScramble)", () => {
     expect(inEvent("333").every(person => average(person, "333") < 1500 && person.registration?.eventIds?.includes("333"))).toBe(true);
     expect(inEvent("333").length).toBe(people.filter(person => average(person, "333") < 1500 && person.registration?.eventIds?.includes("333")).length);
     expect(inEvent("222").every(person => average(person, "222") < 500)).toBe(true);
-    // OH maps to 3x3 results; an event without a limit takes nobody.
+    // OH maps to 3x3 results; an event without a limit takes anyone with a result (nobody has Pyraminx ones here).
     const oh = segmentMembers(segment([rule]), people, { people: settings, pro, segments: [], eventId: "333oh" });
     expect(oh.length).toBe(people.filter(person => average(person, "333") < 1500).length);
     expect(segmentMembers(segment([rule]), people, { people: settings, pro, segments: [], eventId: "pyram" })).toEqual([]);

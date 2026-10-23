@@ -7,7 +7,7 @@
 import type { WcifPerson } from "@/lib/competition-store";
 import { ageOf, rolesOf, type PeopleSettings, type PersonRole } from "@/lib/people";
 import type { ProPeople } from "@/lib/pro/people";
-import { bestAverageAndSingle, personalBestValue, personKey } from "@/lib/rounds";
+import { bestAverageAndSingle, personalBestValue, personKey, SCRAMBLE_EVENT } from "@/lib/rounds";
 
 export const SEGMENT_ROLES = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "trusted", "volunteer"] as const;
 export type SegmentRole = typeof SEGMENT_ROLES[number];
@@ -29,7 +29,7 @@ export type Condition =
   /**
    * CompScript's CanScramble: the personal best (average; single for blind events) in the round's
    * event, or in the event it maps to (3BLD and OH use 3x3), is below that event's limit.
-   * Events without a limit take nobody.
+   * Events without a limit take anyone with a result in them.
    */
   | { kind: "roundPb"; limits: Record<string, number>; mapping: Record<string, string> };
 
@@ -45,9 +45,9 @@ export type SegmentContext = { people: PeopleSettings; pro: ProPeople; segments:
 function underLimit(person: WcifPerson, eventId: string, condition: Extract<Condition, { kind: "roundPb" }>) {
   const source = condition.mapping[eventId] || eventId;
   const limit = condition.limits[source];
-  if (!limit) return false;
   const best = bestAverageAndSingle(person, source)[0];
-  return Number.isFinite(best) && best > 0 && best < limit;
+  // Without a limit, any result in the event will do.
+  return Number.isFinite(best) && best > 0 && (!limit || best < limit);
 }
 
 const numeric = (text: string | undefined) => text !== undefined && text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : undefined;
@@ -139,7 +139,7 @@ export function defaultRule(kind: Condition["kind"], options: { propertyKeys: st
 /** The Amore Open 2026 limits (ScrambleLimits, EventsToScramblingEvents), in centiseconds. */
 export const SCRAMBLE_LIMITS: { limits: Record<string, number>; mapping: Record<string, string> } = {
   limits: { "333": 1000, "222": 500, "444": 5000, pyram: 600, skewb: 600, sq1: 2000 },
-  mapping: { "333bf": "333", "333oh": "333" },
+  mapping: { ...SCRAMBLE_EVENT },
 };
 
 /** Starting points from real CompScript scripts (EligibleVolunteer, EligibleRunner, CanScramble, EligibleScrambler). */
@@ -147,7 +147,7 @@ export const SEGMENT_TEMPLATES: Array<{ id: "volunteers" | "runners" | "scramble
   { id: "volunteers", segment: { match: "all", rules: [{ kind: "role", role: "organizer", negate: true }, { kind: "role", role: "delegate", negate: true }, { kind: "role", role: "trainee-delegate", negate: true }, { kind: "newcomer", negate: true }] } },
   { id: "runners", segment: { match: "all", rules: [{ kind: "age", op: "lt", value: 45 }] } },
   { id: "scramblers", segment: { match: "any", rules: [{ kind: "pb", eventId: "333", type: "average", value: 2000 }, { kind: "role", role: "trusted" }] } },
-  { id: "eventScramblers", segment: { match: "all", rules: [{ kind: "roundRegistered" }, { kind: "roundPb", ...SCRAMBLE_LIMITS }] } },
+  { id: "eventScramblers", segment: { match: "all", rules: [{ kind: "roundPb", ...SCRAMBLE_LIMITS }] } },
 ];
 
 /** Jobs whose eligibility a segment can restrict (CompScript's Job(..., eligibility=...)). */

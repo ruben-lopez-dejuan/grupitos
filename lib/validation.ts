@@ -97,7 +97,8 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       if (rules.eligible?.[duty.role] && !rules.eligible[duty.role]!.has(item.personId)) {
         add({ severity: "warning", code: "not-eligible", group: duty.group, assignmentId: item.id, params: { name: item.name, task: duty.role, group: duty.group } });
       }
-      if (duty.role === "scrambler" && item.seedResult === undefined) {
+      // 4BLD is scrambled like 4x4: a 4x4 result is enough.
+      if (duty.role === "scrambler" && item.seedResult === undefined && item.scrambleResult === undefined) {
         add({ severity: "warning", code: "scrambler-without-result", group: duty.group, assignmentId: item.id, params: { name: item.name, group: duty.group } });
       }
       if (NORMAL_DUTIES.has(duty.role) && rules.noNormalTasks.has(item.personId)) {

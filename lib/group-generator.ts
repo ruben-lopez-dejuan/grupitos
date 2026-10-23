@@ -11,7 +11,7 @@ import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
-import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, bestAverageAndSingle, SCRAMBLE_EVENT, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
   sortingRule: SortingRule;
@@ -52,9 +52,6 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   assignDataEntry: false,
   taskOrder: [...TASK_ORDER_ITEMS],
 };
-
-/** The event whose results tell who can scramble another one (blindfolded and one-handed use the cube). */
-const SCRAMBLE_EVENT: Record<string, string> = { "333bf": "333", "333oh": "333", "333ft": "333", "333mbf": "333", "444bf": "444", "555bf": "555" };
 
 /** Events where Groupifier's "balanced" rule keeps the plain ranking order. */
 const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "skewb", "clock", "sq1"];
@@ -408,6 +405,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const inRoundKeys = new Set(competitors.map(personKey));
     // Strict: trusted people, or people with a result in the faster half of the round
     // (never fewer than the slots to fill), so scrambling is spread among good people.
+    // Blindfolded and one-handed rounds rank by the event scrambled (4x4 for 4BLD).
+    const scrambleEvent = SCRAMBLE_EVENT[round.eventId] ?? round.eventId;
+    const scrambleRank = scrambleEvent === round.eventId ? seedIndex : new Map(competitors
+      .filter(person => seedResult(person, scrambleEvent) !== undefined)
+      .sort((a, b) => seedResult(a, scrambleEvent)! - seedResult(b, scrambleEvent)!)
+      .map((person, index) => [personKey(person), index]));
+    const canScrambleHere = (person: WcifPerson) => seedResult(person, scrambleEvent) !== undefined;
     const fastEnough = Math.max(Math.ceil(competitors.length / 2), round.scramblers * groups.length);
     const scramblerPool = accepted.filter(person => {
       const key = personKey(person);
@@ -415,11 +419,10 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       // A scrambler segment (PRO) replaces the built-in speed rule.
       if (allowed("scrambler")) return allowed("scrambler")!.has(key);
       if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
-      return !strictScramblers || trusted.has(key) || (hasResult(person) && (seedIndex.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
+      return !strictScramblers || trusted.has(key) || (canScrambleHere(person) && (scrambleRank.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
     // Reserve: people outside the pool with a result in the event scrambled for this one (4BLD
     // scrambles are 4x4…), for groups the pool cannot cover (single-group side-room rounds).
-    const scrambleEvent = SCRAMBLE_EVENT[round.eventId] ?? round.eventId;
     const poolKeys = new Set(scramblerPool.map(personKey));
     const reserve = allowed("scrambler") ? [] : accepted.filter(person => {
       const key = personKey(person);
@@ -604,6 +607,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         wcaId: row.person.wcaId,
         birthdate: row.person.birthdate,
         seedResult: seedResult(row.person, round.eventId),
+        ...(scrambleEvent !== round.eventId && row.tasks.some(task => task.role === "scrambler") ? { scrambleResult: seedResult(row.person, scrambleEvent) } : {}),
         inRound: row.inRound,
         station: row.station,
         tasks: row.tasks,
