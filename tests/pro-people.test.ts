@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
@@ -6,6 +7,7 @@ import { peopleFromWcif } from "@/lib/people";
 import { everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
+import { validateAvailability } from "@/lib/validation";
 
 const rooms = [{ id: 1, name: "Sala", color: "#2563eb", stages: [] }];
 const day = (time: string) => `2026-02-21T${time}`;
@@ -79,5 +81,17 @@ describe("generator with PRO people", () => {
     const parentDuties = assignments.find(item => item.personId === parent)?.tasks.filter(task => task.role !== "competitor") ?? [];
     expect(parentDuties.every(task => !overlaps(windowOf(task.group), windowOf(kidGroup)))).toBe(true);
     expect(assignments.find(item => item.personId === other)?.tasks.filter(task => task.role !== "competitor") ?? []).toEqual([]);
+  });
+});
+
+describe("availability check", () => {
+  const schedule: ProSchedule = { timeZone: "UTC", days: ["2026-02-21"], rooms, activities: [], blocks: [{ id: "a", activityCode: "333-r1", roomId: 1, start: day("10:00"), end: day("11:00"), groups: 2 }] };
+  const slots = groupSlots(schedule);
+  const row = (personId: string, tasks: GeneratedAssignment["tasks"]): GeneratedAssignment => ({ id: `333-r1:${personId}`, roundId: "333-r1", eventId: "333", personId, name: personId, inRound: true, tasks });
+
+  it("warns about tasks during a time range or while the accompanied person competes", () => {
+    const assignments = [row("ana", [{ group: 1, role: "competitor" }, { group: 2, role: "judge" }]), row("kid", [{ group: 2, role: "competitor" }]), row("dad", [{ group: 1, role: "competitor" }, { group: 2, role: "scrambler" }])];
+    const issues = validateAvailability(assignments, slots, [{ id: "u1", personKey: "ana", start: day("10:30"), end: day("12:00") }, { id: "u2", personKey: "dad", whileCompeting: "kid" }]);
+    expect(issues.map(issue => [issue.code, issue.severity, issue.params.name, issue.group])).toEqual([["unavailable", "warning", "ana", 2], ["unavailable", "warning", "dad", 2]]);
   });
 });

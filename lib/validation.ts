@@ -1,5 +1,6 @@
 import { competingGroup, competingGroups, duties, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
-import { slotsOverlap, type GroupSlot } from "@/lib/pro/schedule";
+import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
+import { overlaps, slotsOverlap, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { judgesNeeded } from "@/lib/rounds";
 
 /**
@@ -26,7 +27,8 @@ export type IssueCode =
   | "scrambler-without-result"
   | "role-with-normal-task"
   | "time-overlap"
-  | "unavoidable-time-overlap";
+  | "unavoidable-time-overlap"
+  | "unavailable";
 
 export type Issue = {
   key: string;
@@ -172,6 +174,25 @@ export function validateTimes(assignments: GeneratedAssignment[], slots: Map<str
     }
   }
   return [...issues.values()];
+}
+
+/** PRO mode: anything assigned while the person said they are unavailable. */
+export function validateAvailability(assignments: GeneratedAssignment[], slots: Map<string, GroupSlot[]>, unavailable: Unavailability[]): Issue[] {
+  if (!unavailable.length) return [];
+  const windowOf = (roundId: string, group: number) => slots.get(roundId)?.find(slot => slot.group === group)?.windows ?? [];
+  const competing = new Map<string, TimeWindow[]>();
+  for (const item of assignments) for (const task of item.tasks) if (task.role === "competitor") competing.set(item.personId, [...(competing.get(item.personId) ?? []), ...windowOf(item.roundId, task.group)]);
+  const blocked = unavailableWindows(unavailable, key => competing.get(key) ?? []);
+  const issues: Issue[] = [];
+  for (const item of assignments) {
+    const windows = blocked.get(item.personId);
+    if (!windows) continue;
+    for (const task of item.tasks) {
+      if (!windowOf(item.roundId, task.group).some(window => windows.some(busy => overlaps(busy, window)))) continue;
+      issues.push({ key: `${item.roundId}:unavailable:${item.id}:${task.group}`, severity: "warning", code: "unavailable", roundId: item.roundId, group: task.group, assignmentId: item.id, params: { name: item.name, task: task.role, group: task.group } });
+    }
+  }
+  return issues;
 }
 
 export function countBySeverity(issues: Issue[]) {

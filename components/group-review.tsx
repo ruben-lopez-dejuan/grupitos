@@ -8,8 +8,9 @@ import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import { applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
+import type { Unavailability } from "@/lib/pro/people";
 import { clockOf, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
-import { countBySeverity, SEVERITY_ORDER, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
+import { countBySeverity, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
 type Tool = CellValue | "select";
 type History = { past: GeneratedAssignment[][]; present: GeneratedAssignment[]; future: GeneratedAssignment[][] };
@@ -72,7 +73,10 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
   return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
 }
 
-export function GroupReview({ initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
+/** Stable default, so validation is not redone on every render. */
+const NO_UNAVAILABILITY: Unavailability[] = [];
+
+export function GroupReview({ unavailable = NO_UNAVAILABILITY,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -85,6 +89,8 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
   /** PRO mode: stage and times of every group, which also enables the time-overlap check. */
   slots?: Map<string, GroupSlot[]>;
   rooms?: ProRoom[];
+  /** PRO mode: people's unavailabilities, checked against what they are given. */
+  unavailable?: Unavailability[];
   onChange: (assignments: GeneratedAssignment[]) => void;
 }) {
   const { t, tp } = useI18n();
@@ -132,13 +138,13 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
   useEffect(() => { onChange(assignments); }, [assignments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const issuesByRound = useMemo(() => {
-    const timeIssues = slots ? validateTimes(assignments, slots) : [];
+    const timeIssues = slots ? [...validateTimes(assignments, slots), ...validateAvailability(assignments, slots, unavailable)] : [];
     return new Map(rounds.map(round => {
       const rows = assignments.filter(item => item.roundId === round.id);
       const issues = [...validateRound(round.id, rows, rules[round.id] ?? fallbackRules(rows)), ...timeIssues.filter(issue => issue.roundId === round.id)];
       return [round.id, issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0))];
     }));
-  }, [assignments, rounds, rules, slots]);
+  }, [assignments, rounds, rules, slots, unavailable]);
   const roundSlots = slots?.get(roundId);
 
   // People in the round first, by seed; staff who only work in this round after them, by name.
