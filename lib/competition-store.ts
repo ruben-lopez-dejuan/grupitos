@@ -1,6 +1,8 @@
 "use client";
 
 export type WcifPerson = {
+  /** App-only: identifies PRO volunteers, who have no registrant id. Never in a WCIF. */
+  appKey?: string;
   registrantId?: number | null;
   wcaUserId?: number;
   name: string;
@@ -18,6 +20,7 @@ export type WcifPerson = {
     continentalRanking?: number;
     nationalRanking?: number;
   }>;
+  extensions?: WcifExtension[];
   registration?: {
     status?: string;
     isCompeting?: boolean;

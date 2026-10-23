@@ -8,6 +8,7 @@ import { GroupReview } from "@/components/group-review";
 import { Hint } from "@/components/hint";
 import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
+import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
 import { SortingRuleIcon } from "@/components/rule-icons";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,6 +18,7 @@ import { getCompetition, type StoredCompetition } from "@/lib/competition-store"
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
+import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
@@ -143,6 +145,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     add(settings.people.roles.staff, t("people.roleTags.staff"));
     add(settings.people.roles.dataentry, t("people.roleTags.dataentry"));
     add(settings.people.trustedIds, t("people.roleTags.trusted"));
+    if (settings.pro?.enabled) add(settings.pro.people?.volunteers.map(volunteer => volunteer.key), t("proPeople.volunteerTag"));
     return labels;
   }, [settings, t]);
   const photos = useMemo(() => Object.fromEntries((competition?.persons ?? []).map(person => [personKey(person), person.avatar?.thumbUrl])), [competition]);
@@ -187,10 +190,13 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const updateRound = (id: string, change: Partial<RoundConfig>) => update({ rounds: settings.rounds.map(round => round.id === id ? { ...round, ...change } : round) });
   const freshSchedule = (): ProSchedule => importSchedule(competition, roundId => settings.rounds.find(round => round.id === roundId)?.groups ?? 1);
   const setPro = (enabled: boolean) => {
-    update({ pro: { enabled, schedule: settings.pro?.schedule ?? freshSchedule() } });
+    update({ pro: { ...settings.pro, enabled, schedule: settings.pro?.schedule ?? freshSchedule() } });
     if (!enabled && PRO_TABS.includes(tab)) changeTab("zone");
   };
-  const setSchedule = (schedule: ProSchedule) => update({ pro: { enabled: true, schedule } });
+  const setSchedule = (schedule: ProSchedule) => update({ pro: { ...settings.pro, enabled: true, schedule } });
+  // Until first edited, PRO people start from the properties already in the WCIF.
+  const proPeople: ProPeople = settings.pro?.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
+  const setProPeople = (next: ProPeople) => update({ pro: { ...settings.pro!, enabled: true, people: next } });
 
   const activeRounds = rounds.filter(round => round.enabled);
   const firstRounds = rounds.filter(round => round.roundNumber === 1);
@@ -203,7 +209,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [] }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -257,7 +263,9 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           {showMoreOptions && <div className="option-list">{MORE_OPTIONS.map(key => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>}
         </section>}
 
-        {tab === "people" && <PeoplePanel people={people} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />}
+        {tab === "people" && <><PeoplePanel people={people} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
+          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} value={proPeople} onChange={setProPeople} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
+        </>}
 
         {tab === "rounds" && <>
           {outdatedNote}

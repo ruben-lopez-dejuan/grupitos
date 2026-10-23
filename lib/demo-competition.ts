@@ -8,6 +8,8 @@ const EVENT_BASE: Record<string, number> = { "333": 1800, "222": 600, "444": 600
 
 export type DemoSize = "small" | "large";
 
+const DEMO_TEAMS = ["Voluntario", "Registro", "Data entry", "Streaming"];
+
 const DEMO_SHAPES: Record<DemoSize, { id: string; name: string; people: number; events: string[] }> = {
   small: { id: "DemoOpenPequeno2026", name: "Demo Open Pequeño 2026", people: 34, events: ["333", "222", "pyram", "333oh"] },
   large: { id: "DemoCampeonato2026", name: "Demo Campeonato 2026", people: 260, events: ["333", "222", "444", "555", "333oh", "pyram", "skewb", "clock", "minx", "sq1"] },
@@ -44,6 +46,8 @@ export function buildDemoCompetition({ id, name, people, events, newcomerShare =
       wcaId: newcomer ? null : `${year}DEMO${String(index % 100).padStart(2, "0")}`,
       birthdate: `${1975 + Math.floor(random() * 40)}-0${1 + Math.floor(random() * 9)}-1${Math.floor(random() * 9)}`,
       registration: { status: "accepted", isCompeting: true, eventIds },
+      // Large demos carry natshelper properties, as a championship prepared with CompScript would.
+      ...(people > 100 && index % 6 === 0 ? { extensions: [{ id: "org.cubingusa.natshelper.v1.Person", data: { properties: { team: DEMO_TEAMS[(index / 6) % DEMO_TEAMS.length], "weight-judge": index % 4 } } }] } : {}),
       personalBests: newcomer ? [] : eventIds.filter(() => random() < 0.9).flatMap(eventId => {
         const average = Math.round((EVENT_BASE[eventId] ?? 2000) * skill * (0.85 + random() * 0.3));
         return [{ eventId, type: "average" as const, best: average }, { eventId, type: "single" as const, best: Math.round(average * 0.8) }];

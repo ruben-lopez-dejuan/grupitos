@@ -28,7 +28,7 @@ export type RoundConfig = GenerationRound & {
 };
 
 export function personKey(person: WcifPerson) {
-  return String(person.registrantId ?? person.wcaId ?? person.name);
+  return person.appKey ?? String(person.registrantId ?? person.wcaId ?? person.name);
 }
 
 export function acceptedPeople(competition: StoredCompetition) {

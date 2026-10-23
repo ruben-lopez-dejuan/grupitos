@@ -6,6 +6,7 @@
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type Task, type TaskRole } from "@/lib/assignments";
+import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
@@ -152,7 +153,7 @@ function overlapMinutes(a: GroupSlot, b: GroupSlot) {
   return total;
 }
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [] }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -163,13 +164,18 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   slots?: Map<string, GroupSlot[]>;
   /** PRO mode: extra times when an event's competitors are busy (multi-blind cube submission). */
   eventWindows?: Map<string, TimeWindow[]>;
+  /** PRO mode: volunteers who do not compete; they can take staff tasks. */
+  extraPeople?: WcifPerson[];
+  /** PRO mode: times when people cannot be given tasks (needs `slots`). */
+  unavailable?: Unavailability[];
 }): GeneratedAssignment[] {
-  const accepted = acceptedPeople(competition);
+  const accepted = [...acceptedPeople(competition), ...extraPeople];
   const country = competitionCountry(competition);
   const set = (ids?: string[]) => new Set(ids ?? []);
   const delegates = new Set([...set(people.roles.delegate), ...set(people.roles["trainee-delegate"])]);
   const organizers = set(people.roles.organizer);
-  const staff = set(people.roles.staff);
+  // Volunteers who do not compete come to work: they count as staff.
+  const staff = new Set([...set(people.roles.staff), ...extraPeople.map(personKey)]);
   const dataEntry = set(people.roles.dataentry);
   const trusted = set(people.trustedIds);
   const delegateDuty = set(people.delegateDutyIds);
@@ -213,6 +219,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
       }
     });
+    // Unavailable people get no tasks then; "while X competes" follows X's groups as placed.
+    const competing = new Map<string, TimeWindow[]>();
+    for (const plan of plans) plan.groups.forEach((members, groupIndex) => {
+      const windows = slots.get(plan.round.id)?.find(slot => slot.group === groupIndex + 1)?.windows ?? [];
+      for (const person of members) competing.set(personKey(person), [...(competing.get(personKey(person)) ?? []), ...windows]);
+    });
+    for (const [key, windows] of unavailableWindows(unavailable, other => competing.get(other) ?? [])) busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
   }
 
   for (const plan of plans) {

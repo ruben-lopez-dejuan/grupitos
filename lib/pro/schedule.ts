@@ -3,6 +3,7 @@
  * declared by natshelper. Times are venue-local wall-clock values, YYYY-MM-DDTHH:mm.
  */
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
+import type { ProPeople } from "@/lib/pro/people";
 
 export type LocalTime = string;
 export type TimeWindow = { start: LocalTime; end: LocalTime };
@@ -32,7 +33,8 @@ export type ProSchedule = {
   activities: ProActivity[];
 };
 
-export type ProConfig = { enabled: boolean; schedule: ProSchedule };
+/** `people` is absent until the PRO people panel is first used. */
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**
