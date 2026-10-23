@@ -102,7 +102,8 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
   const [cursor, setCursor] = useState<CellRef>();
   const [focusRequest, setFocusRequest] = useState(0);
   const [status, setStatus] = useState("");
-  const [showIssues, setShowIssues] = useState(false);
+  /** Severity whose list is open, from a click on its count. */
+  const [openSeverity, setOpenSeverity] = useState<IssueSeverity>();
   const [showHelp, setShowHelp] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<RowFilter>("all");
@@ -168,8 +169,9 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
   }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);
-  const groupCount = Math.max(currentRules.groups, usedGroupCount(visible), 1);
-  const totals = groupTotals(visible, groupCount);
+  // Group totals count the whole round, whatever the filter or search shows.
+  const groupCount = Math.max(currentRules.groups, usedGroupCount(roundRows), 1);
+  const totals = groupTotals(roundRows, groupCount);
   const extraRoles = EXTRA_ROLES.filter(role => totals.some(total => total.counts[role] > 0) || (role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry));
   const selected = useMemo(() => new Set(selection), [selection]);
   const currentRound = rounds.find(round => round.id === roundId);
@@ -411,7 +413,8 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
     <div className="issue-bar">
       <div className="issue-counts">{issues.length === 0
         ? <span className="ok">{t("review.noIssues")}</span>
-        : (["error", "warning"] as IssueSeverity[]).filter(severity => counts[severity]).map(severity => <span key={severity} className={severity} title={severity === "error" ? t("review.severityErrorHelp") : t("review.severityWarningHelp")}>{severityCount(severity, counts[severity])}</span>)}
+        : (["error", "warning"] as IssueSeverity[]).filter(severity => counts[severity]).map(severity => <button type="button" key={severity} className={`${severity} ${openSeverity === severity ? "open" : ""}`} aria-expanded={openSeverity === severity} title={`${severity === "error" ? t("review.severityErrorHelp") : t("review.severityWarningHelp")}
+${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onClick={() => setOpenSeverity(current => current === severity ? undefined : severity)}>{severityCount(severity, counts[severity])}<i aria-hidden="true">▾</i></button>)}
       </div>
       <span className="review-status" role="status">{status}</span>
       <div className="row-controls">
@@ -419,9 +422,8 @@ export function GroupReview({ initialAssignments, rules, roomName, onChange, pho
         <select value={filter} onChange={event => setFilter(event.target.value as RowFilter)} aria-label={t("review.filter")}>{FILTERS.map(key => <option key={key} value={key}>{t(keyOf("review.filters", key))}</option>)}</select>
         <select value={sortBy} onChange={event => setSortBy(event.target.value as RowSort)} aria-label={t("review.sort")}>{SORTS.map(key => <option key={key} value={key}>{t(keyOf("review.sorts", key))}</option>)}</select>
       </div>
-      {issues.length > 0 && <button className="plain" aria-expanded={showIssues} onClick={() => setShowIssues(value => !value)}>{showIssues ? t("review.hideList") : t("review.showList")}</button>}
     </div>
-    {showIssues && issues.length > 0 && <ul className="issue-items">{issues.map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{issue.severity === "error" ? t("review.severityError") : t("review.severityWarning")}</span>{issueText(issue)}</button></li>)}</ul>}
+    {openSeverity && issues.some(issue => issue.severity === openSeverity) && <ul className="issue-items">{issues.filter(issue => issue.severity === openSeverity).map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{issue.severity === "error" ? t("review.severityError") : t("review.severityWarning")}</span>{issueText(issue)}</button></li>)}</ul>}
 
     <div className="assignment-matrix-wrap" ref={matrixRef}><table className="assignment-matrix" aria-label={t("review.matrix")}><thead>
       <tr><th className="rank-column">#</th><th className="name-column">{t("review.columnPerson")}</th><th>{t("review.columnAge")}</th><th>{t("review.columnSeed")}</th><th>{t("review.columnInRound")}</th><th className="groups-heading" colSpan={groupCount}>{roundSlots ? "" : roomName ?? t("review.area")}</th><th className="tasks-column">{t("review.columnTotals")}</th></tr>

@@ -142,3 +142,14 @@ button.plain{padding:4px 6px;color:var(--blue);background:transparent;border:0;f
 .task-totals{margin-top:0;color:var(--ink)}.task-totals .cell-chip.mini{height:21px;padding:0 6px;font-size:12px;opacity:1}.task-totals b{color:var(--muted);font-weight:650}
 .language-switcher{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;font-size:14px}.language-switcher span{font-size:14px;line-height:1}.language-switcher select{padding:0 2px;color:inherit;background:transparent;border:0;font:inherit;font-weight:650;cursor:pointer}.language-switcher select:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.workspace-topbar-actions,.topbar-actions,.account{display:flex;align-items:center;gap:8px}
 .workspace-tabs button{padding-inline:11px;font-size:14px}
+.issue-counts button{display:inline-flex;align-items:center;padding:3px 8px;margin:-3px -8px;color:inherit;background:transparent;border:0;border-radius:5px;font:inherit;font-weight:700;cursor:pointer}
+.issue-counts button.error{color:var(--error)}
+.issue-counts button.warning{color:var(--warning)}
+.issue-counts button::before{content:"";display:inline-block;width:8px;height:8px;margin-right:7px;background:currentColor;border-radius:50%}
+.issue-counts button:hover,.issue-counts button.open{background:color-mix(in srgb,currentColor 10%,transparent)}
+.issue-counts button i{margin-left:5px;font-style:normal;font-size:12px;transition:transform .15s}
+.issue-counts button.open i{transform:rotate(180deg)}
+.round-tabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:4px}
+.round-tabs button{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
+.round-tabs button>span{min-width:0}
+.round-tabs button>span,.round-tabs small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
