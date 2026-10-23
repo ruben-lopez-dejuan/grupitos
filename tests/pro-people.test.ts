@@ -4,7 +4,7 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, staffRoleFromWcif } from "@/lib/people";
-import { everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
+import { everyone, findVolunteerCopies, importPersonProperties, mergeVolunteerCopies, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
 import { suggestTeamSetup, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams, type TeamSetup } from "@/lib/pro/teams";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
@@ -206,3 +206,25 @@ describe("a room team", () => {
 function roundCompetitorsKeys(competition: StoredCompetition, eventId: string) {
   return (competition.persons ?? []).filter(person => person.registration?.eventIds?.includes(eventId)).map(personKey);
 }
+
+describe("volunteer copies of registered people", () => {
+  it("are merged into the person with their properties, unavailability and roles", () => {
+    const competition = buildDemoCompetition({ id: "Copies", name: "Copies", people: 10, events: ["333"], newcomerShare: 0, seed: 3 });
+    const [first, second] = competition.persons!;
+    const pro = normalizeProPeople({
+      propertyKeys: ["team"],
+      properties: { [personKey(first)]: { shirt: "M" }, "vol-1": { team: "Data entry" }, "vol-2": { team: "Side room" }, "vol-3": { team: "Otro" }, "ghost": { team: "Registro" } },
+      volunteers: [{ key: "vol-1", name: first.name, wcaId: first.wcaId }, { key: "vol-2", name: second.name.toUpperCase() }, { key: "vol-3", name: "Ana Real" }],
+      unavailable: [{ id: "u1", personKey: "vol-2", start: "2026-02-21T09:00", end: "2026-02-21T10:00" }],
+    });
+    const settings = { roles: { staff: ["vol-1", personKey(first)] }, trustedIds: ["vol-2"], delegateDutyIds: [] };
+    expect(findVolunteerCopies(competition, pro)).toEqual([{ volunteer: "vol-1", into: personKey(first) }, { volunteer: "vol-2", into: personKey(second) }]);
+    const merged = mergeVolunteerCopies(competition, pro, settings);
+    expect(merged.people.volunteers.map(volunteer => volunteer.key)).toEqual(["vol-3"]);
+    expect(merged.people.properties).toEqual({ [personKey(first)]: { shirt: "M", team: "Data entry" }, [personKey(second)]: { team: "Side room" }, "vol-3": { team: "Otro" } });
+    expect(merged.people.unavailable[0].personKey).toBe(personKey(second));
+    expect(merged.settings.roles.staff).toEqual([personKey(first)]);
+    expect(merged.settings.trustedIds).toEqual([personKey(second)]);
+    expect([merged.merged, merged.orphans]).toEqual([2, 1]);
+  });
+});

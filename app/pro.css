@@ -356,3 +356,16 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .template-panel select{padding:7px 9px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
 .template-panel .setup-note{margin:0}
 .template-panel .setup-note small{color:var(--muted)}
+
+/* People repair and import preview */
+.repair-note{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin:12px 22px 0;padding:10px 14px;color:#8a4b00;background:color-mix(in srgb,#c58a21 12%,var(--surface));border:1px solid color-mix(in srgb,#c58a21 40%,var(--line));border-radius:6px;font-size:14px}
+:root[data-theme="dark"] .repair-note{color:#f3c27a}
+.repair-note p{margin:0}
+.sheet-identity{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:14px}
+.sheet-identity label{display:inline-flex;align-items:center;gap:6px}
+.sheet-identity label span{color:var(--muted);font-weight:700}
+.sheet-identity select{padding:5px 7px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.sheet-preview ul{display:grid;gap:2px;max-height:180px;margin:4px 0 0;padding:0;overflow:auto;list-style:none;font-size:13px}
+.sheet-preview li em{color:var(--muted);font-style:normal}
+.sheet-preview li.unmatched em,.sheet-preview li.ambiguous em{color:#a35d00}
+:root[data-theme="dark"] .sheet-preview li.unmatched em,:root[data-theme="dark"] .sheet-preview li.ambiguous em{color:#f3c27a}

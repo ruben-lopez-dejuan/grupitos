@@ -4,7 +4,7 @@
  * (UnavailableBetween, and "while X competes" for parents who come with a child).
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
-import { nonCompetingStaff } from "@/lib/people";
+import { nonCompetingStaff, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, personKey } from "@/lib/rounds";
 import type { TimeWindow } from "@/lib/pro/schedule";
 import { migrateTeamRoles, normalizeTeams, type TeamsConfig } from "@/lib/pro/teams";
@@ -101,4 +101,67 @@ export function unavailableWindows(unavailable: Unavailability[], competingWindo
     if (windows.length) result.set(item.personKey, [...(result.get(item.personKey) ?? []), ...windows]);
   }
   return result;
+}
+
+const sameName = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Volunteers that are really someone else: a registered person (or staff without registration)
+ * with the same WCA ID, or else the only one with the same name; or an earlier volunteer with the
+ * same WCA ID or name. Older imports created them for rows they could not match.
+ */
+export function findVolunteerCopies(competition: StoredCompetition, people: ProPeople) {
+  const registered = [...acceptedPeople(competition), ...nonCompetingStaff(competition)];
+  const byWcaId = new Map(registered.filter(person => person.wcaId).map(person => [person.wcaId!.toUpperCase(), personKey(person)]));
+  const byName = new Map<string, string | null>();
+  for (const person of registered) {
+    const name = sameName(person.name);
+    byName.set(name, byName.has(name) && byName.get(name) !== personKey(person) ? null : personKey(person));
+  }
+  const copies: Array<{ volunteer: string; into: string }> = [];
+  const kept: ProVolunteer[] = [];
+  for (const volunteer of people.volunteers) {
+    const wcaId = volunteer.wcaId?.trim().toUpperCase();
+    const twin = kept.find(other => (wcaId && other.wcaId?.trim().toUpperCase() === wcaId) || sameName(other.name) === sameName(volunteer.name));
+    const into = (wcaId && byWcaId.get(wcaId)) || byName.get(sameName(volunteer.name)) || twin?.key;
+    if (into) copies.push({ volunteer: volunteer.key, into });
+    else kept.push(volunteer);
+  }
+  return copies;
+}
+
+/** Property owners that are nobody (left behind by a removed volunteer or a deleted registration). */
+export function orphanPropertyKeys(competition: StoredCompetition, people: ProPeople) {
+  const known = new Set(everyone(competition, people).map(personKey));
+  return Object.keys(people.properties).filter(key => !known.has(key));
+}
+
+/**
+ * Merges each copy into its person: properties (the copy's, imported later, win), unavailability
+ * and role lists move to the person, and the copy is removed. Orphan properties are dropped.
+ */
+export function mergeVolunteerCopies(competition: StoredCompetition, people: ProPeople, settings: PeopleSettings) {
+  const copies = findVolunteerCopies(competition, people);
+  // A chain (copy of a copy) ends at the real person.
+  const target = (key: string): string => { const next = copies.find(copy => copy.volunteer === key)?.into; return next && next !== key ? target(next) : key; };
+  const moved = new Set(copies.map(copy => copy.volunteer));
+  const properties: ProPeople["properties"] = {};
+  const order = Object.keys(people.properties).sort((a, b) => Number(moved.has(a)) - Number(moved.has(b)) || a.localeCompare(b, undefined, { numeric: true }));
+  for (const key of order) properties[target(key)] = { ...properties[target(key)], ...people.properties[key] };
+  const remap = (keys: string[]) => [...new Set(keys.map(target))];
+  const mergedPeople: ProPeople = {
+    ...people,
+    volunteers: people.volunteers.filter(volunteer => !moved.has(volunteer.key)),
+    properties,
+    unavailable: people.unavailable.map(item => ({ ...item, personKey: target(item.personKey), ...(item.whileCompeting !== undefined ? { whileCompeting: target(item.whileCompeting) } : {}) })) as Unavailability[],
+  };
+  const orphans = orphanPropertyKeys(competition, mergedPeople);
+  for (const key of orphans) delete mergedPeople.properties[key];
+  const mergedSettings: PeopleSettings = {
+    ...settings,
+    roles: Object.fromEntries(Object.entries(settings.roles).map(([role, keys]) => [role, remap(keys ?? [])])),
+    trustedIds: remap(settings.trustedIds),
+    delegateDutyIds: remap(settings.delegateDutyIds),
+  };
+  return { people: mergedPeople, settings: mergedSettings, merged: copies.length, orphans: orphans.length };
 }

@@ -13,7 +13,7 @@ import { personKey } from "@/lib/rounds";
 const PAGE = 80;
 
 /** PRO people: volunteers who do not compete and free-form properties per person. */
-export function ProPeoplePanel({ people, days, value, onChange, onReimport, lanes }: {
+export function ProPeoplePanel({ people, days, value, onChange, onReimport, lanes, repair, onRepair }: {
   /** Accepted competitors and volunteers. */
   people: WcifPerson[];
   /** Competition days, for unavailabilities. */
@@ -23,8 +23,11 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
   onReimport: () => void;
   /** Rooms and stages a team can work in. */
   lanes: Array<{ key: string; name: string; hasStages: boolean }>;
+  /** Volunteers copying a registered person and properties of nobody, to repair in one click. */
+  repair?: { copies: number; orphans: number };
+  onRepair?: () => void;
 }) {
-  const { t, locale } = useI18n();
+  const { t, tp, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [newProperty, setNewProperty] = useState("");
@@ -96,6 +99,11 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
 
   return <section className="pro-people people-panel">
     <div className="setup-heading"><h2>{t("proPeople.title")} <Hint align="start" text={t("proPeople.hint")} /></h2><button type="button" className="plain" onClick={() => { if (window.confirm(t("proPeople.confirmReimport"))) onReimport(); }}>{t("proPeople.reimport")}</button></div>
+
+    {repair && (repair.copies > 0 || repair.orphans > 0) && <div className="repair-note" role="alert">
+      <p><strong>{t("proPeople.repairTitle")}</strong> {[repair.copies ? tp("proPeople.repairCopies", repair.copies) : "", repair.orphans ? tp("proPeople.repairOrphans", repair.orphans) : ""].filter(Boolean).join(" · ")}</p>
+      <button className="button secondary" type="button" onClick={() => { if (window.confirm(t("proPeople.repairConfirm"))) onRepair?.(); }}>{t("proPeople.repair")}</button>
+    </div>}
 
     <h3 className="panel-subheading">{t("proPeople.volunteers")} <span className="count-chip">{value.volunteers.length}</span> <Hint align="start" text={t("proPeople.volunteersHint")} /></h3>
     <div className="volunteer-area">

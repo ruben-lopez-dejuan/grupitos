@@ -24,7 +24,7 @@ import { getCompetition, type StoredCompetition } from "@/lib/competition-store"
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
-import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
+import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { applyTemplate, exportTemplate, type ProTemplate } from "@/lib/pro/template";
@@ -159,7 +159,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const teamState = useMemo(() => {
     if (!competition || !settings?.pro?.enabled) return undefined;
     const proPeople = settings.pro.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
-    const { property, setups, values } = teamSetups(proPeople, proPeople.teams, laneChoices(settings.pro.schedule));
+    const { property, setups, values: allValues } = teamSetups(proPeople, proPeople.teams, laneChoices(settings.pro.schedule));
+    // Properties left behind by someone who no longer exists do not count.
+    const known = new Set(everyone(competition, proPeople).map(personKey));
+    const values = new Map([...allValues].filter(([key]) => known.has(key)));
     if (!values.size) return undefined;
     const { settings: people, fromTeam } = withTeams(settings.people, values, setups);
     return { property, setups, values, people, fromTeam, unavailable: teamUnavailability(values, setups), jobExclusions: teamJobExclusions(values, setups), lanes: teamLanes(values, setups) };
@@ -241,6 +244,13 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   // Until first edited, PRO people start from the properties already in the WCIF.
   const proPeople: ProPeople = settings.pro?.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
   const setProPeople = (next: ProPeople) => updatePro(() => ({ people: next }));
+  /** Volunteers that copy a registered person, and properties of nobody: merged or dropped in one click. */
+  const peopleRepair = pro ? { copies: findVolunteerCopies(competition, proPeople).length, orphans: orphanPropertyKeys(competition, proPeople).length } : undefined;
+  const repairPeople = () => setSettings(current => {
+    if (!current?.pro) return current;
+    const merged = mergeVolunteerCopies(competition, current.pro.people ?? proPeople, current.people);
+    return { ...current, people: merged.settings, pro: { ...current.pro, people: merged.people } };
+  });
   const segments = settings.pro?.segments ?? [];
   const setSegments = (next: Segment[]) => updatePro(() => ({ segments: next }));
   /** Teams can be chosen wherever a cluster is: assignment sets, station rules, job eligibility, review filter. */
@@ -464,8 +474,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           </>}
         </section>}
 
-        {tab === "people" && <><PeoplePanel people={rolePeople} settings={settings.people} inUse={peopleInUse} fromTeam={teamState?.fromTeam} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
-          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} lanes={laneChoices(pro.schedule)} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
+        {tab === "people" && <><PeoplePanel people={pro ? everyone(competition, proPeople) : rolePeople} settings={settings.people} inUse={peopleInUse} fromTeam={teamState?.fromTeam} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
+          {pro && <ProPeoplePanel repair={peopleRepair} onRepair={repairPeople} people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} lanes={laneChoices(pro.schedule)} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
         </>}
 
         {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={peopleInUse} proPeople={proPeople} segments={segments} onChange={setSegments} />}

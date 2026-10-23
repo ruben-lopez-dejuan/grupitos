@@ -6,7 +6,7 @@ import { useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
 import type { ProPeople } from "@/lib/pro/people";
-import { applySheetImport, guessMapping, MATCH_BY, parseCsv, propertiesTemplate, spreadsheetIdFromUrl, type SheetMapping } from "@/lib/pro/sheet-import";
+import { applySheetImport, guessMapping, IDENTITIES, parseCsv, propertiesTemplate, spreadsheetIdFromUrl, type Identity, type SheetImportResult, type SheetMapping } from "@/lib/pro/sheet-import";
 
 type Source = "google" | "csv";
 type Status = { configured: boolean; email?: string } | { error: string };
@@ -32,11 +32,8 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
 
   function load(data: string[][]) {
     if (data.length < 2) return setMessage(t("sheetImport.empty"));
-    const headers = data[0];
-    const guess = guessMapping(headers);
-    const nameColumn = headers.findIndex(header => /name|nombre/i.test(header));
     setRows(data);
-    setMapping({ ...guess, propertyColumns: headers.map((_, index) => index).filter(index => index !== guess.matchColumn && index !== nameColumn && !/marca temporal|timestamp|e-?mail|correo|wca\s*id|^\s*(registrant\s*id|id)\s*$/i.test(headers[index])), ...(nameColumn >= 0 ? { volunteerNameColumn: nameColumn } : {}) });
+    setMapping(guessMapping(data[0]));
     setMessage("");
   }
 
@@ -57,12 +54,24 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
     }
   }
 
+  // What the import would do, row by row, before anything changes.
+  const preview = useMemo(() => rows && mapping ? applySheetImport(rows, mapping, people, value) : undefined, [rows, mapping, people, value]);
+
   function apply() {
-    if (!rows || !mapping) return;
-    const result = applySheetImport(rows, mapping, people, value);
-    onApply(result.people);
-    setMessage([t("sheetImport.result", { matched: result.matched, created: result.created }), result.unmatched.length ? `${tp("sheetImport.unmatched", result.unmatched.length)}: ${result.unmatched.slice(0, 12).join(", ")}${result.unmatched.length > 12 ? "…" : ""}` : ""].filter(Boolean).join(" · "));
+    if (!preview) return;
+    onApply(preview.people);
+    setMessage(summary(preview));
     setRows(undefined);
+  }
+
+  function summary(result: SheetImportResult) {
+    const by = (identity: Identity) => result.outcomes.filter(item => item.result === "matched" && item.by === identity).length;
+    return [
+      t("sheetImport.matchedBy", { wcaId: by("wcaId"), registrantId: by("registrantId"), email: by("email"), name: by("name") }),
+      result.created ? tp("sheetImport.created", result.created) : "",
+      result.ambiguous.length ? `${tp("sheetImport.ambiguous", result.ambiguous.length)}: ${result.ambiguous.join(", ")}` : "",
+      result.unmatched.length ? `${tp("sheetImport.unmatched", result.unmatched.length)}: ${result.unmatched.slice(0, 12).join(", ")}${result.unmatched.length > 12 ? "…" : ""}` : "",
+    ].filter(Boolean).join(" · ");
   }
 
   const headers = rows?.[0] ?? [];
@@ -91,19 +100,26 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
 
     {rows && mapping && <div className="sheet-mapping">
       <p className="sheet-status">{tp("sheetImport.rows", rows.length - 1)}</p>
-      <div className="volunteer-form">
-        <span>{t("sheetImport.matchBy")}</span>
-        <select value={mapping.matchBy} onChange={event => setMapping({ ...mapping, matchBy: event.target.value as SheetMapping["matchBy"] })} aria-label={t("sheetImport.matchBy")}>{MATCH_BY.map(item => <option key={item} value={item}>{t(keyOf("sheetImport.match", item))}</option>)}</select>
-        <span>{t("sheetImport.inColumn")}</span>
-        <select value={mapping.matchColumn} onChange={event => setMapping({ ...mapping, matchColumn: Number(event.target.value), propertyColumns: mapping.propertyColumns.filter(column => column !== Number(event.target.value)) })} aria-label={t("sheetImport.inColumn")}>{headers.map((_, index) => <option key={index} value={index}>{columnName(index)}</option>)}</select>
+      <div className="sheet-identity"><strong>{t("sheetImport.matchOrder")} <Hint align="start" text={t("sheetImport.matchOrderHelp")} /></strong>
+        {IDENTITIES.map((identity, order) => <label key={identity}><span>{order + 1}. {t(keyOf("sheetImport.match", identity))}</span>
+          <select value={mapping.identity[identity] ?? ""} onChange={event => {
+            const column = event.target.value === "" ? undefined : Number(event.target.value);
+            const { [identity]: _old, ...rest } = mapping.identity;
+            setMapping({ ...mapping, identity: column === undefined ? rest : { ...rest, [identity]: column }, propertyColumns: mapping.propertyColumns.filter(item => item !== column) });
+          }} aria-label={t(keyOf("sheetImport.match", identity))}><option value="">—</option>{headers.map((_, index) => <option key={index} value={index}>{columnName(index)}</option>)}</select>
+        </label>)}
       </div>
       <div className="sheet-columns"><strong>{t("sheetImport.asProperties")} <Hint align="start" text={t("sheetImport.asPropertiesHelp")} /></strong>
-        {headers.map((_, index) => index === mapping.matchColumn ? null : <label key={index}><input type="checkbox" checked={mapping.propertyColumns.includes(index)} onChange={event => setMapping({ ...mapping, propertyColumns: event.target.checked ? [...mapping.propertyColumns, index].sort((a, b) => a - b) : mapping.propertyColumns.filter(column => column !== index) })} />{columnName(index)}</label>)}
+        {headers.map((_, index) => Object.values(mapping.identity).includes(index) ? null : <label key={index}><input type="checkbox" checked={mapping.propertyColumns.includes(index)} onChange={event => setMapping({ ...mapping, propertyColumns: event.target.checked ? [...mapping.propertyColumns, index].sort((a, b) => a - b) : mapping.propertyColumns.filter(column => column !== index) })} />{mapping.propertyNames?.[index] ?? columnName(index)}</label>)}
       </div>
       <div className="volunteer-form">
-        <label><input type="checkbox" checked={mapping.volunteerNameColumn !== undefined} onChange={event => setMapping({ ...mapping, volunteerNameColumn: event.target.checked ? Math.max(0, headers.findIndex(header => /name|nombre/i.test(header))) : undefined })} /> {t("sheetImport.createVolunteers")}</label>
-        {mapping.volunteerNameColumn !== undefined && <select value={mapping.volunteerNameColumn} onChange={event => setMapping({ ...mapping, volunteerNameColumn: Number(event.target.value) })} aria-label={t("sheetImport.nameColumn")}>{headers.map((_, index) => <option key={index} value={index}>{columnName(index)}</option>)}</select>}
+        <label><input type="checkbox" checked={mapping.clearMissing} onChange={event => setMapping({ ...mapping, clearMissing: event.target.checked })} /> {t("sheetImport.clearMissing")}</label>
+        <label><input type="checkbox" checked={mapping.createVolunteers} disabled={mapping.identity.name === undefined} onChange={event => setMapping({ ...mapping, createVolunteers: event.target.checked })} /> {t("sheetImport.createVolunteers")}</label>
       </div>
+      {preview && <div className="sheet-preview">
+        <p className="sheet-status">{summary(preview)}</p>
+        {preview.outcomes.some(item => item.result !== "matched" || item.by === "name") && <ul>{preview.outcomes.filter(item => item.result !== "matched" || item.by === "name").map(item => <li key={item.row} className={item.result}><small>{t("sheetImport.rowNumber", { row: item.row })}</small> {item.label} <em>{t(keyOf("sheetImport.outcomes", item.result === "matched" ? "byName" : item.result))}</em></li>)}</ul>}
+      </div>}
       <div className="volunteer-form">
         <button className="button primary" type="button" onClick={apply}>{t("sheetImport.apply")}</button>
         <button className="plain" type="button" onClick={() => setRows(undefined)}>{t("sheetImport.cancel")}</button>
