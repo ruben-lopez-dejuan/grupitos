@@ -4,7 +4,7 @@ import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, splitIntoGroups, type AssignmentOptions } from "@/lib/group-generator";
 import { peopleFromWcif, type PeopleSettings } from "@/lib/people";
-import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, seedResult, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
 function setup(competition: StoredCompetition, stations: number, zoneMode: ZoneMode, options: Partial<AssignmentOptions> = {}, people = peopleFromWcif(competition)) {
@@ -123,6 +123,21 @@ describe("generateAssignments — reglas concretas", () => {
   it("strict scramblers only use people with results or trusted people", () => {
     const result = run({ sortingRule: "scrambler-safe" });
     expect(result.filter(item => duties(item).some(duty => duty.role === "scrambler")).every(item => item.seedResult !== undefined)).toBe(true);
+  });
+
+  it("reads WCIF 2 personal best values and still fills strict scramblers", () => {
+    const versionTwo = structuredClone(competition);
+    versionTwo.formatVersion = "2.2";
+    for (const person of versionTwo.persons ?? []) for (const personalBest of person.personalBests ?? []) {
+      personalBest.value = personalBest.best;
+      delete personalBest.best;
+    }
+    const versionTwoPeople = peopleFromWcif(versionTwo);
+    const result = generateAssignments({ competition: versionTwo, rounds: [round], stations: 10, zoneMode: "waiting", people: versionTwoPeople, options: DEFAULT_OPTIONS });
+    const scramblers = result.filter(item => duties(item).some(duty => duty.role === "scrambler"));
+    expect(scramblers).toHaveLength(round.groups * round.scramblers);
+    expect(scramblers.every(item => item.seedResult !== undefined)).toBe(true);
+    expect(seedResult(versionTwo.persons!.find(person => person.personalBests?.some(best => best.eventId === "333"))!, "333")).toBeDefined();
   });
 
   it("trusted people scramble even when slower", () => {

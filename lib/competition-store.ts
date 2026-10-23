@@ -17,7 +17,10 @@ export type WcifPerson = {
   personalBests?: Array<{
     eventId: string;
     type: "single" | "average";
-    best: number;
+    /** WCIF 1.x field name. */
+    best?: number;
+    /** WCIF 2.x field name. */
+    value?: number;
     worldRanking?: number;
     continentalRanking?: number;
     nationalRanking?: number;

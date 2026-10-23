@@ -38,6 +38,15 @@ describe("segments", () => {
     expect(count(segment([{ kind: "registered", eventId: "222" }]))).toBe(people.filter(person => person.registration?.eventIds?.includes("222")).length);
   });
 
+  it("reads WCIF 2 personal best values in segments", () => {
+    const candidate = structuredClone(people.find(person => (person.personalBests?.find(best => best.eventId === "333" && best.type === "average")?.best ?? Infinity) < 1500)!);
+    for (const personalBest of candidate.personalBests ?? []) {
+      personalBest.value = personalBest.best;
+      delete personalBest.best;
+    }
+    expect(matchesSegment(segment([{ kind: "pb", eventId: "333", type: "average", value: 1500 }]), candidate, { people: settings, pro, segments: [] })).toBe(true);
+  });
+
   it("combines rules with any, reuses segments and survives a loop", () => {
     const a = segment([{ kind: "role", role: "organizer" }], "all", "a");
     const b = segment([{ kind: "segment", id: "a" }, { kind: "role", role: "volunteer" }], "any", "b");

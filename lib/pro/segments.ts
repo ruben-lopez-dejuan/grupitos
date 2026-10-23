@@ -7,7 +7,7 @@
 import type { WcifPerson } from "@/lib/competition-store";
 import { ageOf, rolesOf, type PeopleSettings, type PersonRole } from "@/lib/people";
 import type { ProPeople } from "@/lib/pro/people";
-import { bestAverageAndSingle, personKey } from "@/lib/rounds";
+import { bestAverageAndSingle, personalBestValue, personKey } from "@/lib/rounds";
 
 export const SEGMENT_ROLES = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "trusted", "volunteer"] as const;
 export type SegmentRole = typeof SEGMENT_ROLES[number];
@@ -84,8 +84,8 @@ function test(condition: Condition, person: WcifPerson, context: SegmentContext,
     }
     case "registered": return !!person.registration?.eventIds?.includes(condition.eventId);
     case "pb": {
-      const best = person.personalBests?.find(item => item.eventId === condition.eventId && item.type === condition.type)?.best;
-      return best !== undefined && best > 0 && best < condition.value;
+      const best = personalBestValue(person, condition.eventId, condition.type);
+      return Number.isFinite(best) && best > 0 && best < condition.value;
     }
     case "newcomer": return !person.wcaId;
     case "country": return person.countryIso2 === condition.iso2;

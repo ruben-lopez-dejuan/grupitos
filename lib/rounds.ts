@@ -73,14 +73,16 @@ export function judgesNeeded(groupSize: number, stations: number) {
 
 const BLIND_EVENTS = ["333bf", "444bf", "555bf", "333mbf"];
 
-function personalBest(person: WcifPerson, eventId: string, type: "single" | "average") {
-  return person.personalBests?.find(best => best.eventId === eventId && best.type === type)?.best ?? Number.POSITIVE_INFINITY;
+/** Reads a personal best from both WCIF 1.x (`best`) and WCIF 2.x (`value`). */
+export function personalBestValue(person: WcifPerson, eventId: string, type: "single" | "average") {
+  const personalBest = person.personalBests?.find(best => best.eventId === eventId && best.type === type);
+  return personalBest?.value ?? personalBest?.best ?? Number.POSITIVE_INFINITY;
 }
 
 /** Average then single, except blind events, where single comes first (Groupifier). */
 export function bestAverageAndSingle(person: WcifPerson, eventId: string) {
-  const average = personalBest(person, eventId, "average");
-  const single = personalBest(person, eventId, "single");
+  const average = personalBestValue(person, eventId, "average");
+  const single = personalBestValue(person, eventId, "single");
   return BLIND_EVENTS.includes(eventId) ? [single, average] : [average, single];
 }
 
@@ -156,7 +158,7 @@ export function expectedCompetitorsByRound(competition: StoredCompetition) {
       if (condition.type === "ranking") expected.set(round.id, pool.slice(0, condition.value ?? pool.length));
       else if (condition.type === "percent") expected.set(round.id, pool.slice(0, Math.floor(pool.length * (condition.value ?? 100) * 0.01)));
       else expected.set(round.id, pool.filter(person => {
-        const best = personalBest(person, event.id, condition.scope ?? "average");
+        const best = personalBestValue(person, event.id, condition.scope ?? "average");
         return condition.value === null ? Number.isFinite(best) : best < (condition.value ?? 0);
       }));
     });
