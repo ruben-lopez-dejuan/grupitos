@@ -46,7 +46,7 @@ Preferencias firmes del usuario:
 - Comandos:
   - `npm run dev`. El usuario suele tenerlo ya abierto en el puerto 3000, y un segundo `next dev` en la misma carpeta no arranca.
   - `npm run typecheck`.
-  - `npm test`: Vitest, con 208 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
+  - `npm test`: Vitest, con 212 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
   - `npm run build`.
 - Demo sin login, solo en desarrollo:
   - `/demo?size=small`: 34 personas y una sala.
@@ -180,6 +180,7 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
 - **Mezcladores de reserva**: si un grupo no se cubre con el grupo habitual (rondas de un solo grupo en sala auxiliar, escenarios en paralelo), entra gente que no compite en la ronda pero tiene marca en la prueba que se mezcla (`SCRAMBLE_EVENT`: 4BLD → 4x4, 5BLD → 5x5, BLD/OH/multi → 3x3).
 - **Equipo por sala o escenario** (Zona, PRO, `LaneStaffing.team`): un segmento dedicado a esa sala; sus miembros van primero allí y no trabajan en ningún otro sitio.
 - Con el WCIF del Nacional ya no queda ningún grupo sin delegado ni sin mezcladores, con reglas o con puntuación.
+- **Prioridad de asignación** (Reglas, todos los modos, `options.taskOrder`, `components/task-order-panel.tsx`): lista ordenable con flechas de delegado de turno, mezcladores, data entry, runners y jueces. Con reglas, cada tarea elige en ese orden dentro de cada ronda; con el delegado primero (por defecto) sus horas se reservan para toda la competición. Con puntuación, mezcladores, runners y jueces se resuelven juntos y los puestos de las primeras tareas valen más en el ILP (`solveGroupStaff(…, priority)`), así que se cubren antes si falta gente.
 
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
