@@ -111,6 +111,7 @@ export const en: Messages = {
     },
   },
   tabs: {
+    publish: "Publish",
     segments: "Clusters",
     zone: "Area",
     rules: "Rules",
@@ -119,6 +120,16 @@ export const en: Messages = {
     review: "Review",
     print: "Scorecards",
     schedule: "Schedule",
+  },
+  publish: {
+    title: "Export WCIF",
+    hint: "Downloads the competition's WCIF with the proposal: groups (the WCIF's own are reused when room, stage and time match; the rest are created), assignments with stations, Groupifier featured competitors, natshelper properties and stages. The rest of the WCIF stays as it was.",
+    noSync: "Nothing is sent to the WCA yet: download the file to review it or try it in another tool.",
+    download: "Download WCIF",
+    summary: "{people} people with {assignments} assignments.",
+    groups: "Groups: {reused} from the WCIF, {created} new, {removed} removed.",
+    skipped_one: "{count} person is not in the WCIF and is left out (app volunteers)",
+    skipped_other: "{count} people are not in the WCIF and are left out (app volunteers)",
   },
   pro: {
     toggle: "PRO",

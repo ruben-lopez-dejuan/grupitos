@@ -131,6 +131,16 @@ export function isoToLocal(iso: string, timeZone: string): LocalTime {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
+/** Wall-clock time in `timeZone` as a WCIF timestamp (UTC), the reverse of `isoToLocal`. */
+export function localToIso(time: LocalTime, timeZone: string) {
+  const wall = toMinutes(time) * 60000;
+  const offset = (instant: number) => toMinutes(isoToLocal(new Date(instant).toISOString(), timeZone)) * 60000 - instant;
+  // Twice, so a time next to a daylight-saving change gets the offset of its own side.
+  let instant = wall - offset(wall);
+  instant = wall - offset(instant);
+  return new Date(instant).toISOString().replace(".000", "");
+}
+
 function dateRange(startDate: string, count: number) {
   return Array.from({ length: count }, (_, index) => fromMinutes(toMinutes(startDate) + index * 1440).slice(0, 10));
 }

@@ -375,3 +375,9 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .change-competition.restart:hover{color:#b42318}
 .wcif-note{margin:0 0 10px}
 .group-attempt{margin-left:4px;color:var(--muted);font-size:12px;font-weight:650;text-transform:none}
+
+/* Publish: WCIF export */
+.publish-panel .setup-note{margin:0 22px 10px}
+.publish-panel .volunteer-form{padding:0 22px 12px}
+.publish-report{display:grid;gap:4px;padding:0 22px 18px;font-size:14px}
+.publish-report p{margin:0}

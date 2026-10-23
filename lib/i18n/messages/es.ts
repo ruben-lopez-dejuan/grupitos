@@ -113,6 +113,7 @@ export const es = {
     },
   },
   tabs: {
+    publish: "Publicar",
     segments: "Clusters",
     zone: "Zona",
     rules: "Reglas",
@@ -121,6 +122,16 @@ export const es = {
     review: "Revisar",
     print: "Hojas de tiempos",
     schedule: "Horario",
+  },
+  publish: {
+    title: "Exportar WCIF",
+    hint: "Descarga el WCIF de la competición con la propuesta: grupos (reutiliza los del WCIF que coinciden en sala, escenario y hora y crea los demás), asignaciones con estación, destacados de Groupifier, propiedades de natshelper y escenarios. Lo demás del WCIF queda igual.",
+    noSync: "Todavía no se envía nada a la WCA: descarga el archivo para revisarlo o probarlo en otra herramienta.",
+    download: "Descargar WCIF",
+    summary: "{people} personas con {assignments} asignaciones.",
+    groups: "Grupos: {reused} del WCIF, {created} nuevos, {removed} quitados.",
+    skipped_one: "{count} persona no está en el WCIF y queda fuera (voluntarios de la app)",
+    skipped_other: "{count} personas no están en el WCIF y quedan fuera (voluntarios de la app)",
   },
   pro: {
     toggle: "PRO",

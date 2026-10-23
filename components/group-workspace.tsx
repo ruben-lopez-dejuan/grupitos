@@ -10,6 +10,7 @@ import { GroupReview } from "@/components/group-review";
 import { Hint } from "@/components/hint";
 import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
+import { PublishPanel } from "@/components/publish-panel";
 import { ProTemplatePanel } from "@/components/pro-template-panel";
 import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
@@ -40,8 +41,8 @@ import type { RoundRules } from "@/lib/validation";
 
 const DEFAULT_STATIONS = 12;
 
-type Tab = "zone" | "schedule" | "rules" | "people" | "segments" | "rounds" | "review" | "print";
-const TABS: Tab[] = ["zone", "schedule", "rules", "people", "segments", "rounds", "review", "print"];
+type Tab = "zone" | "schedule" | "rules" | "people" | "segments" | "rounds" | "review" | "print" | "publish";
+const TABS: Tab[] = ["zone", "schedule", "rules", "people", "segments", "rounds", "review", "print", "publish"];
 /** Only in PRO mode. */
 const PRO_TABS: Tab[] = ["schedule", "segments"];
 const PHOTOS_KEY = "wca-easy-groups:show-photos";
@@ -461,6 +462,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     id,
     label: t(keyOf("tabs", id)),
     ...(id === "review" ? { done: proposal.length > 0, disabled: proposal.length === 0 } : {}),
+    ...(id === "publish" ? { disabled: proposal.length === 0 } : {}),
   }));
   const outdatedNote = proposalOutdated && <div className="outdated-note" role="status"><p><strong>{t("workspace.outdatedTitle")}</strong> {t("workspace.outdatedText")}</p></div>;
 
@@ -471,7 +473,6 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
       <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link><button type="button" className="change-competition restart" disabled={restarting} onClick={startFromScratch} title={t("workspace.restartHelp")}>{restarting ? t("workspace.restarting") : t("workspace.restart")}</button></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
         {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
-        <span className="tab-pending" title={t("workspace.notAvailable")}><span className="step-number">{tabs.length + 1}</span>{t("workspace.publish")} <small>{t("workspace.soon")}</small></span>
       </nav>
       <div className="workspace-content">
         {tab === "zone" && <>
@@ -599,6 +600,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : undefined} segmentFilters={segmentFilters} />}
         </>}
 
+        {tab === "publish" && <PublishPanel competition={competition} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
       </div>
       <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {

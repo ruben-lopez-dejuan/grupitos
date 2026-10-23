@@ -27,7 +27,7 @@ const PAPER: Record<PaperSize, { pageWidth: number; pageHeight: number; scorecar
 
 const MAX_ATTEMPTS_BY_FORMAT: Record<string, number> = { "1": 1, "2": 2, "3": 3, "5": 5, m: 3, a: 5, h: 5 };
 const SHORT_EVENT_NAMES: Record<string, string> = { "333": "3x3", "222": "2x2", "444": "4x4", "555": "5x5", "666": "6x6", "777": "7x7", "333bf": "3BLD", "333fm": "FMC", "333oh": "3OH", "333ft": "3WF", minx: "Minx", pyram: "Pyra", clock: "Clock", skewb: "Skewb", sq1: "Sq1", "444bf": "4BLD", "555bf": "5BLD", "333mbf": "MBLD" };
-const EVENT_NAMES_EN: Record<string, string> = { "333": "3x3x3 Cube", "222": "2x2x2 Cube", "444": "4x4x4 Cube", "555": "5x5x5 Cube", "666": "6x6x6 Cube", "777": "7x7x7 Cube", "333bf": "3x3x3 Blindfolded", "333fm": "3x3x3 Fewest Moves", "333oh": "3x3x3 One-Handed", "333ft": "3x3x3 With Feet", minx: "Megaminx", pyram: "Pyraminx", clock: "Clock", skewb: "Skewb", sq1: "Square-1", "444bf": "4x4x4 Blindfolded", "555bf": "5x5x5 Blindfolded", "333mbf": "3x3x3 Multi-Blind" };
+export const EVENT_NAMES_EN: Record<string, string> = { "333": "3x3x3 Cube", "222": "2x2x2 Cube", "444": "4x4x4 Cube", "555": "5x5x5 Cube", "666": "6x6x6 Cube", "777": "7x7x7 Cube", "333bf": "3x3x3 Blindfolded", "333fm": "3x3x3 Fewest Moves", "333oh": "3x3x3 One-Handed", "333ft": "3x3x3 With Feet", minx: "Megaminx", pyram: "Pyraminx", clock: "Clock", skewb: "Skewb", sq1: "Square-1", "444bf": "4x4x4 Blindfolded", "555bf": "5x5x5 Blindfolded", "333mbf": "3x3x3 Multi-Blind" };
 
 /** Languages whose texts need a CJK font, which is not bundled. */
 export const UNSUPPORTED_SCORECARD_LANGUAGES = ["cn", "zh"];
