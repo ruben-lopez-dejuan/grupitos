@@ -1,6 +1,6 @@
 # Modo PRO — diseño
 
-Estado: fase 1 hecha (sin commitear), pendiente de corregir salas y escenarios. Fecha: 22/10/2026. El estado del proyecto y el relevo están en [`HANDOFF.md`](../HANDOFF.md).
+Estado (23/10/2026): fases 1 y 2 hechas; fase 3 empezada (quién puede hacer cada tarea). El detalle del estado y el relevo están en [`HANDOFF.md`](../HANDOFF.md).
 
 ## Objetivo
 
@@ -87,10 +87,11 @@ Cada fase deja algo usable.
    - Los grupos de cada ronda salen del horario (G1…Gn por hora y escenario); la matriz muestra escenario y hora de cada grupo.
    - El generador no da a nadie una tarea mientras compite o trabaja en otro grupo a la misma hora, también entre rondas y escenarios.
    - Validación: error «a la vez» por persona; avisos del horario (rondas sin horario, bloques que coinciden en un escenario, rondas que empiezan antes de acabar la anterior).
-   - **Error de modelo pendiente:** la fase 1 trata cada sala del WCIF como un escenario. Hay que pasar a salas con escenarios dentro (ver «Salas y escenarios» y `HANDOFF.md` §6.3) antes de seguir.
+   - Salas con escenarios dentro, ventanas exactas de los grupos importados y edición arrastrando (Codex, 22/10/2026).
+   - 23/10/2026: los grupos paralelos comparten número; el total de grupos se fija por ronda y se reparte entre los bloques; multi-blind por intentos y entrega de cubos; impresión por escenario.
    - Pendiente para fases siguientes: estaciones por escenario, nombres de escenario en las hojas de tiempos y publicación del horario al WCIF.
-2. **Personas y segmentos.** Etiquetas, importación de CSV, voluntarios extra, indisponibilidades y constructor de filtros.
-3. **Motor de personal.** Trabajos por escenario, elegibilidad, puntuación con pesos y «¿por qué?».
+2. **Personas y segmentos.** Etiquetas, importación de CSV, voluntarios extra, indisponibilidades y constructor de filtros. *Hecha (23/10/2026):* propiedades (con las de natshelper), voluntarios, indisponibilidades (franja o «mientras compite X»), importación de Google Sheets (cuenta de servicio, pendiente de crear) o CSV, segmentos con constructor visual y plantillas, filtro por segmento en la revisión.
+3. **Motor de personal.** Trabajos por escenario, elegibilidad, puntuación con pesos y «¿por qué?». *Empezada (23/10/2026):* elegibilidad por segmento para jueces, scramblers y runners. Falta elegibilidad por prueba (límites de marca por prueba), trabajos por ronda × escenario, pesos/ILP y «¿por qué?».
 4. **Reparto de grupos avanzado.** Conjuntos ordenados, estaciones y destacados.
 5. **Equipos.** Rotación por día y equipos equilibrados automáticos.
 6. **Publicación e informes.** Escribir en el WCIF (también para el modo normal) e informes exportables.
