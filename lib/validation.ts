@@ -1,6 +1,6 @@
 import { competingGroup, competingGroups, duties, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
-import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
+import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, type GroupSlot, type TimeWindow, windowsForTask } from "@/lib/pro/schedule";
 import { judgesNeeded } from "@/lib/rounds";
 
 /**
@@ -168,7 +168,9 @@ export function validateTimes(assignments: GeneratedAssignment[], slots: Map<str
   const byPerson = new Map<string, Busy[]>();
   for (const item of assignments) {
     for (const task of item.tasks) {
-      const slot = slots.get(item.roundId)?.find(candidate => candidate.group === task.group);
+      const own = slots.get(item.roundId)?.find(candidate => candidate.group === task.group);
+      // Multi-blind scramblers are busy while scrambling, not during the attempt.
+      const slot = own && { ...own, windows: windowsForTask(own, task.role) };
       if (slot) byPerson.set(item.personId, [...(byPerson.get(item.personId) ?? []), { item, group: task.group, role: task.role, slot }]);
     }
   }
@@ -213,7 +215,8 @@ export function validateAvailability(assignments: GeneratedAssignment[], slots: 
     const windows = blocked.get(item.personId);
     if (!windows) continue;
     for (const task of item.tasks) {
-      if (!windowOf(item.roundId, task.group).some(window => windows.some(busy => overlaps(busy, window)))) continue;
+      const slot = slots.get(item.roundId)?.find(candidate => candidate.group === task.group);
+      if (!(slot ? windowsForTask(slot, task.role) : []).some(window => windows.some(busy => overlaps(busy, window)))) continue;
       issues.push({ key: `${item.roundId}:unavailable:${item.id}:${task.group}`, severity: "warning", code: "unavailable", roundId: item.roundId, group: task.group, assignmentId: item.id, params: { name: item.name, task: task.role, group: task.group } });
     }
   }

@@ -349,3 +349,43 @@ describe("multi-blind attempts", () => {
     for (const item of mbf) expect(printed.split(JSON.stringify(item.name)).length - 1).toBe(1);
   });
 });
+
+describe("multi-blind scrambling", () => {
+  it("happens in its scrambling activity before each attempt", () => {
+    const competition = buildDemoCompetition({ id: "Scr", name: "Scr", people: 30, events: ["333", "333mbf"], newcomerShare: 0, seed: 12 });
+    const schedule: ProSchedule = {
+      timeZone: "UTC", days: ["2026-02-21", "2026-02-22"],
+      rooms: [{ id: 1, name: "Sala", color: "#2563eb", stages: [] }],
+      activities: [
+        { id: "s1", kind: "multi-scramble", name: "Mezcla del multi", roomId: 1, start: "2026-02-21T10:00", end: "2026-02-21T10:40" },
+        { id: "s2", kind: "multi-scramble", name: "Mezcla del multi", roomId: 1, start: "2026-02-22T09:00", end: "2026-02-22T09:40" },
+      ],
+      blocks: [
+        { id: "a", activityCode: "333-r1", roomId: 1, start: "2026-02-21T10:00", end: "2026-02-21T11:00", groups: 2 },
+        { id: "m1", activityCode: "333mbf-r1-a1", roomId: 1, start: "2026-02-21T12:00", end: "2026-02-21T13:00", groups: 1 },
+        { id: "m2", activityCode: "333mbf-r1-a2", roomId: 1, start: "2026-02-22T12:00", end: "2026-02-22T13:00", groups: 1 },
+      ],
+    };
+    const slots = groupSlots(schedule);
+    expect(slots.get("333mbf-r1")!.map(slot => slot.scrambleWindow)).toEqual([{ start: "2026-02-21T10:00", end: "2026-02-21T10:40" }, { start: "2026-02-22T09:00", end: "2026-02-22T09:40" }]);
+    const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots).map(round => round.id === "333mbf-r1" ? { ...round, scramblers: 2 } : round);
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots });
+    const scramblers = assignments.filter(item => item.roundId === "333mbf-r1" && item.tasks.some(task => task.role === "scrambler"));
+    expect(scramblers.length).toBeGreaterThan(0);
+    // Nobody scrambles their own multi, and scrambling on Saturday morning clashes with 3x3 for nobody.
+    expect(scramblers.every(item => !item.inRound)).toBe(true);
+    expect(validateTimes(assignments, slots).filter(issue => issue.severity === "error")).toEqual([]);
+    const saturday = scramblers.filter(item => item.tasks.some(task => task.role === "scrambler" && task.group === 1)).map(item => item.personId);
+    const competing333 = assignments.filter(item => item.roundId === "333-r1" && saturday.includes(item.personId) && item.tasks.some(task => task.role !== "dataentry"));
+    for (const item of competing333) for (const task of item.tasks) expect(slots.get("333-r1")!.find(slot => slot.group === task.group)!.windows[0].start >= "2026-02-21T10:40" || task.group === 0).toBe(true);
+  });
+
+  it("is recognised in an imported WCIF by its name", () => {
+    const competition = buildDemoCompetition({ id: "Imp", name: "Imp", people: 10, events: ["333mbf"], newcomerShare: 0, seed: 2 });
+    competition.schedule = { startDate: "2026-02-21", numberOfDays: 1, venues: [{ timezone: "UTC", rooms: [{ id: 1, name: "Sala", activities: [
+      { id: 1, name: "3x3x3 Multi-Blind Scrambling", activityCode: "other-misc", startTime: "2026-02-21T09:15:00Z", endTime: "2026-02-21T09:50:00Z" },
+      { id: 2, name: "Comida", activityCode: "other-lunch", startTime: "2026-02-21T13:00:00Z", endTime: "2026-02-21T14:00:00Z" },
+    ] }] }] };
+    expect(importSchedule(competition, () => 1).activities.map(activity => activity.kind)).toEqual(["multi-scramble", "lunch"]);
+  });
+});

@@ -39,7 +39,7 @@ describe("PRO templates", () => {
     expect(pro.sets!.map(set => set.id)).toEqual(["sc26-featured", "sc26-top", "sc26-core", "sc26-delegates-12-sábado", "sc26-delegates-3-sábado", "sc26-delegates-4-sábado", "sc26-delegates-12-domingo", "sc26-delegates-3-domingo", "sc26-delegates-4-domingo", "sc26-aes", "sc26-data", "sc26-streaming", "sc26-everyone"]);
     expect(pro.sets![0].lanes).toEqual(["7:11"]);
     expect(pro.staffing).toEqual({ "8:room": { stations: 20, scramblers: 2, runners: 2 } });
-    expect(pro.people!.teams!.setup["Side room"]).toEqual({ kind: "volunteer", lane: "8:room", busy: [{ day: "2026-12-06", start: "08:45", end: "09:15" }, { day: "2026-12-06", start: "09:15", end: "09:50" }, { day: "2026-12-06", start: "12:15", end: "12:25" }] });
+    expect(pro.people!.teams!.setup["Side room"]).toEqual({ kind: "volunteer", lane: "8:room", busy: [{ day: "2026-12-06", start: "08:45", end: "09:15" }, { day: "2026-12-06", start: "12:15", end: "12:25" }] });
     expect(after.rounds.find(round => round.id === "333mbf-r1")).toMatchObject({ scramblers: 0, runners: 0, staffSetByHand: true });
     expect(after.options).toMatchObject({ tasksForOwnEventsOnly: true, noTasksForNewcomers: true });
     expect(after.printing).toMatchObject({ coverSheets: true, order: "stacked" });

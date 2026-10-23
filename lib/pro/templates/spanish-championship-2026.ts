@@ -69,8 +69,9 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
       property: "team",
       setup: {
         "Voluntario normal": { kind: "volunteer" },
-        // 9_competitiongroups.cs: side room setup and multi scrambling on Sunday.
-        "Side room": { kind: "volunteer", lane: SIDE, busy: [{ dayIndex: 1, start: "08:45", end: "09:15" }, { dayIndex: 1, start: "09:15", end: "09:50" }, { dayIndex: 1, start: "12:15", end: "12:25" }] },
+        // 9_competitiongroups.cs: side room setup on Sunday. The multi scrambling (09:15–09:50) is a
+        // "Multi-blind scrambling" activity in the schedule, where the side room team scrambles first.
+        "Side room": { kind: "volunteer", lane: SIDE, busy: [{ dayIndex: 1, start: "08:45", end: "09:15" }, { dayIndex: 1, start: "12:15", end: "12:25" }] },
         "Data entry": { kind: "dataentry" },
         Organizador: { kind: "inherit" },
         Delegado: { kind: "inherit" },

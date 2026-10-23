@@ -180,6 +180,7 @@ export const es = {
     copyToStages: "Copiar a los demás escenarios",
     remove: "Borrar del horario",
     kinds: {
+      "multi-scramble": "Mezcla del multi",
       checkin: "Check-in",
       registration: "Inscripción",
       tutorial: "Tutorial",

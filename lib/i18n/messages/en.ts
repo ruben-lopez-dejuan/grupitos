@@ -178,6 +178,7 @@ export const en: Messages = {
     copyToStages: "Copy to the other stages",
     remove: "Remove from schedule",
     kinds: {
+      "multi-scramble": "Multi-blind scrambling",
       checkin: "Check-in",
       registration: "Registration",
       tutorial: "Tutorial",

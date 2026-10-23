@@ -25,7 +25,8 @@ export type ProRoundBlock = TimeWindow & {
   groupWindows?: TimeWindow[];
 };
 
-export const OTHER_KINDS = ["checkin", "registration", "tutorial", "lunch", "awards", "multi", "setup", "misc"] as const;
+/** `multi-scramble`: when the multi-blind scramblers scramble, between cube submission and the attempt. */
+export const OTHER_KINDS = ["checkin", "registration", "tutorial", "lunch", "awards", "multi", "multi-scramble", "setup", "misc"] as const;
 export type OtherKind = typeof OTHER_KINDS[number];
 export type ProActivity = TimeWindow & { id: string; kind: OtherKind; name: string; roomId: number; stageId?: number };
 
@@ -62,7 +63,12 @@ export type ScheduleLane = { key: string; roomId: number; stageId?: number; name
  * Attempt-based rounds (multi-blind) have a column per attempt: `attempt` (2, 3…) and `linkedTo`, the
  * attempt-1 column whose competitors take every attempt.
  */
-export type GroupSlot = { group: number; roomId: number; stageId?: number; number: number; windows: TimeWindow[]; attempt?: number; linkedTo?: number };
+export type GroupSlot = { group: number; roomId: number; stageId?: number; number: number; windows: TimeWindow[]; attempt?: number; linkedTo?: number; scrambleWindow?: TimeWindow };
+
+/** When a task happens: multi-blind scramblers scramble in their scrambling activity; the rest during the group. */
+export function windowsForTask(slot: Pick<GroupSlot, "windows" | "scrambleWindow">, role: string) {
+  return role === "scrambler" && slot.scrambleWindow ? [slot.scrambleWindow] : slot.windows;
+}
 
 export const STAGE_COLORS = ["#d93636", "#2f9e44", "#2563eb", "#e8a317", "#9c36b5", "#0c8599", "#f76707", "#495057"];
 
@@ -147,8 +153,10 @@ function dateRange(startDate: string, count: number) {
   return Array.from({ length: count }, (_, index) => fromMinutes(toMinutes(startDate) + index * 1440).slice(0, 10));
 }
 
-function otherKind(activityCode: string): OtherKind {
+function otherKind(activityCode: string, name = ""): OtherKind {
   const kind = activityCode.replace(/^other-/, "");
+  // There is no WCIF code for it: "3x3x3 Multi-Blind Scrambling", "Mezcla del multi"…
+  if (/scrambl|mezcl/i.test(name) && /multi|mbld|mbf/i.test(name)) return "multi-scramble";
   return (OTHER_KINDS as readonly string[]).includes(kind) ? kind as OtherKind : "misc";
 }
 
@@ -235,7 +243,7 @@ export function importSchedule(competition: StoredCompetition, suggestedGroups: 
           for (const stageId of targets) blocks.push({ id: `b${activity.id}-${stageId ?? "room"}`, activityCode: activity.activityCode, roomId: room.id, stageId, groups, ...parentWindow });
         }
       } else if (activity.activityCode.startsWith("other-")) {
-        activities.push({ id: `a${activity.id}`, kind: otherKind(activity.activityCode), name: activity.name, roomId: room.id, ...parentWindow });
+        activities.push({ id: `a${activity.id}`, kind: otherKind(activity.activityCode, activity.name), name: activity.name, roomId: room.id, ...parentWindow });
       }
     }
   }
@@ -289,6 +297,17 @@ export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
       for (const part of parts(attempt)) {
         const match = first.findIndex(candidate => candidate.roomId === part.roomId && candidate.stageId === part.stageId && candidate.position === part.position);
         if (match >= 0) slots.push({ group: slots.length + 1, roomId: part.roomId, stageId: part.stageId, number: slots[match].number, windows: [part.window], attempt, linkedTo: match + 1 });
+      }
+    }
+    // Multi-blind: each attempt's scramblers work in the scrambling activity that ends last before
+    // the attempt starts, the same day.
+    if (roundId.startsWith("333mbf")) {
+      const scrambling = schedule.activities.filter(activity => activity.kind === "multi-scramble");
+      for (const slot of slots) {
+        const start = slot.windows[0]?.start;
+        const before = scrambling.filter(activity => start && activity.end <= start && activity.start.slice(0, 10) === start.slice(0, 10)).sort((a, b) => a.end.localeCompare(b.end));
+        const chosen = before.at(-1);
+        if (chosen) slot.scrambleWindow = { start: chosen.start, end: chosen.end };
       }
     }
     result.set(roundId, slots);

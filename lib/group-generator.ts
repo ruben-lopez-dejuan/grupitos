@@ -11,7 +11,7 @@ import { assignStations, type ResolvedStationRule } from "@/lib/pro/station-rule
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
-import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
+import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, windowsForTask, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, hasWcaJob, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, SCRAMBLE_EVENT, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
@@ -375,8 +375,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
 
     const roundSlots = slots?.get(round.id);
     const windowsOf = (group: number) => roundSlots?.find(slot => slot.group === group)?.windows ?? [];
-    const markBusy = (key: string, group: number) => busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windowsOf(group)]);
-    const busyDuring = (key: string, group: number) => windowsOf(group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
+    /** When a task in the group happens (multi-blind scramblers: their scrambling time). */
+    const taskWindows = (group: number, role?: TaskRole) => {
+      const slot = roundSlots?.find(item => item.group === group);
+      return slot ? role ? windowsForTask(slot, role) : slot.windows : [];
+    };
+    const markBusy = (key: string, group: number, role?: TaskRole) => busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...taskWindows(group, role)]);
+    const busyDuring = (key: string, group: number, role?: TaskRole) => taskWindows(group, role).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
     const stationsIn = (group: number) => staffing?.(round.id, group)?.stations ?? stations;
     const attemptOfColumn = new Map(linkedColumns(round.id).map(slot => [slot.group, slot.attempt!]));
@@ -403,7 +408,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     // While their room is running, a room team works there (the side room is staffed first, as in
     // the Spanish Championship scripts), not on the other stages.
     const neededInOwnRoom = (key: string, group: number) => !teamHere(round.id, group, key) && windowsOf(group).some(window => reserved.get(key)?.some(item => overlaps(item.window, window)));
-    const freeIn = (key: string, group: number) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group) && !blockedHere(round.id, group, key) && !neededInOwnRoom(key, group);
+    const freeIn = (key: string, group: number, role?: TaskRole) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group, role) && !blockedHere(round.id, group, key) && !neededInOwnRoom(key, group);
     const roundLoad = (key: string) => rows.get(key)?.tasks.filter(task => task.role !== "competitor").length ?? 0;
     const load = (key: string) => globalLoad.get(key) ?? 0;
     const loadInEvent = (key: string) => eventLoad.get(`${key}|${round.eventId}`) ?? 0;
@@ -425,8 +430,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const assign = (person: WcifPerson, group: number, role: TaskRole) => {
       const row = rowFor(person);
       row.tasks = sortTasks([...row.tasks, { group, role }]);
-      markBusy(row.key, group);
-      const window = windowsOf(group)[0];
+      markBusy(row.key, group, role);
+      const window = taskWindows(group, role)[0];
       if (window) staffLog.set(row.key, [...(staffLog.get(row.key) ?? []), { start: toMinutes(window.start), end: toMinutes(window.end), role }]);
       globalLoad.set(row.key, load(row.key) + 1);
       if (!staff.has(row.key) && (role === "judge" || role === "scrambler" || role === "runner")) othersTotalLoad += 1;
@@ -440,7 +445,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       for (let slot = 0; slot < Math.max(0, ...needs); slot += 1) {
         for (let group = 1; group <= groups.length; group += 1) {
           if (slot >= needs[group - 1]) continue;
-          const available = candidates.filter(person => freeIn(personKey(person), group));
+          const available = candidates.filter(person => freeIn(personKey(person), group, role));
           // A room's own team comes first for its tasks.
           const pick = best(available, person => [teamHere(round.id, group, personKey(person)) ? 0 : 1, ...sortKey(person, group)]);
           if (!pick) continue;
@@ -633,7 +638,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         const counts: Partial<Record<TaskRole, number>> = {};
         for (const [job, need] of Object.entries(needs) as Array<[TaskRole, number]>) {
           if (!need) continue;
-          const pool = (job === "scrambler" ? [...scramblerPool, ...reserve] : poolFor(job as "runner" | "judge")).filter(person => freeIn(personKey(person), group));
+          const pool = (job === "scrambler" ? [...scramblerPool, ...reserve] : poolFor(job as "runner" | "judge")).filter(person => freeIn(personKey(person), group, job));
           counts[job] = pool.length;
           const scored = pool.map(person => {
             const breakdown = scoreBreakdown(factsFor(person, group, job), job, scoring!.weights);

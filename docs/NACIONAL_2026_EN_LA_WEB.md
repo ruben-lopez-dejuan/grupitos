@@ -56,7 +56,12 @@ queda así:
 | Aceptado SIN categorizar, Otro | Sin tareas | | igual que el script: tener equipo y no ser voluntario = no trabaja. Cámbialo si no es lo que queréis |
 
 **Horas ocupadas** (`9_competitiongroups.cs`), en la línea «Ocupado» de Equipos, equipo Side room,
-domingo 6: 08:45–09:15 (montaje), 09:15–09:50 (mezcla del multi) y 12:15–12:25 (montaje).
+domingo 6: 08:45–09:15 y 12:15–12:25 (montaje).
+
+**Mezcla del multi** (09:15–09:50 del domingo en el script): en **Horario**, añade en la Sala
+Auxiliar una actividad de tipo «Mezcla del multi» antes de cada intento, y en **Grupos** pon los
+mezcladores del multi. Los mezcladores de cada intento trabajan en la mezcla que acaba justo antes
+de ese intento (el mismo día), y el equipo Side room va primero.
 
 ## 3. Clusters (para los delegados por turnos)
 
