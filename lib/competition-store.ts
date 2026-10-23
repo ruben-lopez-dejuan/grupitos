@@ -8,6 +8,8 @@ export type WcifPerson = {
   name: string;
   wcaId?: string | null;
   countryIso2?: string;
+  /** Only in the private WCIF (requested with a manager's token). */
+  email?: string;
   birthdate?: string;
   /** Public WCA profile photo. */
   avatar?: { url?: string; thumbUrl?: string } | null;
@@ -29,7 +31,7 @@ export type WcifPerson = {
 };
 
 export type WcifAdvancementCondition = { type: "ranking" | "percent" | "attemptResult"; level: number };
-/** WCIF 1.2 uses `advancementCondition`; newer exports use `participationRuleset`. */
+/** WCIF 1.x uses `advancementCondition`; WCIF 2 uses `participationRuleset`. Both are read. */
 export type WcifParticipationSource =
   | { type: "registrations" }
   | { type: "round"; roundId: string; resultCondition: { type: "ranking" | "percent" | "resultAchieved"; value: number | null; scope?: "single" | "average" } }
@@ -50,6 +52,8 @@ export type WcifRoom = { id?: number; name?: string; color?: string; activities?
 export type WcifVenue = { id?: number; name?: string; countryIso2?: string; timezone?: string; rooms?: WcifRoom[] };
 
 export type StoredCompetition = {
+  /** "2.2" for WCIF requested with /wcif/version/2; a PATCH must send it back with `id`. */
+  formatVersion?: string;
   id: string;
   name: string;
   shortName?: string;

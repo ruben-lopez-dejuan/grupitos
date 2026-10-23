@@ -33,7 +33,7 @@ export const es = {
     importText: "Competidores aceptados, pruebas, rondas, horario y salas de las competiciones que administras.",
     privacy: "La contraseña se introduce siempre en la web oficial de la WCA.",
     footerProject: "Proyecto independiente para competiciones WCA",
-    footerData: "WCIF 1.2 · Datos guardados en tu dispositivo",
+    footerData: "WCIF 2 · Datos guardados en tu dispositivo",
   },
   dashboard: {
     errorTitle: "No pudimos conectar con la WCA",

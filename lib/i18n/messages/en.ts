@@ -31,7 +31,7 @@ export const en: Messages = {
     importText: "Accepted competitors, events, rounds, schedule and rooms of the competitions you manage.",
     privacy: "Your password is always entered on the official WCA website.",
     footerProject: "Independent project for WCA competitions",
-    footerData: "WCIF 1.2 · Data stored on your device",
+    footerData: "WCIF 2 · Data stored on your device",
   },
   dashboard: {
     errorTitle: "We could not reach the WCA",

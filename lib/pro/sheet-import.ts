@@ -72,7 +72,7 @@ export function guessMapping(headers: string[]): Pick<SheetMapping, "matchBy" | 
 function matcher(people: WcifPerson[], matchBy: MatchBy) {
   const index = new Map<string, WcifPerson>();
   for (const person of people) {
-    const value = matchBy === "wcaId" ? person.wcaId : matchBy === "registrantId" ? person.registrantId : matchBy === "email" ? (person as WcifPerson & { email?: string }).email : person.name;
+    const value = matchBy === "wcaId" ? person.wcaId : matchBy === "registrantId" ? person.registrantId : matchBy === "email" ? person.email : person.name;
     if (value !== undefined && value !== null && value !== "") index.set(matchBy === "name" ? normalizeName(String(value)) : String(value).trim().toLowerCase(), person);
   }
   return (text: string) => index.get(matchBy === "name" ? normalizeName(text) : text.trim().toLowerCase());

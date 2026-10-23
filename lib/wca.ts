@@ -5,6 +5,12 @@ export type WcaCompetition = {
   start_date: string; end_date: string; venue_address?: string;
 };
 
+/**
+ * WCIF major version requested from the WCA (GET /competitions/{id}/wcif/version/2, currently
+ * format 2.2). Writes go to PATCH /competitions/{id}/wcif and must include `formatVersion` and `id`.
+ */
+export const WCIF_VERSION = 2;
+
 /** A non-OK answer from the WCA API; the interface writes the message. */
 export class WcaError extends Error {
   constructor(readonly status: number) {
