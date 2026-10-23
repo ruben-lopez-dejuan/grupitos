@@ -6,7 +6,7 @@ import { useI18n } from "@/components/i18n";
 import { keyOf } from "@/lib/i18n";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import type { WcifPerson } from "@/lib/competition-store";
-import type { PeopleSettings, PersonRole } from "@/lib/people";
+import { byName, type PeopleSettings, type PersonRole } from "@/lib/people";
 import { personKey } from "@/lib/rounds";
 
 type ListId = PersonRole | "trusted";
@@ -57,7 +57,7 @@ export function PeoplePanel({ people, settings, inUse = settings, fromTeam, onCh
   return <section className="people-panel" id="people">
     <div className="setup-heading"><h2>{t("people.title")} <Hint align="start" text={t("people.hint")} /></h2><label className="photo-toggle"><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> {t("people.showPhotos")}</label></div>
     <div className="role-grid">{ORDER.map(id => {
-      const keys = shownList(id);
+      const keys = [...shownList(id)].sort((a, b) => byName({ name: byKey.get(a)?.name ?? a }, { name: byKey.get(b)?.name ?? b }));
       const isDelegateList = id === "delegate" || id === "trainee-delegate";
       return <div className="role-card" key={id}>
         <div className="role-card-head"><h3>{t(keyOf("people.lists", id))} <Hint text={t(keyOf("people.descriptions", id))} /></h3><span>{keys.length}</span></div>
@@ -85,7 +85,7 @@ function PersonPicker({ people, exclude, label, onAdd }: { people: WcifPerson[];
   return <div className="person-picker">
     <select value={value} onChange={event => setValue(event.target.value)} aria-label={label}>
       <option value="">{t("people.choose")}</option>
-      {people.filter(person => !exclude.includes(personKey(person))).map(person => <option key={personKey(person)} value={personKey(person)}>{person.name}{person.wcaId ? ` · ${person.wcaId}` : ""}</option>)}
+      {people.filter(person => !exclude.includes(personKey(person))).sort(byName).map(person => <option key={personKey(person)} value={personKey(person)}>{person.name}{person.wcaId ? ` · ${person.wcaId}` : ""}</option>)}
     </select>
     <button className="button secondary" type="button" disabled={!value} onClick={() => { onAdd(value); setValue(""); }}>{t("people.add")}</button>
   </div>;

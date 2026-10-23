@@ -69,6 +69,21 @@ export function volunteerPerson(volunteer: ProVolunteer): WcifPerson {
   return { appKey: volunteer.key, name: volunteer.name, wcaId: volunteer.wcaId ?? null, countryIso2: volunteer.countryIso2, registrantId: null, registration: { status: "accepted", isCompeting: false, eventIds: [] } };
 }
 
+/**
+ * Volunteers with a WCA ID take their name (and country) from the WCA: the WCA ID is what
+ * identifies them, whatever a form or a person typed.
+ */
+export function withWcaNames(people: ProPeople, found: Record<string, { name: string; countryIso2?: string }>) {
+  let changed = 0;
+  const volunteers = people.volunteers.map(volunteer => {
+    const wca = volunteer.wcaId ? found[volunteer.wcaId.trim().toUpperCase()] : undefined;
+    if (!wca || (wca.name === volunteer.name && (!wca.countryIso2 || wca.countryIso2 === volunteer.countryIso2))) return volunteer;
+    changed += 1;
+    return { ...volunteer, wcaId: volunteer.wcaId!.trim().toUpperCase(), name: wca.name, ...(wca.countryIso2 ? { countryIso2: wca.countryIso2 } : {}) };
+  });
+  return { people: changed ? { ...people, volunteers } : people, changed };
+}
+
 export function newVolunteerKey(volunteers: ProVolunteer[]) {
   let index = volunteers.length + 1;
   while (volunteers.some(volunteer => volunteer.key === `vol-${index}`)) index += 1;

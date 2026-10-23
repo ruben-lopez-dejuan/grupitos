@@ -6,7 +6,9 @@ import { SheetImportPanel } from "@/components/sheet-import-panel";
 import { useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
 import { TeamSetupPanel } from "@/components/team-setup-panel";
+import { byName } from "@/lib/people";
 import { newVolunteerKey, type ProPeople, type Unavailability } from "@/lib/pro/people";
+import { fetchWcaNames } from "@/lib/wca-persons";
 import { personKey } from "@/lib/rounds";
 
 /** Rows shown before "show all", so typing stays fast in a 400-person table. */
@@ -33,13 +35,13 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
   const [newProperty, setNewProperty] = useState("");
   const [volunteer, setVolunteer] = useState({ name: "", wcaId: "" });
   const [absence, setAbsence] = useState({ person: "", kind: "time" as "time" | "competing", day: days[0] ?? "", start: "09:00", end: "13:00", other: "", note: "" });
-  const sortedPeople = useMemo(() => [...people].sort((a, b) => a.name.localeCompare(b.name)), [people]);
+  const sortedPeople = useMemo(() => [...people].sort(byName), [people]);
   const nameOf = (key: string) => people.find(person => personKey(person) === key)?.name ?? key;
   const dayLabel = (value: string) => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
   const registeredWcaIds = useMemo(() => new Set(people.filter(person => !person.appKey && person.wcaId).map(person => person.wcaId!.toUpperCase())), [people]);
 
   const needle = query.trim().toLowerCase();
-  const matching = people.filter(person => !needle || `${person.name} ${person.wcaId ?? ""} ${Object.values(value.properties[personKey(person)] ?? {}).join(" ")}`.toLowerCase().includes(needle));
+  const matching = [...people].sort(byName).filter(person => !needle || `${person.name} ${person.wcaId ?? ""} ${Object.values(value.properties[personKey(person)] ?? {}).join(" ")}`.toLowerCase().includes(needle));
   const shown = showAll ? matching : matching.slice(0, PAGE);
 
   const setProperty = (key: string, property: string, text: string) => {
@@ -72,9 +74,19 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
   const wcaId = volunteer.wcaId.trim().toUpperCase();
   const volunteerError = wcaId && registeredWcaIds.has(wcaId) ? t("proPeople.alreadyRegistered") : wcaId && !/^\d{4}[A-Z]{4}\d{2}$/.test(wcaId) ? t("proPeople.badWcaId") : "";
 
-  function addVolunteer() {
-    if (!volunteer.name.trim() || volunteerError) return;
-    onChange({ ...value, volunteers: [...value.volunteers, { key: newVolunteerKey(value.volunteers), name: volunteer.name.trim(), ...(wcaId ? { wcaId } : {}) }] });
+  const [lookup, setLookup] = useState("");
+  /** With a WCA ID, the name (and country) come from the WCA; the typed name is only a fallback. */
+  async function addVolunteer() {
+    if ((!volunteer.name.trim() && !wcaId) || volunteerError) return;
+    let found: { name: string; countryIso2?: string } | undefined;
+    if (wcaId) {
+      setLookup(t("proPeople.lookingUp"));
+      const result = await fetchWcaNames([wcaId]);
+      found = result?.people[wcaId];
+      setLookup(!result ? t("proPeople.lookupFailed") : found ? "" : t("proPeople.lookupMissing", { wcaId }));
+      if (!found && !volunteer.name.trim()) return;
+    }
+    onChange({ ...value, volunteers: [...value.volunteers, { key: newVolunteerKey(value.volunteers), name: found?.name ?? volunteer.name.trim(), ...(wcaId ? { wcaId } : {}), ...(found?.countryIso2 ? { countryIso2: found.countryIso2 } : {}) }] });
     setVolunteer({ name: "", wcaId: "" });
   }
 
@@ -107,12 +119,13 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
 
     <h3 className="panel-subheading">{t("proPeople.volunteers")} <span className="count-chip">{value.volunteers.length}</span> <Hint align="start" text={t("proPeople.volunteersHint")} /></h3>
     <div className="volunteer-area">
-      {value.volunteers.length > 0 && <ul className="volunteer-list">{value.volunteers.map(item => <li key={item.key}><span>{item.name}</span>{item.wcaId && <small>{item.wcaId}</small>}<button type="button" onClick={() => removeVolunteer(item.key)} aria-label={t("people.remove", { name: item.name })}>×</button></li>)}</ul>}
+      {value.volunteers.length > 0 && <ul className="volunteer-list">{[...value.volunteers].sort(byName).map(item => <li key={item.key}><span>{item.name}</span>{item.wcaId && <small>{item.wcaId}</small>}<button type="button" onClick={() => removeVolunteer(item.key)} aria-label={t("people.remove", { name: item.name })}>×</button></li>)}</ul>}
       <form className="volunteer-form" onSubmit={event => { event.preventDefault(); addVolunteer(); }}>
         <input value={volunteer.name} onChange={event => setVolunteer(current => ({ ...current, name: event.target.value }))} placeholder={t("proPeople.volunteerName")} aria-label={t("proPeople.volunteerName")} />
         <input value={volunteer.wcaId} onChange={event => setVolunteer(current => ({ ...current, wcaId: event.target.value }))} placeholder={t("proPeople.volunteerWcaId")} aria-label={t("proPeople.volunteerWcaId")} aria-invalid={!!volunteerError} />
-        <button className="button secondary" type="submit" disabled={!volunteer.name.trim() || !!volunteerError}>{t("people.add")}</button>
+        <button className="button secondary" type="submit" disabled={(!volunteer.name.trim() && !wcaId) || !!volunteerError}>{t("people.add")}</button>
         {volunteerError && <small className="form-error">{volunteerError}</small>}
+        {lookup && <small role="status">{lookup}</small>}
       </form>
     </div>
 

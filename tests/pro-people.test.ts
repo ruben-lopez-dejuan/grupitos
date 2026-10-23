@@ -3,8 +3,8 @@ import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
-import { hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, staffRoleFromWcif } from "@/lib/people";
-import { everyone, findVolunteerCopies, importPersonProperties, mergeVolunteerCopies, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
+import { byName, hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, staffRoleFromWcif } from "@/lib/people";
+import { everyone, findVolunteerCopies, importPersonProperties, mergeVolunteerCopies, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, unavailableWindows, volunteerPerson, withWcaNames } from "@/lib/pro/people";
 import { suggestTeamSetup, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams, type TeamSetup } from "@/lib/pro/teams";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
@@ -226,5 +226,18 @@ describe("volunteer copies of registered people", () => {
     expect(merged.settings.roles.staff).toEqual([personKey(first)]);
     expect(merged.settings.trustedIds).toEqual([personKey(second)]);
     expect([merged.merged, merged.orphans]).toEqual([2, 1]);
+  });
+});
+
+describe("names", () => {
+  it("sort A to Z ignoring accents and case", () => {
+    expect([{ name: "Zoe" }, { name: "álvaro" }, { name: "Alba" }, { name: "Ángel" }].sort(byName).map(item => item.name)).toEqual(["Alba", "álvaro", "Ángel", "Zoe"]);
+  });
+
+  it("of volunteers with a WCA ID come from the WCA", () => {
+    const pro = normalizeProPeople({ propertyKeys: [], properties: {}, volunteers: [{ key: "vol-1", name: "MARÍA LUISA MENENDEZ", wcaId: "2024atar01" }, { key: "vol-2", name: "Sin WCA ID" }], unavailable: [] });
+    const { people, changed } = withWcaNames(pro, { "2024ATAR01": { name: "María Luisa Menéndez Atar", countryIso2: "ES" } });
+    expect(changed).toBe(1);
+    expect(people.volunteers).toEqual([{ key: "vol-1", name: "María Luisa Menéndez Atar", wcaId: "2024ATAR01", countryIso2: "ES" }, { key: "vol-2", name: "Sin WCA ID" }]);
   });
 });

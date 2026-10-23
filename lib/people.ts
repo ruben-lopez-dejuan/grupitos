@@ -76,6 +76,11 @@ export function nonCompetingStaff(competition: StoredCompetition): WcifPerson[] 
     .map(person => ({ ...person, registration: { ...person.registration, status: "accepted", isCompeting: false, eventIds: [] } }));
 }
 
+/** A to Z by name, ignoring accents and case: the order of every list or search of people. */
+export function byName(a: { name?: string | null }, b: { name?: string | null }) {
+  return (a.name ?? "").localeCompare(b.name ?? "", "es", { sensitivity: "base" });
+}
+
 export function rolesOf(people: PeopleSettings, key: string): PersonRole[] {
   return PERSON_ROLES.filter(role => people.roles[role]?.includes(key));
 }

@@ -5,7 +5,7 @@ import { Hint } from "@/components/hint";
 import { useEventName, useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
-import type { PeopleSettings } from "@/lib/people";
+import { byName, type PeopleSettings } from "@/lib/people";
 import type { ProPeople } from "@/lib/pro/people";
 import { CONDITION_KINDS, ROUND_KINDS, defaultRule, newSegmentId, PROPERTY_OPS, SEGMENT_ROLES, SEGMENT_TEMPLATES, segmentMembers, type Condition, type Segment, type SegmentRule } from "@/lib/pro/segments";
 import { personKey } from "@/lib/rounds";
@@ -42,7 +42,7 @@ export function ProSegmentsPanel({ people, eventIds, settings, proPeople, segmen
   const selected = segments.find(segment => segment.id === selectedId) ?? segments[0];
   const context = useMemo(() => ({ people: settings, pro: proPeople, segments }), [settings, proPeople, segments]);
   const counts = useMemo(() => new Map(segments.map(segment => [segment.id, segmentMembers(segment, people, context).length])), [segments, people, context]);
-  const members = useMemo(() => selected ? segmentMembers(selected, people, context) : [], [selected, people, context]);
+  const members = useMemo(() => selected ? [...segmentMembers(selected, people, context)].sort(byName) : [], [selected, people, context]);
   const countries = useMemo(() => [...new Set(people.map(person => person.countryIso2).filter((value): value is string => !!value))].sort(), [people]);
   const options = { propertyKeys: proPeople.propertyKeys, eventIds, countries, segmentIds: segments.filter(segment => segment.id !== selected?.id).map(segment => segment.id) };
 

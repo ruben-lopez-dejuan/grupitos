@@ -26,7 +26,8 @@ import { groupsFromWcif, hasWcifGroups, wcifGroupsNeedStages } from "@/lib/wcif-
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
-import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
+import { fetchWcaNames } from "@/lib/wca-persons";
+import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { previewSets } from "@/lib/pro/sets-preview";
@@ -494,6 +495,14 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           }
           return { ...round, competitors: now.competitors, competitorsKnown: now.competitorsKnown };
         }),
+      });
+      // Volunteers with a WCA ID keep the name the WCA has.
+      const ids = (settings?.pro?.people?.volunteers ?? []).flatMap(volunteer => volunteer.wcaId ? [volunteer.wcaId] : []);
+      const found = ids.length ? await fetchWcaNames(ids) : undefined;
+      if (found) setSettings(current => {
+        if (!current?.pro?.people) return current;
+        const renamed = withWcaNames(current.pro.people, found.people);
+        return renamed.changed ? { ...current, pro: { ...current.pro, people: renamed.people } } : current;
       });
       setRefreshNote(opened.length ? t("workspace.refreshNew", { rounds: opened.join(", ") }) : t("workspace.refreshNothing"));
     } catch {

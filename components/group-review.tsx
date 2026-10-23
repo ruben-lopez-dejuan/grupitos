@@ -10,6 +10,7 @@ import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
 import { clockOf, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
+import { byName } from "@/lib/people";
 import { formatResult } from "@/lib/results";
 import { countBySeverity, groupLimits, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
@@ -182,7 +183,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
       group: (a, b) => (competingGroup(a) ?? Number.MAX_SAFE_INTEGER) - (competingGroup(b) ?? Number.MAX_SAFE_INTEGER) || bySeed(a, b),
       load: (a, b) => (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
     };
-    return roundRows.filter(keep).sort((a, b) => order[sortBy](a, b) || a.name.localeCompare(b.name));
+    // Searching for someone always lists the matches A to Z by name.
+    return roundRows.filter(keep).sort((a, b) => (needle ? 0 : order[sortBy](a, b)) || byName(a, b));
   }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads, segmentFilters]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);

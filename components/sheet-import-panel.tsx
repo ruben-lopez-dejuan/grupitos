@@ -5,7 +5,8 @@ import { Hint } from "@/components/hint";
 import { useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
-import type { ProPeople } from "@/lib/pro/people";
+import { withWcaNames, type ProPeople } from "@/lib/pro/people";
+import { fetchWcaNames } from "@/lib/wca-persons";
 import { applySheetImport, guessMapping, IDENTITIES, parseCsv, propertiesTemplate, spreadsheetIdFromUrl, type Identity, type SheetImportResult, type SheetMapping } from "@/lib/pro/sheet-import";
 
 type Source = "google" | "csv";
@@ -57,10 +58,24 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
   // What the import would do, row by row, before anything changes.
   const preview = useMemo(() => rows && mapping ? applySheetImport(rows, mapping, people, value) : undefined, [rows, mapping, people, value]);
 
-  function apply() {
+  /** Volunteers with a WCA ID take the name the WCA has (the WCA ID identifies them). */
+  async function apply() {
     if (!preview) return;
-    onApply(preview.people);
-    setMessage(summary(preview));
+    let people = preview.people;
+    let names = "";
+    const ids = people.volunteers.flatMap(volunteer => volunteer.wcaId ? [volunteer.wcaId] : []);
+    if (ids.length) {
+      setBusy(true);
+      const found = await fetchWcaNames(ids);
+      setBusy(false);
+      if (found) {
+        const renamed = withWcaNames(people, found.people);
+        people = renamed.people;
+        names = [renamed.changed ? tp("sheetImport.wcaNames", renamed.changed) : "", found.missing.length ? `${tp("sheetImport.wcaMissing", found.missing.length)}: ${found.missing.join(", ")}` : ""].filter(Boolean).join(" · ");
+      } else names = t("sheetImport.wcaNamesFailed");
+    }
+    onApply(people);
+    setMessage([summary(preview), names].filter(Boolean).join(" · "));
     setRows(undefined);
   }
 
@@ -121,7 +136,7 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
         {preview.outcomes.some(item => item.result !== "matched" || item.by === "name") && <ul>{preview.outcomes.filter(item => item.result !== "matched" || item.by === "name").map(item => <li key={item.row} className={item.result}><small>{t("sheetImport.rowNumber", { row: item.row })}</small> {item.label} <em>{t(keyOf("sheetImport.outcomes", item.result === "matched" ? "byName" : item.result))}</em></li>)}</ul>}
       </div>}
       <div className="volunteer-form">
-        <button className="button primary" type="button" onClick={apply}>{t("sheetImport.apply")}</button>
+        <button className="button primary" type="button" disabled={busy} onClick={apply}>{t("sheetImport.apply")}</button>
         <button className="plain" type="button" onClick={() => setRows(undefined)}>{t("sheetImport.cancel")}</button>
       </div>
     </div>}
