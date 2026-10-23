@@ -592,7 +592,7 @@ export const es = {
     "missing-dataentry": "G{group} no tiene data entry.",
     "time-overlap": "{name} tiene «{task}» en G{group} a la vez que «{otherTask}» en {otherRound} G{otherGroup}.",
     unavailable: "{name} tiene «{task}» en G{group}, pero no está disponible a esa hora.",
-    "unavoidable-time-overlap": "El horario no deja una combinación posible: {name} compite en G{group} a la vez que en {otherRound} G{otherGroup}.",
+    "unavoidable-time-overlap": "{name} compite en G{group} a la vez que en {otherRound} G{otherGroup} y ningún grupo de las dos rondas lo evita: solo se arregla en el horario.",
     and: " y ",
   },
   printing: {

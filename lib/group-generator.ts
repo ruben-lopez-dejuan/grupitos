@@ -7,7 +7,7 @@
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type Task, type TaskRole } from "@/lib/assignments";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
-import { overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
+import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
@@ -89,7 +89,10 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
     return (byPerson.get(personKey(person)) ?? []).reduce((sum, other) => {
       if (other.planIndex === planIndex) return sum;
       const occupied = slotOf(other);
-      return occupied ? sum + overlapMinutes(candidate, occupied) : sum;
+      if (!occupied) return sum;
+      // A short overlap is going from one event to the next: nearly free, but a clean gap still wins.
+      const minutes = overlapMinutes(candidate, occupied);
+      return sum + (minutes <= COMPETING_OVERLAP_TOLERANCE ? minutes / 1000 : minutes);
     }, 0);
   };
   const flexibility = (byPerson: Map<string, Placement[]>, placement: Placement) => placement.plan.groups.reduce((count, _, index) => count + (cost(byPerson, placement.person, placement.planIndex, index + 1) === 0 ? 1 : 0), 0);
@@ -143,15 +146,6 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
   }
 }
 
-function overlapMinutes(a: GroupSlot, b: GroupSlot) {
-  let total = 0;
-  for (const x of a.windows) for (const y of b.windows) {
-    const start = Math.max(toMinutes(x.start), toMinutes(y.start));
-    const end = Math.min(toMinutes(x.end), toMinutes(y.end));
-    if (end > start) total += end - start;
-  }
-  return total;
-}
 
 export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing }: {
   competition: StoredCompetition;

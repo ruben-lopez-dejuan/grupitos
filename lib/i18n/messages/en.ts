@@ -590,7 +590,7 @@ export const en: Messages = {
     "missing-dataentry": "G{group} has no data entry.",
     "time-overlap": "{name} has “{task}” in G{group} at the same time as “{otherTask}” in {otherRound} G{otherGroup}.",
     unavailable: "{name} has “{task}” in G{group} but is unavailable at that time.",
-    "unavoidable-time-overlap": "The schedule leaves no possible combination: {name} competes in G{group} at the same time as {otherRound} G{otherGroup}.",
+    "unavoidable-time-overlap": "{name} competes in G{group} at the same time as in {otherRound} G{otherGroup}, and no group of either round avoids it: only the schedule can fix it.",
     and: " and ",
   },
   printing: {

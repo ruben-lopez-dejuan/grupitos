@@ -1,6 +1,6 @@
 import { competingGroup, competingGroups, duties, groupTotals, type GeneratedAssignment } from "@/lib/assignments";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
-import { overlaps, slotsOverlap, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
+import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { judgesNeeded } from "@/lib/rounds";
 
 /**
@@ -179,8 +179,11 @@ export function validateTimes(assignments: GeneratedAssignment[], slots: Map<str
         if (tasks[i].item.roundId === tasks[j].item.roundId && tasks[i].group === tasks[j].group) continue;
         if (slotsOverlap(tasks[i].slot, tasks[j].slot)) {
           const bothCompete = tasks[i].role === "competitor" && tasks[j].role === "competitor";
-          const firstCanMove = slots.get(tasks[i].item.roundId)?.some(candidate => !slotsOverlap(candidate, tasks[j].slot)) ?? false;
-          const secondCanMove = slots.get(tasks[j].item.roundId)?.some(candidate => !slotsOverlap(candidate, tasks[i].slot)) ?? false;
+          // Competing in two events with a short overlap is going from one to the next.
+          const fits = (a: GroupSlot, b: GroupSlot) => bothCompete ? overlapMinutes(a, b) <= COMPETING_OVERLAP_TOLERANCE : !slotsOverlap(a, b);
+          if (fits(tasks[i].slot, tasks[j].slot)) continue;
+          const firstCanMove = slots.get(tasks[i].item.roundId)?.some(candidate => fits(candidate, tasks[j].slot)) ?? false;
+          const secondCanMove = slots.get(tasks[j].item.roundId)?.some(candidate => fits(candidate, tasks[i].slot)) ?? false;
           const unavoidable = bothCompete && !firstCanMove && !secondCanMove;
           add(tasks[i], tasks[j], unavoidable);
           add(tasks[j], tasks[i], unavoidable);

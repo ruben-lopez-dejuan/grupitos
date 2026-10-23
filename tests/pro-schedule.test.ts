@@ -194,6 +194,18 @@ describe("generator with a schedule", () => {
     expect(new Set(validateTimes(assignments, slots).map(issue => `${issue.code}:${issue.severity}`))).toEqual(new Set(["unavoidable-time-overlap:warning"]));
   });
 
+  it("chains two events that overlap only a few minutes (5x5 G1, then multi-blind) without a warning", () => {
+    const source = buildDemoCompetition({ id: "Chain", name: "Chain", people: 12, events: ["555", "333mbf"], newcomerShare: 0, seed: 5 });
+    const competition: StoredCompetition = { ...source, persons: source.persons?.map((person, index) => ({ ...person, registration: { ...person.registration, eventIds: index < 6 ? ["555", "333mbf"] : ["555"] } })) };
+    // 555 G1 10:00-10:30, G2 10:30-11:00; the attempt starts at 10:23 (7 minutes into G1's end).
+    const slots = groupSlots(schedule([block("a", "555-r1", 1, "10:00", "11:00", 2), block("b", "333mbf-r1-a1", 3, "10:23", "11:30", 1)]));
+    const rounds = withScheduledGroups(initialRounds(competition, 6, "fixed"), slots).map(round => ({ ...round, scramblers: 0, runners: 0 }));
+    const assignments = generateAssignments({ competition, rounds, stations: 6, zoneMode: "fixed", people: peopleFromWcif(competition), options: { ...DEFAULT_OPTIONS, assignJudges: false }, slots });
+    const multi = new Set(assignments.filter(item => item.roundId === "333mbf-r1" && item.inRound).map(item => item.personId));
+    expect(assignments.filter(item => item.roundId === "555-r1" && multi.has(item.personId)).map(item => item.tasks.find(task => task.role === "competitor")!.group)).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(validateTimes(assignments, slots)).toEqual([]);
+  });
+
   it("never gives anyone two things at once", () => {
     const competition = demoCompetition("large");
     const imported = importSchedule(competition, () => 8);

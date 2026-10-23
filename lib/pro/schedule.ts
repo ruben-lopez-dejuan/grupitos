@@ -269,6 +269,22 @@ export function groupSlots(schedule: ProSchedule): Map<string, GroupSlot[]> {
   return result;
 }
 
+/**
+ * Minutes two competing groups may overlap and still count as one after the other: people
+ * finish a group and walk to the next event (5x5 G1 until 15:22, multi-blind from 15:15).
+ */
+export const COMPETING_OVERLAP_TOLERANCE = 10;
+
+export function overlapMinutes(a: GroupSlot, b: GroupSlot) {
+  let total = 0;
+  for (const x of a.windows) for (const y of b.windows) {
+    const start = Math.max(toMinutes(x.start), toMinutes(y.start));
+    const end = Math.min(toMinutes(x.end), toMinutes(y.end));
+    if (end > start) total += end - start;
+  }
+  return total;
+}
+
 export function slotsOverlap(a: GroupSlot, b: GroupSlot) {
   return a.windows.some(x => b.windows.some(y => overlaps(x, y)));
 }
