@@ -248,6 +248,22 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     const sizes = [...(eligible[role]?.values() ?? [])].map(set => set.size);
     return sizes.length ? [Math.min(...sizes), Math.max(...sizes)] : undefined;
   };
+  // PRO: teams dedicated to a room or stage, from the segment chosen in the zone tab.
+  const laneTeams = pro && slots && Object.values(staffing).some(lane => lane.team) ? (() => {
+    const all = everyone(competition, proPeople);
+    const context = { people: settings.people, pro: proPeople, segments };
+    const byLane = new Map(Object.entries(staffing).flatMap(([lane, own]) => {
+      const segment = segments.find(item => item.id === own.team);
+      return segment ? [[lane, new Set(segmentMembers(segment, all, context).map(personKey))] as const] : [];
+    }));
+    return {
+      forGroup: (roundId: string, group: number) => {
+        const slot = slots.get(roundId)?.find(item => item.group === group);
+        return slot ? byLane.get(targetKey(slot.roomId, slot.stageId)) : undefined;
+      },
+      members: new Set([...byLane.values()].flatMap(members => [...members])),
+    };
+  })() : undefined;
   const segmentFilters = pro && segments.length ? (() => {
     const context = { people: settings.people, pro: proPeople, segments };
     const all = everyone(competition, proPeople);
@@ -265,7 +281,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -306,7 +322,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
               <h3 className="panel-subheading">{t("staffing.title")} <Hint align="start" text={t("staffing.hint")} /></h3>
               <p className="setup-note staffing-note">{t("staffing.note")}</p>
               <div className="round-table staffing-grid">
-                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span></div>
+                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span>{t("staffing.team")} <Hint text={t("staffing.teamHint")} /></span></div>
                 {scheduleLanes(pro.schedule).map(lane => {
                   const own = staffing[lane.key] ?? {};
                   const laneStations = own.stations ?? stations;
@@ -316,6 +332,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                     {/* Without a value of its own, each round keeps its suggestion; a click starts from the usual one per five or eight stations. */}
                     <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={own.scramblers ?? suggestScramblers(laneStations, 1, laneStations)} auto={own.scramblers === undefined} min={0} onChange={value => setStaffing(lane.key, { scramblers: value })} />
                     <Stepper label={t("rounds.stepperRunners")} variant="runner" value={own.runners ?? suggestRunners(laneStations, 1, laneStations)} auto={own.runners === undefined} min={0} onChange={value => setStaffing(lane.key, { runners: value })} />
+                    <select className="lane-team" value={own.team ?? ""} onChange={event => setStaffing(lane.key, { team: event.target.value || undefined })} aria-label={`${lane.name} · ${t("staffing.team")}`}><option value="">{t("staffing.noTeam")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>
                   </div>;
                 })}
               </div>

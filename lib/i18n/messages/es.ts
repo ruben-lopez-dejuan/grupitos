@@ -256,6 +256,9 @@ export const es = {
     stepperRunners: "runners",
   },
   staffing: {
+    team: "Equipo",
+    teamHint: "Un segmento de personas dedicadas a esta sala o escenario (por ejemplo, el equipo de side room): tienen prioridad para sus tareas aquí y no trabajan en ningún otro sitio. Crea el segmento en Segmentos, por ejemplo «team es Side room».",
+    noTeam: "Sin equipo propio",
     note: "Valores predeterminados de cada sala o escenario. Mezcladores y runners se pueden cambiar después para cada ronda en Grupos.",
     auto: "Sugerencia: aún no lo has fijado. Si no lo cambias, cada ronda usa su propia sugerencia.",
     title: "Por sala y escenario",
@@ -617,6 +620,8 @@ export const es = {
     score: "Puntuación {score}",
     picked: "Elegida entre {count} personas libres; llevaba {load} tareas",
     reasons: {
+      reserve: "de reserva: tiene marca en la prueba que se mezcla",
+      laneTeam: "es del equipo de esta sala",
       staff: "staff con prioridad",
       volunteer: "voluntario que no compite (cuenta como staff)",
       trusted: "personal de confianza",

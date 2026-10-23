@@ -289,3 +289,7 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .team-roles label span{font-weight:650}
 .team-roles small{color:var(--muted);font-weight:600}
 .team-roles select{padding:5px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:13px}
+
+.staffing-grid .round-table-head,.staffing-grid .round-row{grid-template-columns:minmax(170px,1.2fr) 140px 130px 130px minmax(150px,1fr)}
+.staffing-grid .round-table-head span{display:flex;align-items:center;gap:4px}
+.lane-team{width:100%;min-width:0;padding:6px 8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:13px}

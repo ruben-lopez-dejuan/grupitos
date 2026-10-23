@@ -37,7 +37,13 @@ export type ProSchedule = {
 
 /** `people` is absent until the PRO people panel is first used. */
 /** Per room or stage (lane key): stations and staff per group; empty means the round's value. */
-export type LaneStaffing = { stations?: number; scramblers?: number; runners?: number };
+export type LaneStaffing = {
+  stations?: number;
+  scramblers?: number;
+  runners?: number;
+  /** Segment of people dedicated to this room or stage (a side room team). */
+  team?: string;
+};
 
 export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig };
 

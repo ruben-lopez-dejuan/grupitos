@@ -31,6 +31,11 @@ export function draftStorageKey(competitionId: string) {
   return `wca-easy-groups:draft:${competitionId}`;
 }
 
+function usesSegments(settings: WorkspaceSettings) {
+  const pro = settings.pro;
+  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team));
+}
+
 /** Only the settings that change what the generator produces. */
 export function generationSignature(settings: WorkspaceSettings) {
   return JSON.stringify({
@@ -50,8 +55,9 @@ export function generationSignature(settings: WorkspaceSettings) {
       staffing: settings.pro.staffing,
       scoring: settings.pro.scoring?.enabled ? settings.pro.scoring : undefined,
       preferences: settings.pro.scoring?.enabled && settings.pro.scoring.weights.preferences ? settings.pro.people?.properties : undefined,
-      segments: settings.pro.jobs && Object.keys(settings.pro.jobs).length ? settings.pro.segments : undefined,
-      properties: settings.pro.jobs && Object.keys(settings.pro.jobs).length ? settings.pro.people?.properties : undefined,
+      // Segments shape the proposal when they decide who may do a job or who staffs a room.
+      segments: usesSegments(settings) ? settings.pro.segments : undefined,
+      properties: usesSegments(settings) ? settings.pro.people?.properties : undefined,
     } : undefined,
   });
 }

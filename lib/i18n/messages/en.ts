@@ -254,6 +254,9 @@ export const en: Messages = {
     stepperRunners: "runners",
   },
   staffing: {
+    team: "Team",
+    teamHint: "A segment of people dedicated to this room or stage (the side room team, say): they come first for its tasks and work nowhere else. Create it in Segments, for example \"team is Side room\".",
+    noTeam: "No own team",
     note: "Defaults for each room or stage. Scramblers and runners can be changed later for each round in Groups.",
     auto: "Suggestion: not set yet. Unless you change it, each round uses its own suggestion.",
     title: "Per room and stage",
@@ -615,6 +618,8 @@ export const en: Messages = {
     score: "Score {score}",
     picked: "Picked among {count} free people; had {load} tasks",
     reasons: {
+      reserve: "reserve: has a result in the event scrambled",
+      laneTeam: "in this room's team",
       staff: "staff, with priority",
       volunteer: "non-competing volunteer (counts as staff)",
       trusted: "trusted person",

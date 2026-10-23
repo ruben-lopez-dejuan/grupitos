@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import stagedFixture from "@/tests/fixtures/schedule-with-rooms-and-stages.json";
-import type { GeneratedAssignment } from "@/lib/assignments";
+import { groupTotals, type GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, minScheduledGroups, setRoundGroups, scheduleProblems, splitBlock, staffingOf, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { initialRounds } from "@/lib/rounds";
+import { initialRounds, personKey } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { roundScorecards } from "@/lib/scorecards/scorecards";
 import { groupLimits, validateRound, validateTimes } from "@/lib/validation";
@@ -259,5 +259,37 @@ describe("staffing per room and stage", () => {
     expect(groupLimits(rules, verde[0])).toEqual({ stations: 3, scramblers: 0, runners: 0 });
     const issues = validateRound("333-r1", assignments.filter(item => item.roundId === "333-r1"), rules);
     expect(issues.some(issue => issue.code === "missing-scramblers" && verde.includes(issue.group!))).toBe(false);
+  });
+});
+
+describe("side room staffing", () => {
+  // A single-group blindfolded round in the side room after the main-stage rounds: everyone in it
+  // competes, so its staff must come from outside the round.
+  const source = buildDemoCompetition({ id: "Side", name: "Side", people: 40, events: ["333", "444", "444bf"], newcomerShare: 0, seed: 8 });
+  const competition: StoredCompetition = { ...source, persons: source.persons?.map((person, index) => ({ ...person, roles: index < 6 ? ["delegate"] : [], registration: { ...person.registration, eventIds: index % 3 === 0 ? ["333", "444", "444bf"] : ["333", "444"] } })) };
+  const slots = groupSlots(schedule([block("a", "333-r1", 1, "10:00", "11:00", 2), block("b", "333-r1", 2, "10:00", "11:00", 2), block("d", "444-r1", 1, "11:00", "12:00", 2), block("c", "444bf-r1", 3, "12:00", "13:00", 1)]));
+  const rounds = withScheduledGroups(initialRounds(competition, 6, "fixed"), slots).map(round => ({ ...round, enabled: round.competitorsKnown }));
+  const people = peopleFromWcif(competition);
+  const options = { ...DEFAULT_OPTIONS, assignDelegateDuties: true };
+
+  it("covers the side room with reserve scramblers (4x4 results) and a delegate", () => {
+    const assignments = generateAssignments({ competition, rounds, stations: 6, zoneMode: "fixed", people, options, slots });
+    const side = assignments.filter(item => item.roundId === "444bf-r1");
+    const counts = groupTotals(side, 1)[0].counts;
+    expect(counts.scrambler).toBe(rounds.find(round => round.id === "444bf-r1")!.scramblers);
+    expect(counts.delegate).toBe(1);
+    expect(side.filter(item => item.tasks.some(task => task.role === "scrambler")).every(item => item.why?.some(why => why.reasons.includes("reserve")))).toBe(true);
+    expect(validateTimes(assignments, slots)).toEqual([]);
+  });
+
+  it("keeps a room's team in its room, first in line there", () => {
+    const team = new Set(competition.persons!.filter((_, index) => index >= 6 && index % 3 !== 0).slice(0, 4).map(personKey));
+    const laneTeams = { forGroup: (roundId: string, group: number) => slots.get(roundId)?.find(slot => slot.group === group)?.roomId === 3 ? team : undefined, members: team };
+    const assignments = generateAssignments({ competition, rounds, stations: 6, zoneMode: "fixed", people, options, slots, laneTeams });
+    const elsewhere = assignments.filter(item => team.has(item.personId) && item.roundId !== "444bf-r1" && item.tasks.some(task => task.role !== "competitor"));
+    expect(elsewhere).toEqual([]);
+    const sideStaff = new Set(assignments.filter(item => item.roundId === "444bf-r1" && item.tasks.some(task => task.role !== "competitor")).map(item => item.personId));
+    // The team does not compete in 4BLD, so all of it is free and works there.
+    for (const key of team) expect(sideStaff.has(key)).toBe(true);
   });
 });
