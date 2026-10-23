@@ -172,3 +172,10 @@ button.plain{padding:4px 6px;color:var(--blue);background:transparent;border:0;f
 .matrix-review{margin-inline:calc((min(1500px,calc(100vw - 40px)) - 100%)/-2)}
 .change-competition{margin-left:6px;padding:3px 8px;color:var(--muted)!important;border:1px solid var(--line);border-radius:5px;font-size:13px;font-weight:650;white-space:nowrap}
 .change-competition:hover{color:var(--ink)!important;background:var(--surface-subtle)}
+
+/* Printing states: generated rounds are ready; planned rounds remain printable without names. */
+.print-table td.generated-round{background:color-mix(in srgb,var(--blue) 4%,transparent)}
+.print-table td.planned-round{background:color-mix(in srgb,var(--muted) 5%,transparent)}
+.print-table .generated-round .print-round-status{color:var(--ink);font-weight:700}
+.print-table .planned-round .print-round-status{font-style:italic}
+.print-table .no-stages{display:block;margin-top:5px;color:var(--muted);font-size:12px}

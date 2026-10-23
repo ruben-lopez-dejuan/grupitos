@@ -36,7 +36,8 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   const withAssignments = new Set(assignments.map(item => item.roundId));
   // Rounds with a proposal, plus later rounds whose groups are planned but whose competitors are unknown.
   const printable = rounds.filter(round => withAssignments.has(round.id) || (round.roundNumber > 1 && !round.competitorsKnown && round.competitors > 0));
-  const [chosen, setChosen] = useState<string[]>(() => printable.filter(round => withAssignments.has(round.id)).map(round => round.id));
+  const generatedIds = printable.filter(round => withAssignments.has(round.id)).map(round => round.id);
+  const [chosen, setChosen] = useState<string[]>(() => generatedIds);
   /** Stages left out of the print, as "roundId|laneKey". */
   const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState<"rounds" | "blank">();
@@ -45,15 +46,18 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   const source = { competition, assignments, rounds, stations, zoneMode, printing, schedule, slots };
   const selectedIds = chosen.filter(id => printable.some(round => round.id === id));
   const lanes = schedule ? scheduleLanes(schedule) : [];
-  /** Lanes a round's groups run in, in schedule order; empty when it runs in a single one. */
-  const lanesOf = (roundId: string) => {
+  const stageLanes = lanes.filter(lane => lane.stageId !== undefined);
+  /** Real stages a round's groups run in. A room without stages deliberately returns none. */
+  const stagesOf = (roundId: string) => {
     const used = new Set(slots?.get(roundId)?.map(slot => targetKey(slot.roomId, slot.stageId)));
-    return used.size > 1 ? lanes.filter(lane => used.has(lane.key)) : [];
+    return stageLanes.filter(lane => used.has(lane.key));
   };
   const stageKey = (roundId: string, lane: string) => `${roundId}|${lane}`;
   const toggleStages = (keys: string[], include: boolean) => setExcluded(current => include ? current.filter(key => !keys.includes(key)) : [...new Set([...current, ...keys])]);
-  // Stage buttons on top act on every chosen round that runs in that stage.
-  const usedLanes = lanes.filter(lane => selectedIds.some(id => lanesOf(id).some(item => item.key === lane.key)));
+  // Stage buttons stay available regardless of the round selection and keep their filters for later.
+  const printableIds = printable.map(round => round.id);
+  const usedStages = stageLanes.filter(lane => printableIds.some(id => stagesOf(id).some(item => item.key === lane.key)));
+  const allGeneratedChosen = generatedIds.length > 0 && generatedIds.every(id => selectedIds.includes(id));
   const includeGroup = (roundId: string, group: number) => {
     const slot = slots?.get(roundId)?.find(item => item.group === group);
     return !slot || !excluded.includes(stageKey(roundId, targetKey(slot.roomId, slot.stageId)));
@@ -97,12 +101,12 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     <h3 className="panel-subheading">{t("printing.what")}</h3>
     <div className="print-rounds">
       <div className="print-rounds-head"><strong>{t("printing.roundsTitle")} <Hint align="start" text={t("printing.roundsHelp")} /></strong>
-        {usedLanes.length > 0 && <div className="stage-filter" aria-label={t("printing.stagesTitle")}>{usedLanes.map(lane => {
-          const keys = selectedIds.filter(id => lanesOf(id).some(item => item.key === lane.key)).map(id => stageKey(id, lane.key));
+        {usedStages.length > 0 && <div className="stage-filter" aria-label={t("printing.stagesTitle")}>{usedStages.map(lane => {
+          const keys = printableIds.filter(id => stagesOf(id).some(item => item.key === lane.key)).map(id => stageKey(id, lane.key));
           const included = keys.filter(key => !excluded.includes(key)).length;
           return <button key={lane.key} type="button" aria-pressed={included === keys.length} className={included === 0 ? "off" : included < keys.length ? "partial" : ""} style={{ ["--stage" as string]: lane.color }} title={t("printing.stageToggle", { name: lane.name, count: included, total: keys.length })} onClick={() => toggleStages(keys, included < keys.length)}><i />{lane.name}<small>{included}/{keys.length}</small></button>;
         })}<Hint text={t("printing.stagesHelp")} /></div>}
-        <button className="plain" type="button" onClick={() => setChosen(selectedIds.length === printable.length ? [] : printable.map(round => round.id))}>{selectedIds.length === printable.length ? t("printing.selectNone") : t("printing.selectAll")}</button></div>
+        <button className="plain" type="button" disabled={!generatedIds.length} onClick={() => setChosen(current => allGeneratedChosen ? current.filter(id => !generatedIds.includes(id)) : [...new Set([...current, ...generatedIds])])}>{allGeneratedChosen ? t("printing.selectNone") : t("printing.selectAll")}</button></div>
       <table className="print-table">
         <thead><tr><th>{t("printing.columnEvent")}</th>{roundNumbers.map(number => <th key={number}>{t("printing.roundNumber", { number })}</th>)}</tr></thead>
         <tbody>{eventIds.map(eventId => <tr key={eventId}>
@@ -112,13 +116,15 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
             if (!round) return <td key={number} className="none" />;
             const canPrint = printable.some(item => item.id === round.id);
             if (!canPrint) return <td key={number} className="none" title={t("printing.noProposal")}>—</td>;
-            const roundLanes = lanesOf(round.id);
-            return <td key={number}><label><input type="checkbox" checked={chosen.includes(round.id)} onChange={event => setChosen(current => event.target.checked ? [...current, round.id] : current.filter(id => id !== round.id))} /><span>{withAssignments.has(round.id) ? t("printing.generated") : t("printing.notGenerated")}</span></label>
-              {roundLanes.length > 0 && chosen.includes(round.id) && <span className="cell-stages">{roundLanes.map(lane => {
+            const roundStages = stagesOf(round.id);
+            const generated = withAssignments.has(round.id);
+            const scheduled = (slots?.get(round.id)?.length ?? 0) > 0;
+            return <td key={number} className={generated ? "generated-round" : "planned-round"}><label><input type="checkbox" checked={chosen.includes(round.id)} onChange={event => setChosen(current => event.target.checked ? [...current, round.id] : current.filter(id => id !== round.id))} /><span className="print-round-status">{generated ? t("printing.generated") : t("printing.notGenerated")}</span></label>
+              {roundStages.length > 0 ? <span className="cell-stages">{roundStages.map(lane => {
                 const key = stageKey(round.id, lane.key);
                 const on = !excluded.includes(key);
                 return <button key={lane.key} type="button" aria-pressed={on} className={on ? "" : "off"} style={{ ["--stage" as string]: lane.color }} title={lane.name} onClick={() => toggleStages([key], !on)}><i />{lane.name}</button>;
-              })}</span>}
+              })}</span> : schedule && scheduled ? <span className="no-stages">{t("printing.noStages")}</span> : null}
             </td>;
           })}
         </tr>)}</tbody>
