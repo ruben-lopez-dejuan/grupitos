@@ -369,3 +369,8 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .sheet-preview li em{color:var(--muted);font-style:normal}
 .sheet-preview li.unmatched em,.sheet-preview li.ambiguous em{color:#a35d00}
 :root[data-theme="dark"] .sheet-preview li.unmatched em,:root[data-theme="dark"] .sheet-preview li.ambiguous em{color:#f3c27a}
+
+/* Start from scratch and WCIF groups */
+.change-competition.restart{color:var(--muted);background:transparent;border:0;font:inherit;cursor:pointer}
+.change-competition.restart:hover{color:#b42318}
+.wcif-note{margin:0 0 10px}

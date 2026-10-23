@@ -31,6 +31,8 @@ export type WcifPerson = {
     isCompeting?: boolean;
     eventIds?: string[];
   };
+  /** Group and staff assignments already in the WCIF. */
+  assignments?: Array<{ activityId: number; assignmentCode: string; stationNumber?: number | null }>;
 };
 
 export type WcifAdvancementCondition = { type: "ranking" | "percent" | "attemptResult"; level: number };

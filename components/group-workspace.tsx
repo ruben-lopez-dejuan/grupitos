@@ -20,7 +20,8 @@ import { TaskOrderPanel } from "@/components/task-order-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TASK_CODES, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
-import { getCompetition, type StoredCompetition } from "@/lib/competition-store";
+import { getCompetition, saveCompetition, type StoredCompetition } from "@/lib/competition-store";
+import { groupsFromWcif, hasWcifGroups, wcifGroupsNeedStages } from "@/lib/wcif-groups";
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
@@ -70,6 +71,20 @@ function defaultSettings(competition: StoredCompetition): WorkspaceSettings {
   };
 }
 
+/**
+ * Settings and proposal with the groups already in the WCIF: rounds that have them are switched on
+ * (in normal mode with their number of groups) and the assignments become the proposal.
+ */
+function withWcifGroups(competition: StoredCompetition, settings: WorkspaceSettings) {
+  const slots = settings.pro?.enabled ? groupSlots(settings.pro.schedule) : undefined;
+  const imported = groupsFromWcif(competition, slots);
+  const rounds = settings.rounds.map(round => {
+    const groups = imported.groupsByRound.get(round.id);
+    return groups === undefined ? round : { ...round, enabled: true, ...(slots ? {} : { groups }) };
+  });
+  return { settings: { ...settings, rounds }, proposal: imported.assignments, unplaced: imported.unplaced };
+}
+
 /** Rooms and stages a team can work in, with whether a room has stages. */
 function laneChoices(schedule: ProSchedule) {
   return scheduleLanes(schedule).map(lane => ({ key: lane.key, name: lane.name, color: lane.color, hasStages: lane.stageId !== undefined || (schedule.rooms.find(room => room.id === lane.roomId)?.stages.length ?? 0) > 0 }));
@@ -89,6 +104,21 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const [tab, setTab] = useState<Tab>("zone");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
+  /** Shown in the review after groups were read from the WCIF. */
+  const [wcifNote, setWcifNote] = useState<{ count: number; unplaced: number }>();
+  const [restarting, setRestarting] = useState(false);
+
+  /** Opens the WCIF's own groups in the review. */
+  const openWcifGroups = useCallback((data: StoredCompetition, base: WorkspaceSettings) => {
+    const result = withWcifGroups(data, base);
+    setSettings(result.settings);
+    setProposal(result.proposal);
+    setGeneratedWith(undefined);
+    setProposalVersion(version => version + 1);
+    setWcifNote({ count: result.proposal.length, unplaced: result.unplaced });
+    setTab("review");
+    history.replaceState(null, "", "#review");
+  }, []);
 
   useEffect(() => {
     getCompetition(competitionId).then(data => {
@@ -96,13 +126,15 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
       if (!data) return;
       const draft = parseDraft(localStorage.getItem(draftStorageKey(data.id)));
       const defaults = defaultSettings(data);
+      // First time here and the WCIF already has groups: open them for review.
+      if (!draft && hasWcifGroups(data)) return openWcifGroups(data, wcifGroupsNeedStages(data) ? { ...defaults, pro: { enabled: true, schedule: importSchedule(data, roundId => defaults.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : defaults);
       setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
       if (draft) {
         setProposal(draft.assignments);
         setGeneratedWith(draft.generatedWith);
       }
     }).finally(() => setLoading(false));
-  }, [competitionId]);
+  }, [competitionId, openWcifGroups]);
 
   // Showing photos is a per-viewer preference, kept in this browser only.
   useEffect(() => {
@@ -241,6 +273,40 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     if (!enabled && PRO_TABS.includes(tab)) changeTab("zone");
   };
   const setSchedule = (schedule: ProSchedule) => updatePro(() => ({ schedule }));
+  /**
+   * Starts again from the WCIF: downloads it again when possible (registrations and groups as
+   * they are now), forgets every setting, volunteer and proposal of this competition, and opens
+   * the WCIF's groups if it has any. PRO mode stays on if it was.
+   */
+  async function startFromScratch() {
+    const [stored, current] = [competition, settings];
+    if (!stored || !current || !window.confirm(t("workspace.restartConfirm"))) return;
+    setRestarting(true);
+    let data: StoredCompetition = stored;
+    try {
+      const response = await fetch(`/api/wca/competitions/${encodeURIComponent(stored.id)}`);
+      if (response.ok) {
+        data = await response.json() as StoredCompetition;
+        await saveCompetition(data);
+      }
+    } catch {
+      // Offline or a demo: the stored WCIF is used.
+    }
+    try { localStorage.removeItem(draftStorageKey(data.id)); } catch { /* storage blocked */ }
+    setCompetition(data);
+    const fresh = defaultSettings(data);
+    const base = current.pro?.enabled || (hasWcifGroups(data) && wcifGroupsNeedStages(data)) ? { ...fresh, pro: { enabled: true, schedule: importSchedule(data, roundId => fresh.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : fresh;
+    setWcifNote(undefined);
+    if (hasWcifGroups(data)) openWcifGroups(data, base);
+    else {
+      setSettings(base);
+      setProposal([]);
+      setGeneratedWith(undefined);
+      setProposalVersion(version => version + 1);
+      changeTab("zone");
+    }
+    setRestarting(false);
+  }
   // Until first edited, PRO people start from the properties already in the WCIF.
   const proPeople: ProPeople = settings.pro?.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
   const setProPeople = (next: ProPeople) => updatePro(() => ({ people: next }));
@@ -402,7 +468,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
     <section className="workspace-main">
       {/* No sidebar: the mark, the competition and the steps all live in these two bars. */}
-      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
+      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link><button type="button" className="change-competition restart" disabled={restarting} onClick={startFromScratch} title={t("workspace.restartHelp")}>{restarting ? t("workspace.restarting") : t("workspace.restart")}</button></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
         {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
         <span className="tab-pending" title={t("workspace.notAvailable")}><span className="step-number">{tabs.length + 1}</span>{t("workspace.publish")} <small>{t("workspace.soon")}</small></span>
@@ -524,6 +590,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         </>}
 
         {tab === "review" && <>
+          {wcifNote && <p className="setup-note wcif-note" role="status">{t("workspace.wcifGroups", { count: wcifNote.count })}{wcifNote.unplaced > 0 && ` ${t("workspace.wcifUnplaced", { count: wcifNote.unplaced })}`}</p>}
           {outdatedNote}
           {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
