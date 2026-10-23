@@ -36,7 +36,7 @@ import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEli
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { acceptedPeople, personKey, initialRounds, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, personKey, initialRounds, shapeRound, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
@@ -109,6 +109,9 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   /** Shown in the review after groups were read from the WCIF. */
   const [wcifNote, setWcifNote] = useState<{ count: number; unplaced: number }>();
   const [restarting, setRestarting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  /** Mid-competition messages: what refreshing from the WCA found, which rounds were generated. */
+  const [refreshNote, setRefreshNote] = useState<string>();
 
   /** Opens the WCIF's own groups in the review. */
   const openWcifGroups = useCallback((data: StoredCompetition, base: WorkspaceSettings) => {
@@ -447,10 +450,63 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const proposalOutdated = proposal.length > 0 && generatedWith !== undefined && generatedWith !== signature;
   const delegatesWithoutDuties = options.assignDelegateDuties && !peopleInUse.delegateDutyIds.some(key => isDelegate(peopleInUse, key));
 
+  /** Everything the generator needs except the rounds to generate. */
+  const generationInput = { competition, stations, zoneMode, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
+  // Mid-competition: enabled rounds with known competitors that the proposal does not have yet.
+  const newRounds = proposal.length ? activeRounds.filter(round => round.competitorsKnown && !proposal.some(item => item.roundId === round.id)) : [];
+  const roundName = (round: { eventId: string; roundNumber: number }) => `${eventName(round.eventId)} R${round.roundNumber}`;
+
+  /** Generates only the new rounds; the rest of the proposal stays as it is and counts for them. */
+  function generateNewRounds() {
+    if (!newRounds.length) return;
+    const added = generateAssignments({ ...generationInput, rounds: newRounds, fixedAssignments: proposal });
+    setProposal([...proposal, ...added]);
+    setGeneratedWith(signature);
+    setProposalVersion(version => version + 1);
+    setRefreshNote(t("workspace.newRoundsDone", { rounds: newRounds.map(roundName).join(", ") }));
+    changeTab("review");
+  }
+
+  /**
+   * Downloads the WCIF again (results, registrations) and keeps the settings and the proposal:
+   * rounds whose competitors are now known are switched on, ready for "Generate new rounds".
+   */
+  async function refreshFromWca() {
+    if (!competition) return;
+    setRefreshing(true);
+    try {
+      const response = await fetch(`/api/wca/competitions/${encodeURIComponent(competition.id)}`);
+      if (!response.ok) { setRefreshNote(t("workspace.refreshFailed")); return; }
+      const data = await response.json() as StoredCompetition;
+      await saveCompetition(data);
+      setCompetition(data);
+      const fresh = initialRounds(data, stations, zoneMode);
+      const opened: string[] = [];
+      setSettings(current => current && {
+        ...current,
+        rounds: current.rounds.map(round => {
+          const now = fresh.find(item => item.id === round.id);
+          if (!now) return round;
+          if (now.competitorsKnown && !round.competitorsKnown) {
+            opened.push(roundName(round));
+            const known = { ...round, competitors: now.competitors, competitorsKnown: true, enabled: true };
+            return round.staffSetByHand ? known : { ...shapeRound(known, current.stations, current.zoneMode), enabled: true };
+          }
+          return { ...round, competitors: now.competitors, competitorsKnown: now.competitorsKnown };
+        }),
+      });
+      setRefreshNote(opened.length ? t("workspace.refreshNew", { rounds: opened.join(", ") }) : t("workspace.refreshNothing"));
+    } catch {
+      setRefreshNote(t("workspace.refreshFailed"));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules }));
+    setProposal(generateAssignments({ ...generationInput, rounds: activeRounds }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -472,11 +528,12 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
     <section className="workspace-main">
       {/* No sidebar: the mark, the competition and the steps all live in these two bars. */}
-      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link><button type="button" className="change-competition restart" disabled={restarting} onClick={startFromScratch} title={t("workspace.restartHelp")}>{restarting ? t("workspace.restarting") : t("workspace.restart")}</button></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
+      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link><button type="button" className="change-competition refresh" disabled={refreshing} onClick={refreshFromWca} title={t("workspace.refreshHelp")}>{refreshing ? t("workspace.refreshing") : t("workspace.refresh")}</button><button type="button" className="change-competition restart" disabled={restarting} onClick={startFromScratch} title={t("workspace.restartHelp")}>{restarting ? t("workspace.restarting") : t("workspace.restart")}</button></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
         {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
       </nav>
       <div className="workspace-content">
+        {refreshNote && <p className="setup-note refresh-note" role="status">{refreshNote}<button type="button" className="rule-remove" onClick={() => setRefreshNote(undefined)} aria-label={t("workspace.dismiss")}>×</button></p>}
         {tab === "zone" && <>
           <section className="data-strip" id="summary">
             <div><small>{t("workspace.stats.accepted")}</small><strong>{people.length}</strong></div><div><small>{t("workspace.stats.events")}</small><strong>{competition.events?.length ?? 0}</strong></div><div><small>{t("workspace.stats.rooms")}</small><strong>{roomCount}</strong></div><div><small>{t("workspace.stats.activeRounds")}</small><strong>{activeRounds.length}</strong></div>
@@ -610,7 +667,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
       </div>
       <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {
         // Groups are only generated from the Groups step; every other step leads to the next one.
-        if (tab === "rounds") return <button className="button primary" onClick={createProposal} disabled={!activeRounds.length}>{proposal.length ? t("workspace.regenerate") : t("workspace.create")}</button>;
+        if (tab === "rounds") return <>
+          {newRounds.length > 0 && <button className="button primary" onClick={generateNewRounds} title={newRounds.map(roundName).join(", ")}>{tp("workspace.generateNew", newRounds.length)}</button>}
+          <button className={`button ${newRounds.length ? "secondary" : "primary"}`} onClick={createProposal} disabled={!activeRounds.length}>{proposal.length ? t("workspace.regenerate") : t("workspace.create")}</button>
+        </>;
         const next = tabs[tabs.findIndex(item => item.id === tab) + 1];
         return next && !next.disabled && <button className="button primary" onClick={() => changeTab(next.id)}>{t("workspace.next", { step: next.label })} →</button>;
       })()}</div></footer>

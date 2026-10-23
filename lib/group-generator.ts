@@ -85,7 +85,13 @@ type Placement = { plan: CompetitorPlan; planIndex: number; group: number; perso
  * leaves each person in the group that overlaps least. Every step lowers the total overlap, so
  * it ends. This runs before any staff duties are assigned.
  */
-export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<string, GroupSlot[]>, reserved?: Map<string, Array<{ roundId: string; window: TimeWindow }>>) {
+/**
+ * Times to keep a person free when placing competitors: a room team's work (weight 0.1), or tasks
+ * already fixed (weight 1; `competing` ones allow the short walk from one event to the next).
+ */
+type Reserved = Map<string, Array<{ roundId: string; window: TimeWindow; weight?: number; competing?: boolean }>>;
+
+export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<string, GroupSlot[]>, reserved?: Reserved) {
   const placements = () => {
     const byPerson = new Map<string, Placement[]>();
     plans.forEach((plan, planIndex) => plan.groups.forEach((members, groupIndex) => members.forEach(person => {
@@ -117,10 +123,11 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       // A short overlap is going from one event to the next: nearly free, but a clean gap still wins.
       const minutes = overlapMinutes(candidate, occupied);
       return sum + (minutes <= COMPETING_OVERLAP_TOLERANCE ? minutes / 1000 : minutes);
-    }, 0) + (reserved?.get(personKey(person)) ?? []).reduce((sum, { roundId, window }) => {
+    }, 0) + (reserved?.get(personKey(person)) ?? []).reduce((sum, { roundId, window, weight = 0.1, competing }) => {
       // A room team's working times weigh less than competing twice, and never in the room's own rounds.
       if (roundId === plans[planIndex].round.id) return sum;
-      return sum + overlapMinutes(candidate, { windows: [window] }) / 10;
+      const minutes = overlapMinutes(candidate, { windows: [window] });
+      return sum + (competing && minutes <= COMPETING_OVERLAP_TOLERANCE ? minutes / 1000 : minutes * weight);
     }, 0);
   };
   const flexibility = (byPerson: Map<string, Placement[]>, placement: Placement) => placement.plan.groups.reduce((count, _, index) => count + (cost(byPerson, placement.person, placement.planIndex, index + 1) === 0 ? 1 : 0), 0);
@@ -166,7 +173,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
   /** Placements of room-team members that overlap their room's working times (outside its own rounds). */
   const reservedClashes = (byPerson: Map<string, Placement[]>) => [...(reserved?.keys() ?? [])].flatMap(key => (byPerson.get(key) ?? []).filter(placement => {
     const slot = slotOf(placement);
-    return !!slot && reserved!.get(key)!.some(({ roundId, window }) => roundId !== placement.plan.round.id && overlapMinutes(slot, { windows: [window] }) > 0);
+    return !!slot && reserved!.get(key)!.some(({ roundId, window, competing }) => roundId !== placement.plan.round.id && overlapMinutes(slot, { windows: [window] }) > (competing ? COMPETING_OVERLAP_TOLERANCE : 0));
   }).map(placement => [placement]));
 
   const limit = Math.max(1, plans.reduce((sum, plan) => sum + plan.competitors.length, 0) * 4);
@@ -186,7 +193,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -218,6 +225,11 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   assignmentSets?: (round: GenerationRound) => ResolvedSet[];
   /** PRO mode: station rule of each group of a round (CompScript's StationAssignmentRule), for fixed stations. */
   stationRules?: (round: GenerationRound) => Map<number, ResolvedStationRule>;
+  /**
+   * Mid-competition: assignments of rounds already done or kept, which are not generated again.
+   * Their competing and staff times, loads and streaks count for the new rounds.
+   */
+  fixedAssignments?: GeneratedAssignment[];
 }): GeneratedAssignment[] {
   const accepted = [...acceptedPeople(competition), ...nonCompetingStaff(competition), ...extraPeople];
   const country = competitionCountry(competition);
@@ -277,13 +289,22 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured, targets }];
   });
   // Room teams (the side room team) are kept free to work in their room when that is possible.
-  const reserved = new Map<string, Array<{ roundId: string; window: TimeWindow }>>();
+  const reserved: Reserved = new Map();
+  /** Windows of each fixed task, from the schedule. */
+  const fixedTasks = fixedAssignments.flatMap(item => item.tasks.map(task => {
+    const slot = slots?.get(item.roundId)?.find(candidate => candidate.group === task.group);
+    return { item, task, windows: slot ? windowsForTask(slot, task.role) : [] };
+  }));
+  // New rounds' competitors keep away from the groups they already compete or work in.
+  for (const { item, task, windows } of fixedTasks) {
+    for (const window of windows) reserved.set(item.personId, [...(reserved.get(item.personId) ?? []), { roundId: item.roundId, window, weight: 1, competing: task.role === "competitor" }]);
+  }
   if (slots && laneTeams) for (const plan of plans) plan.groups.forEach((members, index) => {
     if (!members.length) return;
     const windows = competingSlots!.get(plan.round.id)?.find(slot => slot.group === index + 1)?.windows ?? [];
     for (const key of laneTeams.forGroup(plan.round.id, index + 1) ?? []) reserved.set(key, [...(reserved.get(key) ?? []), ...windows.map(window => ({ roundId: plan.round.id, window }))]);
   });
-  if (competingSlots) resolveCompetitorOverlaps(plans, competingSlots, reserved);
+  if (competingSlots) resolveCompetitorOverlaps(plans, competingSlots, reserved.size ? reserved : undefined);
   // Then every attempt column takes its attempt-1 column's competitors.
   for (const plan of plans) {
     for (const linked of linkedColumns(plan.round.id)) plan.groups[linked.group - 1] = [...(plan.groups[linked.linkedTo! - 1] ?? [])];
@@ -300,8 +321,10 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
       }
     });
+    for (const { item, windows } of fixedTasks) busyTimes.set(item.personId, [...(busyTimes.get(item.personId) ?? []), ...windows]);
     // Unavailable people get no tasks then; "while X competes" follows X's groups as placed.
     const competing = new Map<string, TimeWindow[]>();
+    for (const { item, task, windows } of fixedTasks) if (task.role === "competitor") competing.set(item.personId, [...(competing.get(item.personId) ?? []), ...windows]);
     for (const plan of plans) plan.groups.forEach((members, groupIndex) => {
       const windows = slots.get(plan.round.id)?.find(slot => slot.group === groupIndex + 1)?.windows ?? [];
       for (const person of members) competing.set(personKey(person), [...(competing.get(personKey(person)) ?? []), ...windows]);
@@ -367,6 +390,15 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const outputByRound = new Map<string, GeneratedAssignment[]>();
   /** Times already covered by a data entry person, across rounds and rooms. */
   const dataEntryTimes: TimeWindow[] = [];
+  for (const { item, task, windows } of fixedTasks) {
+    if (task.role === "competitor") continue;
+    globalLoad.set(item.personId, (globalLoad.get(item.personId) ?? 0) + 1);
+    eventLoad.set(`${item.personId}|${item.eventId}`, (eventLoad.get(`${item.personId}|${item.eventId}`) ?? 0) + 1);
+    if (!staff.has(item.personId) && (task.role === "judge" || task.role === "scrambler" || task.role === "runner")) othersTotalLoad += 1;
+    const window = windows[0];
+    if (window) staffLog.set(item.personId, [...(staffLog.get(item.personId) ?? []), { start: toMinutes(window.start), end: toMinutes(window.end), role: task.role }]);
+    if (task.role === "dataentry") dataEntryTimes.push(...windows);
+  }
 
   for (const plan of staffingOrder) {
     const { round, competitors, groups, fixed, seedIndex, featured } = plan;

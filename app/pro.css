@@ -398,3 +398,9 @@ button.plain.danger{justify-self:start;color:var(--error)}
 /* Zone: max people per group per stage */
 .max-per-group{display:inline-flex;align-items:center;gap:2px}
 .max-per-group-off{color:var(--muted);font-size:13px}
+
+/* Mid-competition */
+.change-competition.refresh{color:var(--muted);background:transparent;border:0;font:inherit;cursor:pointer}
+.change-competition.refresh:hover{color:var(--blue)}
+.refresh-note{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
+.workspace-actions>div:last-child{display:flex;gap:8px}

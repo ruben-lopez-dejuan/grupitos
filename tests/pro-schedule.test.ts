@@ -389,3 +389,39 @@ describe("multi-blind scrambling", () => {
     expect(importSchedule(competition, () => 1).activities.map(activity => activity.kind)).toEqual(["multi-scramble", "lunch"]);
   });
 });
+
+describe("mid-competition: generating only new rounds", () => {
+  it("keeps the fixed rounds and counts their times for the new ones", () => {
+    const competition = buildDemoCompetition({ id: "Mid", name: "Mid", people: 40, events: ["333", "222"], newcomerShare: 0, seed: 14 });
+    const schedule: ProSchedule = {
+      timeZone: "UTC", days: ["2026-02-21"], activities: [],
+      rooms: [{ id: 1, name: "Main", color: "#d93636", stages: [{ id: 1, name: "Red", color: "#d93636" }, { id: 2, name: "Blue", color: "#2563eb" }] }],
+      blocks: [
+        { id: "a", activityCode: "333-r1", roomId: 1, stageId: 1, start: "2026-02-21T10:00", end: "2026-02-21T11:00", groups: 2 },
+        { id: "b", activityCode: "222-r1", roomId: 1, stageId: 2, start: "2026-02-21T10:00", end: "2026-02-21T11:00", groups: 2 },
+      ],
+    };
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(initialRounds(competition, 10, "fixed"), slots);
+    const errors = (assignments: GeneratedAssignment[]) => validateTimes(assignments, slots).filter(issue => issue.severity === "error").length;
+    const run = (options: typeof DEFAULT_OPTIONS, staffRounds: typeof rounds) => {
+      const base = { competition, stations: 10, zoneMode: "fixed" as const, people: peopleFromWcif(competition), options, slots };
+      const first = generateAssignments({ ...base, rounds: staffRounds.filter(round => round.id === "333-r1") });
+      const alone = generateAssignments({ ...base, rounds: staffRounds.filter(round => round.id === "222-r1") });
+      const after = generateAssignments({ ...base, rounds: staffRounds.filter(round => round.id === "222-r1"), fixedAssignments: first });
+      expect(after.every(item => item.roundId === "222-r1")).toBe(true);
+      const together = generateAssignments({ ...base, rounds: staffRounds });
+      return { alone: errors([...first, ...alone]), after: errors([...first, ...after]), together: errors(together) };
+    };
+    // Competitors only: the new round places people around the groups they already compete in.
+    const competing = run({ ...DEFAULT_OPTIONS, assignJudges: false }, rounds.map(round => ({ ...round, scramblers: 0 })));
+    // The fixed round cannot move and groups stay even, so one person may still clash (the review
+    // shows it); generating both together moves 3x3 too.
+    expect(competing.alone).toBeGreaterThan(10);
+    expect(competing.after).toBeLessThanOrEqual(2);
+    expect(competing.together).toBe(0);
+    // With staff, the fixed tasks count too (some people compete in one group and work in the other).
+    const working = run(DEFAULT_OPTIONS, rounds);
+    expect(working.after).toBeLessThan(working.alone / 2);
+  });
+});
