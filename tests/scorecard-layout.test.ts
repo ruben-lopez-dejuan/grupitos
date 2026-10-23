@@ -5,6 +5,7 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
+import { groupSlots, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds } from "@/lib/rounds";
 import { DEFAULT_PRINTING, type PaperSize } from "@/lib/scorecards/options";
 import { blankScorecards, fitText, roundScorecards, scorecardsPdfDefinition, UNSUPPORTED_SCORECARD_LANGUAGES } from "@/lib/scorecards/scorecards";
@@ -46,6 +47,26 @@ describe("scorecards keep to their quarter of the page", () => {
     expect(await pageCount(scorecardsPdfDefinition(cards, null, paperSize))).toBe(cards.length / PER_PAGE[paperSize]);
     const blank = blankScorecards(source);
     expect(await pageCount(scorecardsPdfDefinition(blank, null, paperSize))).toBe(Math.ceil(blank.length / PER_PAGE[paperSize]));
+  }, 30000);
+});
+
+describe("back pages and stages", () => {
+  const competition = worstCase();
+  const rooms = [{ id: 1, name: "Pabellón", color: "#d93636", stages: [{ id: 0, name: "Gipuzkoa-Donostia", color: "#d93636" }, { id: 1, name: "Bizkaia", color: "#2f9e44" }] }];
+  const schedule: ProSchedule = { timeZone: "UTC", days: ["2026-02-21"], rooms, activities: [], blocks: [0, 1].map(stageId => ({ id: `b${stageId}`, activityCode: "333-r1", roomId: 1, stageId, start: "2026-02-21T10:00", end: "2026-02-21T11:00", groups: 2 })) };
+  const slots = groupSlots(schedule);
+  const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots);
+  const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots });
+
+  it.each(["a4", "letter", "a6"] as PaperSize[])("%s: a back page per page, and the stage name fits the group box", async paperSize => {
+    const printing = { ...DEFAULT_PRINTING, paperSize, order: "natural" as const };
+    const source = { competition, assignments, rounds, stations: 12, zoneMode: "fixed" as const, printing, schedule, slots };
+    const fronts = roundScorecards(source, ["333-r1"]);
+    expect(JSON.stringify(fronts)).toContain("Bizkaia");
+    expect(await pageCount(scorecardsPdfDefinition(fronts, null, paperSize))).toBe(fronts.length / PER_PAGE[paperSize]);
+    const withBacks = roundScorecards({ ...source, printing: { ...printing, registrantOnBack: true } }, ["333-r1"]);
+    expect(await pageCount(scorecardsPdfDefinition(withBacks, null, paperSize, true))).toBe(2 * fronts.length / PER_PAGE[paperSize]);
+    expect(JSON.stringify(roundScorecards({ ...source, printing: { ...printing, stageInGroupCell: false } }, ["333-r1"]))).not.toContain("Bizkaia");
   }, 30000);
 });
 

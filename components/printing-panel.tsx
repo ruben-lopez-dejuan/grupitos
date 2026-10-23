@@ -15,7 +15,7 @@ import { SCORECARD_LANGUAGES } from "@/lib/scorecards/translations";
 
 type OptionKey = Exclude<{ [K in keyof PrintingOptions]: PrintingOptions[K] extends boolean ? K : never }[keyof PrintingOptions], undefined>;
 
-const CONTENT_OPTIONS: OptionKey[] = ["coverSheets", "localNamesFirst", "printOneName"];
+const CONTENT_OPTIONS: OptionKey[] = ["coverSheets", "localNamesFirst", "printOneName", "registrantOnBack"];
 /** Where the scramble checker box is printed. */
 const CHECKER_OPTIONS: OptionKey[] = ["scrambleCheckerTopRanked", "scrambleCheckerFinalRounds", "scrambleCheckerBlank", "scrambleCheckerBigCubes"];
 
@@ -91,7 +91,7 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
       <label className="field"><span>{t("printing.background")} <Hint text={t("printing.backgroundHelp")} /></span><input type="url" value={printing.backgroundUrl} placeholder="https://…" onChange={event => set("backgroundUrl", event.target.value)} /></label>
     </div>
     <h3 className="panel-subheading">{t("printing.content")}</h3>
-    <div className="option-list printing-options">{CONTENT_OPTIONS.map(checkbox)}</div>
+    <div className="option-list printing-options">{[...CONTENT_OPTIONS, ...(schedule ? ["stageInGroupCell" as const] : [])].map(checkbox)}</div>
     <h3 className="panel-subheading">{t("printing.checker")} <Hint align="start" text={t("printing.checkerHelp")} /></h3>
     <div className="option-list printing-options four">{CHECKER_OPTIONS.map(checkbox)}</div>
     <h3 className="panel-subheading">{t("printing.what")}</h3>

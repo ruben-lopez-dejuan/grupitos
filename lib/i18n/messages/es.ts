@@ -653,6 +653,8 @@ export const es = {
       coverSheets: { label: "Portada por grupo", help: "Una hoja de control para el delegado y data entry delante de cada grupo." },
       localNamesFirst: { label: "Nombre local primero", help: "" },
       printOneName: { label: "Solo un nombre", help: "No añade el nombre local o latino entre paréntesis." },
+      registrantOnBack: { label: "Nº de inscripción por detrás", help: "Detrás de cada página, otra con el número de inscripción de cada competidor en grande. Imprime a doble cara por el borde largo y cada número queda detrás de su hoja." },
+      stageInGroupCell: { label: "Escenario en la casilla de grupo", help: "Imprime el nombre del escenario bajo el número de grupo en las rondas con varios escenarios." },
       scrambleCheckerTopRanked: { label: "Los mejores", help: "Quien está en el WR50 en single o en el WR50/NR15 en media." },
       scrambleCheckerFinalRounds: { label: "Finales", help: "Todas las hojas de las finales." },
       scrambleCheckerBlank: { label: "Hojas en blanco", help: "" },

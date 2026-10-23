@@ -11,7 +11,7 @@ async function downloadPdf(definition: unknown, fileName: string) {
 
 export async function downloadRoundScorecards(source: ScorecardSource, roundIds: string[], fileName: string, includeGroup?: GroupFilter) {
   const image = await getImageDataUrl(source.printing.backgroundUrl);
-  await downloadPdf(scorecardsPdfDefinition(roundScorecards(source, roundIds, includeGroup), image, source.printing.paperSize), fileName);
+  await downloadPdf(scorecardsPdfDefinition(roundScorecards(source, roundIds, includeGroup), image, source.printing.paperSize, source.printing.registrantOnBack), fileName);
 }
 
 export async function downloadBlankScorecards(source: ScorecardSource, fileName: string) {

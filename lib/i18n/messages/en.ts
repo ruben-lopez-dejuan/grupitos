@@ -651,6 +651,8 @@ export const en: Messages = {
       coverSheets: { label: "Cover sheet per group", help: "A control sheet for the delegate and data entry in front of each group." },
       localNamesFirst: { label: "Local name first", help: "" },
       printOneName: { label: "Only one name", help: "Does not add the local or Latin name in brackets." },
+      registrantOnBack: { label: "Registrant id on the back", help: "After every page, another one with each competitor's registrant id in large type. Print double-sided, flipping on the long edge, and each number lands behind its scorecard." },
+      stageInGroupCell: { label: "Stage in the group box", help: "Prints the stage name under the group number in rounds spread over several stages." },
       scrambleCheckerTopRanked: { label: "Top ranked", help: "People in the WR50 for single, or WR50/NR15 for average." },
       scrambleCheckerFinalRounds: { label: "Finals", help: "Every scorecard of a final." },
       scrambleCheckerBlank: { label: "Blank scorecards", help: "" },

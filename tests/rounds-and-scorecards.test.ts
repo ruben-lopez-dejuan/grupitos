@@ -60,6 +60,19 @@ describe("scorecards (Groupifier port)", () => {
     expect(cards).toHaveLength(planned.competitors);
   });
 
+  it("adds a mirrored back page with registrant ids for long-edge duplex", () => {
+    const front = roundScorecards(source, ["333-r1"]);
+    const withBacks = roundScorecards({ ...source, printing: { ...DEFAULT_PRINTING, registrantOnBack: true } }, ["333-r1"]);
+    expect(withBacks).toHaveLength(front.length * 2);
+    const backOf = (page: number) => withBacks.slice(page * 8 + 4, page * 8 + 8) as Array<{ text?: string }>;
+    // The back of [a, b / c, d] is [b, a / d, c]; each number is the registrant id of the card in front.
+    const idsOnFront = withBacks.slice(0, 4).map(card => {
+      const text = JSON.stringify(card);
+      return competition.persons?.filter(person => text.includes(JSON.stringify(person.name))).sort((a, b) => b.name.length - a.name.length)[0]?.registrantId;
+    });
+    expect(backOf(0).map(card => card.text)).toEqual([idsOnFront[1], idsOnFront[0], idsOnFront[3], idsOnFront[2]].map(String));
+  });
+
   it("adds cover sheets when asked", () => {
     const plain = roundScorecards(source, ["333-r1"]).filter(card => Array.isArray(card)).length;
     const covered = roundScorecards({ ...source, printing: { ...DEFAULT_PRINTING, coverSheets: true, order: "natural" } }, ["333-r1"]).filter(card => Array.isArray(card)).length;

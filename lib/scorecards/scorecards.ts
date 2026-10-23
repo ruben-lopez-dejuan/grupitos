@@ -118,7 +118,7 @@ function prepareScorecardsPages(cards: Node[], scorecardsPerPage: number, order:
 
 const cutLine = (properties: Record<string, number>) => ({ ...properties, type: "line", lineWidth: 0.1, dash: { length: 10 }, lineColor: "#888888" });
 
-export function scorecardsPdfDefinition(cards: Node[], imageData: string | null, paperSize: PaperSize): Node {
+export function scorecardsPdfDefinition(cards: Node[], imageData: string | null, paperSize: PaperSize, backPages = false): Node {
   const { pageWidth, pageHeight, scorecardsPerRow, scorecardsPerPage, horizontalMargin, verticalMargin } = PAPER[paperSize];
   /* Determined empirically to fit results table. */
   const imagePositions = [{ x: 60, y: 170 }, { x: 360, y: 170 }, { x: 60, y: 590 }, { x: 360, y: 590 }].slice(0, scorecardsPerPage);
@@ -129,7 +129,8 @@ export function scorecardsPdfDefinition(cards: Node[], imageData: string | null,
     ],
   } : {};
   return {
-    background: [
+    // With back pages, every second page is a back: no background image or cut lines there.
+    background: (currentPage: number) => backPages && currentPage % 2 === 0 ? [] : [
       ...(imageData === null ? [] : imagePositions.map(absolutePosition => ({ absolutePosition, image: imageData, width: 200, height: 200 }))),
       cutLines,
     ],
@@ -427,9 +428,9 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
     return printed.flatMap(({ group, competitors }) => {
       let scorecardNumber = firstNumber(group);
       const activityCode = `${roundId}-g${slotOf(group)?.number ?? group}`;
-      const stageName = stagesInRound.size > 1 ? laneOf(group)?.name : undefined;
+      const stageName = stagesInRound.size > 1 && printing.stageInGroupCell ? laneOf(group)?.name : undefined;
       let inGroupNumber = competitors.length;
-      const groupCards: Node[] = competitors.map(({ competitor, station }) => scorecard({
+      const groupCards: Node[] = competitors.map(({ competitor, station }) => withBackLabel(competitor.registrantId, scorecard({
         scorecardNumber: scorecardNumber--,
         stationNumber: station ?? inGroupNumber--,
         competitionName,
@@ -441,14 +442,43 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
         printStations: !!station || (!competitor.registrantId && fixed),
         printScrambleCheckerBox: shouldPrintScrambleChecker(competitor, roundId, competition, printing),
         stageName,
-      }));
+      })));
       if (printing.coverSheets) groupCards.unshift(coverSheet({ competitionName, activityCode, numberOfScorecards: competitors.length, roomName: laneOf(group)?.name ?? roomName }));
       const onLastPage = groupCards.length % scorecardsPerPage;
       return onLastPage === 0 || printing.order === "stacked" ? groupCards : groupCards.concat(times(scorecardsPerPage - onLastPage, () => ({})));
     });
   });
 
-  return prepareScorecardsPages(cards, scorecardsPerPage, printing.order);
+  const pages = prepareScorecardsPages(cards, scorecardsPerPage, printing.order);
+  return printing.registrantOnBack ? withBackPages(pages, printing.paperSize) : pages;
+}
+
+/** Registrant id to print on the back of a scorecard (cover sheets and padding have none). */
+const BACK_LABELS = new WeakMap<object, string>();
+
+function withBackLabel(registrantId: number | null | undefined, card: Node) {
+  if (registrantId !== null && registrantId !== undefined && card && typeof card === "object") BACK_LABELS.set(card as object, String(registrantId));
+  return card;
+}
+
+/**
+ * After every page of scorecards, a page with each card's registrant id in large type. Each row
+ * is mirrored, so with long-edge duplex printing every number lands behind its own scorecard.
+ */
+export function withBackPages(cards: Node[], paperSize: PaperSize): Node[] {
+  const { pageWidth, scorecardsPerRow, scorecardsPerPage, horizontalMargin } = PAPER[paperSize];
+  const cellWidth = pageWidth / scorecardsPerRow - 2 * horizontalMargin;
+  const back = (card: Node): Node => {
+    const label = card && typeof card === "object" ? BACK_LABELS.get(card as object) : undefined;
+    return label ? { ...fitText(label, cellWidth - 20, 140, { bold: true, min: 40 }), bold: true, alignment: "center", margin: [0, 120, 0, 0] } : {};
+  };
+  const result: Node[] = [];
+  for (let start = 0; start < cards.length; start += scorecardsPerPage) {
+    const page = cards.slice(start, start + scorecardsPerPage);
+    result.push(...page);
+    for (let row = 0; row < page.length; row += scorecardsPerRow) result.push(...page.slice(row, row + scorecardsPerRow).reverse().map(back));
+  }
+  return result;
 }
 
 /** A page of blank scorecards for every distinct attempt count (FMC excluded), as in Groupifier. */

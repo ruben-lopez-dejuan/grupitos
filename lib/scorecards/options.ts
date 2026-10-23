@@ -15,6 +15,10 @@ export type PrintingOptions = {
   scrambleCheckerBigCubes: boolean;
   backgroundUrl: string;
   language: string;
+  /** PRO: print the stage under the group number. */
+  stageInGroupCell: boolean;
+  /** A back page after every page with each competitor's registrant id, mirrored for long-edge duplex. */
+  registrantOnBack: boolean;
 };
 
 export const DEFAULT_PRINTING: PrintingOptions = {
@@ -29,4 +33,6 @@ export const DEFAULT_PRINTING: PrintingOptions = {
   scrambleCheckerBigCubes: false,
   backgroundUrl: "",
   language: "es",
+  stageInGroupCell: true,
+  registrantOnBack: false,
 };
