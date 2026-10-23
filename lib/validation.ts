@@ -149,10 +149,12 @@ export function validateTimes(assignments: GeneratedAssignment[], slots: Map<str
     }
   }
   const issues = new Map<string, Issue>();
+  // A clash the schedule makes unavoidable (no group of either round is free) is a warning:
+  // only the schedule can fix it, and the generator already picked the smallest overlap.
   const add = (busy: Busy, other: Busy, unavoidable: boolean) => {
     const code = unavoidable ? "unavoidable-time-overlap" : "time-overlap";
     const key = `${busy.item.roundId}:time-overlap:${busy.item.id}:${busy.group}`;
-    if (!issues.has(key) || (unavoidable && issues.get(key)?.code !== "unavoidable-time-overlap")) issues.set(key, { key, severity: "error", code, roundId: busy.item.roundId, group: busy.group, assignmentId: busy.item.id, params: { name: busy.item.name, task: busy.role, group: busy.group, otherRound: other.item.roundId, otherGroup: other.group, otherTask: other.role } });
+    if (!issues.has(key) || (unavoidable && issues.get(key)?.code !== "unavoidable-time-overlap")) issues.set(key, { key, severity: unavoidable ? "warning" : "error", code, roundId: busy.item.roundId, group: busy.group, assignmentId: busy.item.id, params: { name: busy.item.name, task: busy.role, group: busy.group, otherRound: other.item.roundId, otherGroup: other.group, otherTask: other.role } });
   };
   for (const tasks of byPerson.values()) {
     for (let i = 0; i < tasks.length; i += 1) {

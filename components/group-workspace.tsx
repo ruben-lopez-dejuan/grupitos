@@ -17,7 +17,7 @@ import { getCompetition, type StoredCompetition } from "@/lib/competition-store"
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, peopleFromWcif } from "@/lib/people";
-import { groupSlots, importSchedule, scheduleLanes, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
+import { eventBusyWindows, groupSlots, importSchedule, scheduleLanes, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
@@ -203,7 +203,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");

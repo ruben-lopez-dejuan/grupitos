@@ -5,7 +5,7 @@ import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
-import { groupSlots, importSchedule, isoToLocal, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
+import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds } from "@/lib/rounds";
 import { validateTimes } from "@/lib/validation";
 
@@ -68,6 +68,19 @@ describe("importSchedule", () => {
     const mbf = groupSlots(imported).get("333mbf-r1")!;
     expect(mbf).toHaveLength(1);
     expect(mbf[0].windows).toEqual([{ start: "2026-02-21T12:00", end: "2026-02-21T13:00" }, { start: "2026-02-21T15:00", end: "2026-02-21T16:00" }]);
+  });
+
+  it("reads multi-blind groups named per attempt (333mbf-r1-g1-a1) and cube submission", () => {
+    const attempt = (id: number, number: number, start: string, end: string) => ({ id, name: `MBLD A${number}`, activityCode: `333mbf-r1-a${number}`, startTime: `2026-02-21T${start}:00Z`, endTime: `2026-02-21T${end}:00Z`, childActivities: [{ id: id * 10, name: "", activityCode: `333mbf-r1-g1-a${number}`, startTime: `2026-02-21T${start}:00Z`, endTime: `2026-02-21T${end}:00Z` }] });
+    const competition: StoredCompetition = {
+      id: "X", name: "X",
+      schedule: { startDate: "2026-02-21", numberOfDays: 1, venues: [{ timezone: "UTC", rooms: [{ id: 1, name: "Side", activities: [attempt(1, 1, "14:15", "15:25"), attempt(2, 2, "16:00", "17:10"), { id: 3, name: "Submission", activityCode: "other-multi", startTime: "2026-02-21T12:15:00Z", endTime: "2026-02-21T12:35:00Z" }] }] }] },
+    };
+    // The suggestion (3 groups) must not replace the single group already in the WCIF.
+    const imported = importSchedule(competition, () => 3);
+    expect(imported.blocks.map(item => [item.activityCode, item.groups])).toEqual([["333mbf-r1-a1", 1], ["333mbf-r1-a2", 1]]);
+    expect(groupSlots(imported).get("333mbf-r1")).toHaveLength(1);
+    expect(eventBusyWindows(imported).get("333mbf")).toEqual([{ start: "2026-02-21T12:15", end: "2026-02-21T12:35" }]);
   });
 });
 
@@ -143,6 +156,21 @@ describe("generator with a schedule", () => {
     const groupsByPerson = new Map<string, number[]>();
     for (const assignment of assignments.filter(item => item.inRound)) groupsByPerson.set(assignment.personId, [...(groupsByPerson.get(assignment.personId) ?? []), assignment.tasks.find(task => task.role === "competitor")!.group]);
     expect([...groupsByPerson.values()].every(groups => groups.length === 2 && groups[0] !== groups[1])).toBe(true);
+  });
+
+  it("puts multi-blind competitors in the group that overlaps least when none is free", () => {
+    const source = buildDemoCompetition({ id: "Multi", name: "Multi", people: 12, events: ["555", "333mbf"], newcomerShare: 0, seed: 5 });
+    const competition: StoredCompetition = { ...source, persons: source.persons?.map((person, index) => ({ ...person, registration: { ...person.registration, eventIds: index < 6 ? ["555", "333mbf"] : ["555"] } })) };
+    // 555 G1 overlaps the attempt by 15 minutes, G2 by 30.
+    const slots = groupSlots(schedule([block("a", "555-r1", 1, "10:00", "11:00", 2), block("b", "333mbf-r1-a1", 3, "10:15", "11:30", 1)]));
+    const rounds = withScheduledGroups(initialRounds(competition, 6, "fixed"), slots).map(round => ({ ...round, scramblers: 0, runners: 0 }));
+    const assignments = generateAssignments({ competition, rounds, stations: 6, zoneMode: "fixed", people: peopleFromWcif(competition), options: { ...DEFAULT_OPTIONS, assignJudges: false }, slots });
+    const multi = new Set(assignments.filter(item => item.roundId === "333mbf-r1" && item.inRound).map(item => item.personId));
+    expect(multi.size).toBe(6);
+    const groupsOfMulti = assignments.filter(item => item.roundId === "555-r1" && multi.has(item.personId)).map(item => item.tasks.find(task => task.role === "competitor")!.group);
+    expect(groupsOfMulti).toEqual([1, 1, 1, 1, 1, 1]);
+    // Only the schedule can remove the remaining overlap, so it is a warning.
+    expect(new Set(validateTimes(assignments, slots).map(issue => `${issue.code}:${issue.severity}`))).toEqual(new Set(["unavoidable-time-overlap:warning"]));
   });
 
   it("never gives anyone two things at once", () => {

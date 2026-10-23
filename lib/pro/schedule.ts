@@ -143,7 +143,8 @@ function stageIdOf(activity: WcifActivity) {
 }
 
 function groupChildren(activity: WcifActivity) {
-  return (activity.childActivities ?? []).filter(child => /-g\d+$/.test(child.activityCode));
+  // Attempt-based rounds (multi-blind, FMC) name their groups 333mbf-r1-g1-a1.
+  return (activity.childActivities ?? []).filter(child => /-g\d+(?:-a\d+)?$/.test(child.activityCode));
 }
 
 function childWindow(activity: WcifActivity, timeZone: string): TimeWindow | undefined {
@@ -320,6 +321,15 @@ export function normalizeProSchedule(value: unknown): ProSchedule {
     blocks: blocks.map(block => ({ ...block, roomId: Number(block.stageId), stageId: undefined })) as ProRoundBlock[],
     activities: activities.map(activity => ({ ...activity, roomId: Number(activity.stageId), stageId: undefined })) as ProActivity[],
   };
+}
+
+/**
+ * Times outside any group when an event's competitors are busy anyway: multi-blind cube
+ * submission (`other-multi`) for 333mbf.
+ */
+export function eventBusyWindows(schedule: ProSchedule): Map<string, TimeWindow[]> {
+  const submissions = schedule.activities.filter(activity => activity.kind === "multi").map(({ start, end }) => ({ start, end }));
+  return new Map(submissions.length ? [["333mbf", submissions]] : []);
 }
 
 export function withScheduledGroups<T extends { id: string; groups: number }>(rounds: T[], slots: Map<string, GroupSlot[]>): T[] {
