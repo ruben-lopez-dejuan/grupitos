@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDemoCompetition } from "@/lib/demo-competition";
-import { DEFAULT_OPTIONS, generateAssignments, groupTargets, splitWithSets } from "@/lib/group-generator";
+import { DEFAULT_OPTIONS, generateAssignments, groupTargets, resolveCompetitorOverlaps, splitWithSets } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { allowedGroups, formatGroupNumbers, parseGroupNumbers, resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { previewSets } from "@/lib/pro/sets-preview";
@@ -154,5 +154,26 @@ describe("a maximum per group on some stages", () => {
       expect(sizes.reduce((a, b) => a + b, 0)).toBe(bestFirst.length);
       expect(Math.abs(sizes.filter((_, index) => index !== middle - 1)[0] - sizes.filter((_, index) => index !== middle - 1)[1])).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("a set keeps its count per group", () => {
+  it("when the overlap repair moves people: it swaps within the same set only", () => {
+    const [a, b, c, d] = bestFirst;
+    const window = (start: string, end: string) => ({ start: `2026-02-21T${start}`, end: `2026-02-21T${end}` });
+    const slots = new Map([
+      ["333-r1", [{ group: 1, roomId: 1, number: 1, windows: [window("10:00", "10:30")] }, { group: 2, roomId: 1, number: 2, windows: [window("10:30", "11:00")] }]],
+      ["222-r1", [{ group: 1, roomId: 1, number: 1, windows: [window("10:00", "10:30")] }]],
+    ]);
+    const plan = (roundId: string, groups: typeof bestFirst[], setOf?: Map<string, string>) => ({
+      round: { id: roundId, eventId: roundId.split("-")[0], roundNumber: 1, groups: groups.length, scramblers: 0, runners: 0, enabled: true },
+      competitors: groups.flat(), groups, fixed: false, seedIndex: new Map(groups.flat().map((person, index) => [personKey(person), index])), preferredGroup: new Map(), setOf,
+      allowed: setOf && new Map([...setOf.keys()].map(key => [key, new Set([1, 2])])),
+    });
+    // a and b are featured in G1; c and d come from another set in G2; a also competes in 222 G1 at 10:00.
+    const setOf = new Map([[personKey(a), "featured"], [personKey(b), "featured"], [personKey(c), "top"], [personKey(d), "top"]]);
+    const plans = [plan("333-r1", [[a, b], [c, d]], setOf), plan("222-r1", [[a]])];
+    resolveCompetitorOverlaps(plans as never, slots);
+    expect(keys(plans[0].groups[0]).sort()).toEqual(keys([a, b]).sort());
   });
 });

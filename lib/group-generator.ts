@@ -68,6 +68,8 @@ type CompetitorPlan = {
   preferredGroup: Map<string, number>;
   /** People placed by an assignment set may only move among that set's groups. */
   allowed?: Map<string, Set<number>>;
+  /** The assignment set that placed each person: moves swap people of the same set only. */
+  setOf?: Map<string, string>;
   /** People marked as featured on their scorecard. */
   featured?: Set<string>;
   /** Group sizes to keep when some stages have a maximum per group (otherwise groups stay even). */
@@ -75,6 +77,8 @@ type CompetitorPlan = {
 };
 
 const allowedIn = (plan: Pick<CompetitorPlan, "allowed">, person: WcifPerson, group: number) => plan.allowed?.get(personKey(person))?.has(group) ?? true;
+/** Swapping two people keeps every set's count per group (4 featured per group stay 4). */
+const sameSet = (plan: Pick<CompetitorPlan, "setOf">, a: WcifPerson, b: WcifPerson) => plan.setOf?.get(personKey(a)) === plan.setOf?.get(personKey(b));
 
 type Placement = { plan: CompetitorPlan; planIndex: number; group: number; person: WcifPerson };
 
@@ -147,7 +151,8 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       const nextSizes = plan.groups.map((members, index) => members.length + (index === fromGroup - 1 ? -1 : index === targetGroup - 1 ? 1 : 0));
       // A move keeps groups even, or within their target sizes when stages have a maximum.
       const fits = plan.targets ? nextSizes[targetGroup - 1] <= plan.targets[targetGroup - 1] : Math.max(...nextSizes) - Math.min(...nextSizes) <= 1;
-      if (fits) {
+      // People placed by a set only swap, so their set keeps its count in each group.
+      if (fits && !plan.setOf?.has(personKey(person))) {
         source.splice(sourceIndex, 1);
         target.push(person);
         return true;
@@ -160,7 +165,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       for (const swapper of swappers) {
         // The swapper must not end up worse off, so the total overlap still goes down.
         if (cost(byPerson, swapper, planIndex, fromGroup) > cost(byPerson, swapper, planIndex, targetGroup)) continue;
-        if (!allowedIn(plan, swapper, fromGroup)) continue;
+        if (!allowedIn(plan, swapper, fromGroup) || !sameSet(plan, person, swapper)) continue;
         const targetIndex = target.findIndex(candidate => personKey(candidate) === personKey(swapper));
         source[sourceIndex] = swapper;
         target[targetIndex] = person;
@@ -280,13 +285,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const caps = Array.from({ length: primary }, (_, index) => staffing?.(round.id, index + 1)?.maxPerGroup);
     const targets = caps.some(cap => cap !== undefined) ? groupTargets(competitors.length, caps) : undefined;
     const sets = assignmentSets?.({ ...round, groups: primary }) ?? [];
-    const { groups, allowed, featured } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
-      : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined };
-    if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group));
+    const { groups, allowed, featured, setOf } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
+      : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined, setOf: undefined };
+    if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group), (a, b) => sameSet({ setOf }, a, b));
     const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     const preferredGroup = new Map<string, number>();
     groups.forEach((members, groupIndex) => members.forEach(person => preferredGroup.set(personKey(person), groupIndex + 1)));
-    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured, targets }];
+    return [{ round, competitors, groups, fixed, seedIndex, preferredGroup, allowed, featured, targets, setOf }];
   });
   // Room teams (the side room team) are kept free to work in their room when that is possible.
   const reserved: Reserved = new Map();
@@ -830,6 +835,7 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
   const groups: WcifPerson[][] = Array.from({ length: groupCount }, () => []);
   const allowed = new Map<string, Set<number>>();
   const featured = new Set<string>();
+  const setOf = new Map<string, string>();
   const stats: SetStats[] = [];
   const even = Math.ceil(bestFirst.length / Math.max(1, groupCount));
   /** Seats of each group: its target size when stages have a maximum, else the even size. */
@@ -851,13 +857,14 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
         if (!person) break;
         groups[group - 1].push(person);
         allowed.set(personKey(person), new Set(eligible));
+        setOf.set(personKey(person), set.id);
         if (set.featured) featured.add(personKey(person));
         placed += 1;
       }
     }
     stats.push({ id: set.id, name: set.name, wanted: placed + queue.length, seats, placed });
   }
-  if (!allowed.size) return { groups: targets ? fillByRule(bestFirst, targets, rule, eventId) : splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined, stats };
+  if (!allowed.size) return { groups: targets ? fillByRule(bestFirst, targets, rule, eventId) : splitIntoGroups(bestFirst, groupCount, rule, eventId), allowed: undefined, featured: undefined, setOf: undefined, stats };
   const rest = bestFirst.filter(person => !allowed.has(personKey(person)));
   const sizes = groups.map(members => members.length);
   // Groups below their target first (fewest people first); past every target, the smallest.
@@ -868,7 +875,7 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
     sizes[pick.index] += 1;
   }
   fillByRule(rest, sizes.map((size, index) => size - groups[index].length), rule, eventId).forEach((members, index) => groups[index].push(...members));
-  return { groups, allowed, featured, stats };
+  return { groups, allowed, featured, setOf, stats };
 }
 
 /**
@@ -932,19 +939,22 @@ function separateSameFirstNames(people: WcifPerson[]) {
 }
 
 /** Moves people matching `hasRole` into groups that have none of them, swapping with someone of close seed. */
-export function spreadRole(groups: WcifPerson[][], hasRole: (person: WcifPerson) => boolean, canMove: (person: WcifPerson, group: number) => boolean = () => true) {
+export function spreadRole(groups: WcifPerson[][], hasRole: (person: WcifPerson) => boolean, canMove: (person: WcifPerson, group: number) => boolean = () => true, canSwap: (a: WcifPerson, b: WcifPerson) => boolean = () => true) {
   for (let guard = 0; guard < groups.length * 4; guard += 1) {
     const counts = groups.map(members => members.filter(hasRole).length);
     const crowded = counts.findIndex(count => count >= 2);
     const empty = counts.findIndex(count => count === 0);
     if (crowded < 0 || empty < 0) return;
-    const mover = groups[crowded].find(person => hasRole(person) && canMove(person, empty + 1));
-    if (!mover) return;
-    const position = groups[crowded].indexOf(mover);
-    const swapIndex = groups[empty].reduce((closest, person, index) => !hasRole(person) && canMove(person, crowded + 1) && (closest < 0 || Math.abs(index - position) < Math.abs(closest - position)) ? index : closest, -1);
-    if (swapIndex < 0) return;
-    const other = groups[empty][swapIndex];
-    groups[crowded][position] = other;
-    groups[empty][swapIndex] = mover;
+    // The first person with the role who can move and has someone to swap with (same set).
+    let swap: { position: number; swapIndex: number } | undefined;
+    for (const [position, mover] of groups[crowded].entries()) {
+      if (!hasRole(mover) || !canMove(mover, empty + 1)) continue;
+      const swapIndex = groups[empty].reduce((closest, person, index) => !hasRole(person) && canMove(person, crowded + 1) && canSwap(mover, person) && (closest < 0 || Math.abs(index - position) < Math.abs(closest - position)) ? index : closest, -1);
+      if (swapIndex >= 0) { swap = { position, swapIndex }; break; }
+    }
+    if (!swap) return;
+    const mover = groups[crowded][swap.position];
+    groups[crowded][swap.position] = groups[empty][swap.swapIndex];
+    groups[empty][swap.swapIndex] = mover;
   }
 }
