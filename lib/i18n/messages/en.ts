@@ -93,6 +93,7 @@ export const en: Messages = {
     plannedGroups_one: "{count} planned group",
     plannedGroups_other: "{count} planned groups",
     changeCompetition: "Change competition",
+    next: "Next: {step}",
     regenerate: "Generate again",
     create: "Create group proposal",
     confirmReplace: "This replaces the current proposal, including your manual changes. Continue?",

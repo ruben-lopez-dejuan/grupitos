@@ -95,6 +95,7 @@ export const es = {
     plannedGroups_one: "{count} grupo previsto",
     plannedGroups_other: "{count} grupos previstos",
     changeCompetition: "Cambiar competición",
+    next: "Siguiente: {step}",
     regenerate: "Volver a generar",
     create: "Crear propuesta de grupos",
     confirmReplace: "Se sustituirá la propuesta actual, incluidos los cambios hechos a mano. ¿Continuar?",

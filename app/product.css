@@ -170,3 +170,5 @@ button.plain{padding:4px 6px;color:var(--blue);background:transparent;border:0;f
 .tab-pending{flex:none;padding:14px 11px 12px;color:var(--muted);opacity:.6;font-size:14px;font-weight:650;white-space:nowrap;cursor:default}
 .tab-pending small{font-size:12px;font-weight:500}
 .matrix-review{margin-inline:calc((min(1500px,calc(100vw - 40px)) - 100%)/-2)}
+.change-competition{margin-left:6px;padding:3px 8px;color:var(--muted)!important;border:1px solid var(--line);border-radius:5px;font-size:13px;font-weight:650;white-space:nowrap}
+.change-competition:hover{color:var(--ink)!important;background:var(--surface-subtle)}

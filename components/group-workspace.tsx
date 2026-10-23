@@ -249,7 +249,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
     <section className="workspace-main">
       {/* No sidebar: the mark, the competition and the steps all live in these two bars. */}
-      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><Link href="/dashboard">{t("workspace.breadcrumb")}</Link><span>/</span><strong title={competition.id}>{competition.name}</strong></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
+      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
         {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
         <span className="tab-pending" title={t("workspace.notAvailable")}><span className="step-number">{tabs.length + 1}</span>{t("workspace.publish")} <small>{t("workspace.soon")}</small></span>
@@ -265,7 +265,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
               <label><span>{t("zone.stations")}</span><div className="number-field"><button aria-label={t("zone.removeStation")} onClick={() => changeZone({ stations: Math.max(1, stations - 1) })}>−</button><strong>{stations}</strong><button aria-label={t("zone.addStation")} onClick={() => changeZone({ stations: stations + 1 })}>+</button></div></label>
               <div className="preset-field"><span>{t("zone.entry")}</span><div className="segmented three">{ZONE_MODES.map(mode => <button key={mode} className={zoneMode === mode ? "selected" : ""} title={t(keyOf("zone.modes", `${mode}.help`))} onClick={() => changeZone({ zoneMode: mode })}>{t(keyOf("zone.modes", `${mode}.label`))}</button>)}</div><small>{t(keyOf("zone.modes", `${zoneMode}.help`))}</small></div>
             </div>
-            {roomCount > 1 && <p className="setup-note">{t("zone.rooms", { count: roomCount })}</p>}
+            {roomCount > 1 && !pro && <p className="setup-note">{t("zone.rooms", { count: roomCount })}</p>}
           </section>
         </>}
 
@@ -346,7 +346,12 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
       </div>
-      <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div><Link className="button secondary" href="/dashboard">{t("workspace.changeCompetition")}</Link><button className="button primary" onClick={createProposal} disabled={!activeRounds.length}>{proposal.length ? t("workspace.regenerate") : t("workspace.create")}</button></div></footer>
+      <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {
+        // Groups are only generated from the Groups step; every other step leads to the next one.
+        if (tab === "rounds") return <button className="button primary" onClick={createProposal} disabled={!activeRounds.length}>{proposal.length ? t("workspace.regenerate") : t("workspace.create")}</button>;
+        const next = tabs[tabs.findIndex(item => item.id === tab) + 1];
+        return next && !next.disabled && <button className="button primary" onClick={() => changeTab(next.id)}>{t("workspace.next", { step: next.label })} →</button>;
+      })()}</div></footer>
     </section>
   </main>;
 }
