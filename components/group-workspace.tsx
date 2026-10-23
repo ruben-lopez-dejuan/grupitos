@@ -221,21 +221,13 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const outdatedNote = proposalOutdated && <div className="outdated-note" role="status"><p><strong>{t("workspace.outdatedTitle")}</strong> {t("workspace.outdatedText")}</p></div>;
 
   return <main className="workspace-shell">
-    <aside className="workspace-sidebar">
-      <Link className="product-mark" href="/dashboard"><span>EG</span><strong>Easy Groups</strong></Link>
-      <div className="competition-switcher"><small>{t("workspace.activeCompetition")}</small><strong>{competition.shortName ?? competition.name}</strong><span>{competition.id}</span></div>
-      <nav className="workspace-nav" aria-label={t("workspace.sections")}>
-        {tabs.map((item, index) => <button key={item.id} type="button" className={tab === item.id ? "active" : item.done ? "done" : ""} disabled={item.disabled} aria-current={tab === item.id ? "page" : undefined} onClick={() => changeTab(item.id)}><span>{item.done && tab !== item.id ? "✓" : index + 1}</span> {item.label}</button>)}
-        <span className="nav-pending" title={t("workspace.notAvailable")}><span>{tabs.length + 1}</span> {t("workspace.publish")} <small>{t("workspace.soon")}</small></span>
-      </nav>
-      <div className="sidebar-spacer" />
-      <div className="sidebar-user"><span>{userName.slice(0, 1).toUpperCase()}</span><div><strong>{userName}</strong><small>{t("auth.wcaAccount")}</small></div></div>
-    </aside>
 
     <section className="workspace-main">
-      <header className="workspace-topbar"><div><Link href="/dashboard">{t("workspace.breadcrumb")}</Link><span>/</span><strong>{competition.name}</strong></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /></div></header>
+      {/* No sidebar: the mark, the competition and the steps all live in these two bars. */}
+      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><span>EG</span></Link><Link href="/dashboard">{t("workspace.breadcrumb")}</Link><span>/</span><strong title={competition.id}>{competition.name}</strong></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
-        {tabs.map(item => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}>{item.label}</button>)}
+        {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
+        <span className="tab-pending" title={t("workspace.notAvailable")}><span className="step-number">{tabs.length + 1}</span>{t("workspace.publish")} <small>{t("workspace.soon")}</small></span>
       </nav>
       <div className="workspace-content">
         {tab === "zone" && <>

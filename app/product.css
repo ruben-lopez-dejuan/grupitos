@@ -153,3 +153,20 @@ button.plain{padding:4px 6px;color:var(--blue);background:transparent;border:0;f
 .round-tabs button{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
 .round-tabs button>span{min-width:0}
 .round-tabs button>span,.round-tabs small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+
+/* Workspace without sidebar: numbered steps in the tab bar, mark and user in the top bar. */
+.workspace-shell{display:block}
+.workspace-main{grid-column:auto}
+.workspace-actions{left:0}
+.workspace-topbar{padding:0 20px}
+.workspace-topbar .product-mark.compact{height:auto;padding:0 6px 0 0;border:0}
+.workspace-topbar .product-mark.compact span{width:28px;height:28px;color:var(--surface);background:var(--ink)}
+.user-badge{width:30px;height:30px;display:grid;place-items:center;color:var(--ink)!important;background:var(--surface-subtle);border:1px solid var(--line);border-radius:50%;font-size:13px;font-weight:800}
+.workspace-tabs{padding:0 14px}
+.workspace-tabs button,.tab-pending{display:inline-flex;align-items:center;gap:7px}
+.step-number{width:20px;height:20px;flex:none;display:grid;place-items:center;color:var(--muted);border:1px solid var(--line);border-radius:50%;font-size:12px;font-weight:750}
+.workspace-tabs button.active .step-number{color:var(--surface);background:var(--blue);border-color:var(--blue)}
+.workspace-tabs button.done:not(.active) .step-number{color:var(--green);border-color:var(--green)}
+.tab-pending{flex:none;padding:14px 11px 12px;color:var(--muted);opacity:.6;font-size:14px;font-weight:650;white-space:nowrap;cursor:default}
+.tab-pending small{font-size:12px;font-weight:500}
+.matrix-review{margin-inline:calc((min(1500px,calc(100vw - 40px)) - 100%)/-2)}
