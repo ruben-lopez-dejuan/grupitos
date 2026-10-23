@@ -10,6 +10,7 @@
 import { competingGroup, type GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition, WcifPerson, WcifRound } from "@/lib/competition-store";
 import { groupSizes } from "@/lib/group-generator";
+import { scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
 import { personKey, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
 import type { PaperSize, PrintingOptions } from "@/lib/scorecards/options";
 import { translation, type ScorecardTexts } from "@/lib/scorecards/translations";
@@ -227,9 +228,11 @@ type ScorecardInput = {
   printing: PrintingOptions;
   printStations?: boolean;
   printScrambleCheckerBox: boolean;
+  /** PRO mode: the stage, printed small under the group number. */
+  stageName?: string;
 };
 
-function scorecard({ scorecardNumber, stationNumber, competitionName, activityCode, round, attemptCount = 5, competitor = NAMELESS, printing, printStations = false, printScrambleCheckerBox }: ScorecardInput): Node {
+function scorecard({ scorecardNumber, stationNumber, competitionName, activityCode, round, attemptCount = 5, competitor = NAMELESS, printing, printStations = false, printScrambleCheckerBox, stageName }: ScorecardInput): Node {
   const fallback = translation("en");
   const texts = translation(printing.language);
   const t = (key: Exclude<keyof ScorecardTexts, "eventName">) => texts[key] || fallback[key] || "";
@@ -262,7 +265,9 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
           [
             eventId ? fitText(eventName(eventId), eventWidth, 12, { min: 7 }) : " ",
             { text: roundNumber ?? "", alignment: "center" },
-            { text: groupNumber ?? "", alignment: "center" },
+            stageName
+              ? { alignment: "center", stack: [{ text: groupNumber ?? "" }, { ...fitText(stageName, 30, 6, { min: 4 }), color: "#444" }] }
+              : { text: groupNumber ?? "", alignment: "center" },
             ...(printStations ? [{ text: stationNumber ?? "", alignment: "center" }] : []),
           ],
         ],
@@ -363,18 +368,26 @@ export type ScorecardSource = {
   stations: number;
   zoneMode: ZoneMode;
   printing: PrintingOptions;
+  /** PRO mode: group numbers and stages come from the schedule. */
+  schedule?: ProSchedule;
+  slots?: Map<string, GroupSlot[]>;
 };
+
+/** Which matrix columns of a round to print; all of them when absent. */
+export type GroupFilter = (roundId: string, group: number) => boolean;
 
 /**
  * Scorecards for the chosen rounds. Rounds with assignments get one card per competitor,
  * grouped and numbered as in Groupifier; planned rounds without known competitors get
  * nameless cards sized from the expected number of competitors.
  */
-export function roundScorecards({ competition, assignments, rounds, stations, zoneMode, printing }: ScorecardSource, roundIds: string[]) {
+export function roundScorecards({ competition, assignments, rounds, stations, zoneMode, printing, schedule, slots }: ScorecardSource, roundIds: string[], includeGroup: GroupFilter = () => true) {
   const persons = new Map((competition.persons ?? []).map(person => [personKey(person), person]));
   const competitionName = competition.shortName ?? competition.name;
   const roomName = competition.schedule?.venues?.[0]?.rooms?.[0]?.name ?? "";
   const { scorecardsPerPage } = PAPER[printing.paperSize];
+  const lanes = schedule ? scheduleLanes(schedule) : [];
+  const laneOrder = new Map(lanes.map((lane, index) => [lane.key, index]));
 
   const cards = roundIds.flatMap(roundId => {
     const config = rounds.find(round => round.id === roundId);
@@ -397,9 +410,24 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
       }))
       : groupSizes(config.competitors, config.groups).map((size, index) => ({ group: index + 1, competitors: times(size, () => ({ competitor: NAMELESS })) }));
 
-    let scorecardNumber = groups.reduce((sum, group) => sum + group.competitors.length, 0);
-    return groups.flatMap(({ group, competitors }) => {
-      const activityCode = `${roundId}-g${group}`;
+    // PRO: print each stage's groups together, in time order, with the number people know.
+    const roundSlots = slots?.get(roundId);
+    const slotOf = (group: number) => roundSlots?.find(slot => slot.group === group);
+    const laneOf = (group: number) => {
+      const slot = slotOf(group);
+      return slot ? lanes.find(lane => lane.key === targetKey(slot.roomId, slot.stageId)) : undefined;
+    };
+    const printed = groups
+      .filter(({ group }) => includeGroup(roundId, group))
+      .sort((a, b) => roundSlots ? (laneOrder.get(laneOf(a.group)?.key ?? "") ?? 0) - (laneOrder.get(laneOf(b.group)?.key ?? "") ?? 0) || a.group - b.group : 0);
+    const stagesInRound = new Set(roundSlots?.map(slot => targetKey(slot.roomId, slot.stageId)));
+    // Numbers count down over the whole round, so a filtered print keeps each card's number.
+    const total = groups.reduce((sum, item) => sum + item.competitors.length, 0);
+    const firstNumber = (group: number) => total - groups.filter(item => item.group < group).reduce((sum, item) => sum + item.competitors.length, 0);
+    return printed.flatMap(({ group, competitors }) => {
+      let scorecardNumber = firstNumber(group);
+      const activityCode = `${roundId}-g${slotOf(group)?.number ?? group}`;
+      const stageName = stagesInRound.size > 1 ? laneOf(group)?.name : undefined;
       let inGroupNumber = competitors.length;
       const groupCards: Node[] = competitors.map(({ competitor, station }) => scorecard({
         scorecardNumber: scorecardNumber--,
@@ -412,8 +440,9 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
         printing,
         printStations: !!station || (!competitor.registrantId && fixed),
         printScrambleCheckerBox: shouldPrintScrambleChecker(competitor, roundId, competition, printing),
+        stageName,
       }));
-      if (printing.coverSheets) groupCards.unshift(coverSheet({ competitionName, activityCode, numberOfScorecards: competitors.length, roomName }));
+      if (printing.coverSheets) groupCards.unshift(coverSheet({ competitionName, activityCode, numberOfScorecards: competitors.length, roomName: laneOf(group)?.name ?? roomName }));
       const onLastPage = groupCards.length % scorecardsPerPage;
       return onLastPage === 0 || printing.order === "stacked" ? groupCards : groupCards.concat(times(scorecardsPerPage - onLastPage, () => ({})));
     });

@@ -7,6 +7,8 @@ import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, minScheduledGroups, setRoundGroups, scheduleProblems, splitBlock, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds } from "@/lib/rounds";
+import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
+import { roundScorecards } from "@/lib/scorecards/scorecards";
 import { validateTimes } from "@/lib/validation";
 
 const stages = [{ id: 1, name: "Rojo", color: "#d93636" }, { id: 2, name: "Verde", color: "#2f9e44" }];
@@ -203,5 +205,23 @@ describe("generator with a schedule", () => {
     // Parallel stages still get their judges: every group has someone working.
     const judged = new Set(assignments.flatMap(item => item.tasks.filter(task => task.role === "judge").map(task => `${item.roundId}:${task.group}`)));
     for (const round of rounds.filter(item => item.competitorsKnown)) for (let group = 1; group <= round.groups; group += 1) expect(judged.has(`${round.id}:${group}`)).toBe(true);
+  });
+});
+
+describe("scorecards with a schedule", () => {
+  it("prints only the chosen stage, with the shared number and the stage name", () => {
+    const competition = demoCompetition("small");
+    const proSchedule = schedule([block("a", "333-r1", 1, "10:00", "11:00", 2), block("b", "333-r1", 2, "10:00", "11:00", 2)]);
+    const slots = groupSlots(proSchedule);
+    const rounds = withScheduledGroups(initialRounds(competition, 12, "waiting"), slots);
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots });
+    const verde = new Set(slots.get("333-r1")!.filter(slot => slot.stageId === 2).map(slot => slot.group));
+    const inVerde = assignments.filter(item => item.roundId === "333-r1" && item.tasks.some(task => task.role === "competitor" && verde.has(task.group))).length;
+    const cards = roundScorecards({ competition, assignments, rounds, stations: 12, zoneMode: "waiting", printing: DEFAULT_PRINTING, schedule: proSchedule, slots }, ["333-r1"], (_, group) => verde.has(group)).filter(Array.isArray);
+    expect(cards).toHaveLength(inVerde);
+    const texts = cards.map(card => JSON.stringify(card));
+    expect(texts.every(text => text.includes("\"Verde\"") && !text.includes("\"Rojo\""))).toBe(true);
+    // Verde's groups are G2 and G4 as columns, but people know them as groups 1 and 2.
+    expect(new Set(texts.map(text => text.match(/"stack":\[\{"text":(\d+)\}/)?.[1]))).toEqual(new Set(["1", "2"]));
   });
 });

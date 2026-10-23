@@ -7,6 +7,7 @@ import { useEventName, useI18n } from "@/components/i18n";
 import { keyOf } from "@/lib/i18n";
 import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
+import { clockOf, scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 import { UNSUPPORTED_SCORECARD_LANGUAGES } from "@/lib/scorecards/scorecards";
@@ -18,13 +19,16 @@ const CONTENT_OPTIONS: OptionKey[] = ["coverSheets", "localNamesFirst", "printOn
 /** Where the scramble checker box is printed. */
 const CHECKER_OPTIONS: OptionKey[] = ["scrambleCheckerTopRanked", "scrambleCheckerFinalRounds", "scrambleCheckerBlank", "scrambleCheckerBigCubes"];
 
-export function PrintingPanel({ competition, rounds, assignments, stations, zoneMode, printing, onChange }: {
+export function PrintingPanel({ competition, rounds, assignments, stations, zoneMode, printing, schedule, slots, onChange }: {
   competition: StoredCompetition;
   rounds: RoundConfig[];
   assignments: GeneratedAssignment[];
   stations: number;
   zoneMode: ZoneMode;
   printing: PrintingOptions;
+  /** PRO mode: groups can be printed by stage. */
+  schedule?: ProSchedule;
+  slots?: Map<string, GroupSlot[]>;
   onChange: (printing: PrintingOptions) => void;
 }) {
   const { t, tp } = useI18n();
@@ -33,11 +37,20 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   // Rounds with a proposal, plus later rounds whose groups are planned but whose competitors are unknown.
   const printable = rounds.filter(round => withAssignments.has(round.id) || (round.roundNumber > 1 && !round.competitorsKnown && round.competitors > 0));
   const [chosen, setChosen] = useState<string[]>(() => printable.filter(round => withAssignments.has(round.id)).map(round => round.id));
+  /** Groups left out of the print, as "roundId:group". */
+  const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState<"rounds" | "blank">();
   const [message, setMessage] = useState("");
   const set = <K extends keyof PrintingOptions>(key: K, value: PrintingOptions[K]) => onChange({ ...printing, [key]: value });
-  const source = { competition, assignments, rounds, stations, zoneMode, printing };
+  const source = { competition, assignments, rounds, stations, zoneMode, printing, schedule, slots };
   const selectedIds = chosen.filter(id => printable.some(round => round.id === id));
+  const groupKey = (roundId: string, group: number) => `${roundId}:${group}`;
+  const lanes = schedule ? scheduleLanes(schedule) : [];
+  // Chosen rounds whose groups are spread over several stages: those can be filtered by stage.
+  const staged = selectedIds.filter(id => new Set(slots?.get(id)?.map(slot => targetKey(slot.roomId, slot.stageId))).size > 1);
+  const stagedGroups = staged.flatMap(roundId => slots!.get(roundId)!.map(slot => ({ roundId, slot, key: groupKey(roundId, slot.group), lane: targetKey(slot.roomId, slot.stageId) })));
+  const usedLanes = lanes.filter(lane => stagedGroups.some(item => item.lane === lane.key));
+  const toggleGroups = (keys: string[], include: boolean) => setExcluded(current => include ? current.filter(key => !keys.includes(key)) : [...new Set([...current, ...keys])]);
   const eventIds = [...new Set(rounds.map(round => round.eventId))];
   const roundNumbers = [...new Set(rounds.map(round => round.roundNumber))].sort((a, b) => a - b);
 
@@ -51,7 +64,7 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     setMessage("");
     try {
       const { downloadBlankScorecards, downloadRoundScorecards } = await import("@/lib/scorecards/download");
-      if (kind === "rounds") await downloadRoundScorecards(source, selectedIds, `${competition.id}-scorecards.pdf`);
+      if (kind === "rounds") await downloadRoundScorecards(source, selectedIds, `${competition.id}-scorecards.pdf`, (roundId, group) => !excluded.includes(groupKey(roundId, group)));
       else await downloadBlankScorecards(source, `${competition.id}-blank-scorecards.pdf`);
       setMessage(t("printing.done"));
     } catch (error) {
@@ -91,6 +104,25 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
         </tr>)}</tbody>
       </table>
     </div>
+    {stagedGroups.length > 0 && <div className="print-stages">
+      <div className="print-rounds-head"><strong>{t("printing.stagesTitle")} <Hint align="start" text={t("printing.stagesHelp")} /></strong></div>
+      <div className="stage-filter">{usedLanes.map(lane => {
+        const keys = stagedGroups.filter(item => item.lane === lane.key).map(item => item.key);
+        const included = keys.filter(key => !excluded.includes(key)).length;
+        return <button key={lane.key} type="button" aria-pressed={included === keys.length} className={included === 0 ? "off" : included < keys.length ? "partial" : ""} style={{ ["--stage" as string]: lane.color }} title={t("printing.stageToggle", { name: lane.name, count: included, total: keys.length })} onClick={() => toggleGroups(keys, included < keys.length)}><i />{lane.name}<small>{included}/{keys.length}</small></button>;
+      })}</div>
+      <div className="print-groups">{staged.map(roundId => {
+        const round = rounds.find(item => item.id === roundId)!;
+        return <div key={roundId} className="print-group-row">
+          <span className="print-group-round"><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><span>{eventName(round.eventId)} <small>{t("printing.roundNumber", { number: round.roundNumber })}</small></span></span>
+          <span className="print-group-chips">{[...slots!.get(roundId)!].sort((a, b) => lanes.findIndex(lane => lane.key === targetKey(a.roomId, a.stageId)) - lanes.findIndex(lane => lane.key === targetKey(b.roomId, b.stageId)) || a.group - b.group).map(slot => {
+            const lane = lanes.find(item => item.key === targetKey(slot.roomId, slot.stageId));
+            const key = groupKey(roundId, slot.group);
+            return <label key={key} className="group-toggle" style={{ ["--stage" as string]: lane?.color }} title={`${lane?.name ?? ""} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><input type="checkbox" checked={!excluded.includes(key)} onChange={event => toggleGroups([key], event.target.checked)} /><i />G{slot.number} {lane?.name}</label>;
+          })}</span>
+        </div>;
+      })}</div>
+    </div>}
     <div className="print-actions">
       <button className="button primary" type="button" disabled={!selectedIds.length || !!busy} onClick={() => download("rounds")}><ScorecardIcon filled />{busy === "rounds" ? t("printing.generating") : tp("printing.download", selectedIds.length)}</button>
       <button className="button secondary" type="button" disabled={!!busy} onClick={() => download("blank")}><ScorecardIcon />{busy === "blank" ? t("printing.generating") : t("printing.blank")}</button>

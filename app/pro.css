@@ -116,3 +116,22 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .lane-split span{display:inline-flex;align-items:center;gap:3px}
 .lane-split i{width:8px;height:8px;border-radius:50%}
 .lane-split:hover{color:var(--ink);background:var(--surface-subtle)}
+
+/* Printing by stage */
+.print-stages{display:grid;gap:10px;margin-top:14px}
+.stage-filter{display:flex;flex-wrap:wrap;gap:8px}
+.stage-filter button{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;color:var(--ink);background:color-mix(in srgb,var(--stage) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--stage) 55%,var(--line));border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+.stage-filter button i,.group-toggle i{width:9px;height:9px;flex:none;background:var(--stage);border-radius:50%}
+.stage-filter button small{color:var(--muted);font-size:12px;font-weight:600}
+.stage-filter button.partial{background:var(--surface);border-style:dashed}
+.stage-filter button.off{color:var(--muted);background:var(--surface);border-color:var(--line);opacity:.75}
+.print-groups{display:grid;gap:6px}
+.print-group-row{display:grid;grid-template-columns:190px minmax(0,1fr);align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+.print-group-round{display:flex;align-items:center;gap:8px;min-width:0;font-size:14px;font-weight:650}
+.print-group-round .event-icon{width:24px;height:24px;font-size:15px}
+.print-group-round small{color:var(--muted);font-weight:500}
+.print-group-chips{display:flex;flex-wrap:wrap;gap:4px}
+.group-toggle{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;font-size:13px;font-weight:650;white-space:nowrap;background:var(--surface-subtle);border:1px solid var(--line);border-radius:5px;cursor:pointer}
+.group-toggle input{margin:0}
+.group-toggle:has(input:not(:checked)){color:var(--muted);opacity:.65}
+@media (max-width:700px){.print-group-row{grid-template-columns:1fr}}
