@@ -144,7 +144,7 @@ Referencias. Clonarlas si hace falta; están fuera del repo.
 
 ## 6. Modo PRO: estado (23/10/2026)
 
-Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segments?, jobs?, staffing?, scoring?, sets? }` (`lib/pro/*`), guardada con el borrador. `parseDraft()` normaliza borradores antiguos (incluido el de la fase 1, que guardaba salas como escenarios).
+Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segments?, jobs?, staffing?, scoring?, sets?, stationRules? }` (`lib/pro/*`), guardada con el borrador. `parseDraft()` normaliza borradores antiguos (incluido el de la fase 1, que guardaba salas como escenarios).
 
 ### 6.1. Fase 1: horario, salas y escenarios (hecha)
 
@@ -194,9 +194,10 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
   - **Dónde**: salas o escenarios (una sala incluye sus escenarios) y números de grupo (cualquiera, el primero, el último o una lista «1, 3-4»), con el número que ve la gente.
   - **Destacado**: estrella en la revisión y en la hoja de tiempos (arriba a la derecha, como Groupifier; Roboto no tiene ★, así que es un SVG).
 - **Algoritmo** (`splitWithSets()` en `lib/group-generator.ts`): como `Assign` de CompScript, cada conjunto toma a su gente aún sin colocar, de mejor a peor, y la reparte una por grupo y pasada, el grupo más vacío primero (el desempate alterna para hacer serpiente), sin pasar del tamaño par `ceil(n / grupos)` salvo que todos sus grupos estén llenos. Los conjuntos posteriores no mueven a nadie. El resto rellena los huecos con la regla de orden (simétrica: de uno en uno desde el último grupo; por ranking: tramos consecutivos) de forma que los grupos quedan parejos. Si ningún conjunto coloca a nadie, se usa el reparto de siempre. El arreglo de solapes y el reparto de delegados solo mueven a la gente de un conjunto entre los grupos de ese conjunto.
-- Diferencias con CompScript: no hay scorers por grupo (`ByMatchingValue`, `RecentlyCompeted`…) ni reglas de estación; el reparto dentro de un conjunto es determinista en vez de un ILP; el destacado no se escribe aún en `groupifier.ActivityConfig.featuredCompetitorWcaUserIds` (se hará con la publicación al WCIF).
+- Diferencias con CompScript: no hay scorers por grupo (`ByMatchingValue`, `RecentlyCompeted`…); el reparto dentro de un conjunto es determinista en vez de un ILP; el destacado no se escribe aún en `groupifier.ActivityConfig.featuredCompetitorWcaUserIds` (se hará con la publicación al WCIF).
 - Plantillas: «Destacados (streaming)» (top 4 por grupo en el primer escenario, primeras rondas), «Organizadores» y «Delegados de servicio» (crean su cluster si no existe, reutilizándolo si ya hay uno con las mismas reglas) y «Un cluster».
 - Comprobado con el WCIF del Nacional: con «top 4 por grupo en Araba» salen 144 destacados en 13 primeras rondas, todos en Araba y sin ningún solape.
+- **Reglas de estación** (Reglas, PRO, `settings.pro.stationRules`, `lib/pro/station-rules.ts`, `components/station-rules-panel.tsx`): el `StationAssignmentRule` de CompScript (`assignStations` en `groups/assign.js`). Cada regla cubre rondas, salas o escenarios y números de grupo (los mismos selectores que los conjuntos, `components/group-scope.tsx`) y ordena las estaciones 1, 2, 3… por posición (psych sheet en primeras rondas, ronda anterior después), número de inscripción, nombre o una propiedad numérica, de menor a mayor o al revés. Las **exclusiones** apartan a un cluster de algunas estaciones (como `NonNAStream` de los nacionales de EE. UU.: estaciones 1–2 del streaming). Sin exclusiones se ordena sin más; con ellas se resuelve un problema de asignación (`javascript-lp-solver`) que llena todas las estaciones posibles y aleja a cada persona lo menos posible de su puesto en el orden (suma de desviaciones al cuadrado). Solo actúan en rondas con estación fija (donde la app ya numera estaciones); vale la primera regla que cubre cada grupo. Sin reglas, todo sigue igual: la estación 1 es para el mejor del grupo.
 - **Plantilla CSV de pesos** (Personas → importar hoja): un enlace descarga un CSV con una fila por persona (ID, WCA ID, nombre), las columnas `weight-judge`, `weight-scrambler`, `weight-runner` y `team` y las propiedades existentes con sus valores. Una columna «ID» empareja por número de inscripción, así que al reimportarla también encuentra a los newcomers.
 
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
@@ -210,7 +211,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 
 ## 7. Siguientes fases
 
-1. **Fase 4, reparto avanzado en grupos:** hechos los conjuntos ordenados y los destacados (6.5). Faltan las reglas de estación (`StationAssignmentRule`: estaciones por psych sheet o por posición de la ronda anterior, con exclusiones como las estaciones del streaming) y, quizá, scorers por grupo (nombres parecidos, mismo país, «ha competido hace poco»).
+1. **Fase 4, reparto avanzado en grupos:** hechos los conjuntos ordenados, los destacados y las reglas de estación (6.5). Queda, si se quiere, añadir scorers por grupo (nombres parecidos, mismo país, «ha competido hace poco») y escribir la estrella en el WCIF al publicar.
 2. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.
 3. **Fase 6, publicación e informes:**
    - **WCIF v2**: la importación ya pide `GET /api/v0/competitions/{id}/wcif/version/2` (formato 2.2; con el token del organizador devuelve el WCIF privado). Para publicar, `PATCH /api/v0/competitions/{id}/wcif` y **hay que mandar siempre `formatVersion` e `id`** (recomendación de la WCA que trasladó el usuario).
