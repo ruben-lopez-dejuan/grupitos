@@ -266,6 +266,23 @@ export const es = {
     lane: "Sala o escenario",
     roundValue: "ronda",
   },
+  taskOrder: {
+    title: "Prioridad de asignación",
+    rules: "En cada ronda, la primera tarea elige antes entre la gente libre.",
+    weighted: "Con puntuación, mezcladores, runners y jueces se eligen juntos: el orden decide qué puestos se cubren primero cuando falta gente.",
+    hint: "Ejemplo: con Mezcladores antes que Jueces, los rápidos se reservan para mezclar. Con Delegado de turno el primero, sus horas se apartan para toda la competición antes que nada (recomendado).",
+    off: "desactivada en las reglas",
+    up: "Subir {task}",
+    down: "Bajar {task}",
+    reset: "Restablecer el orden",
+    items: {
+      delegate: "Delegado de turno",
+      scrambler: "Mezcladores",
+      dataentry: "Data entry",
+      runner: "Runners",
+      judge: "Jueces",
+    },
+  },
   jobs: {
     range: "Entre {min} y {max} personas según la prueba",
     title: "Quién puede hacer cada tarea",

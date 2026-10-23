@@ -14,7 +14,8 @@ const SEAT = 100000;
 export type IlpCandidate = { key: string; job: TaskRole; score: number };
 
 /** The chosen key for each filled seat, as [personKey, job] pairs. */
-export function solveGroupStaff(needs: Partial<Record<TaskRole, number>>, candidates: IlpCandidate[]): Array<[string, TaskRole]> {
+/** `priority` adds worth to a job's seats, so when people run short the first jobs in the order are filled first. */
+export function solveGroupStaff(needs: Partial<Record<TaskRole, number>>, candidates: IlpCandidate[], priority: Partial<Record<TaskRole, number>> = {}): Array<[string, TaskRole]> {
   const ints: Record<string, number> = {};
   const model: solver.Model = { optimize: "value", opType: "max", constraints: {}, variables: {}, ints };
   const jobs = Object.entries(needs).filter(([, need]) => (need ?? 0) > 0) as Array<[TaskRole, number]>;
@@ -26,7 +27,7 @@ export function solveGroupStaff(needs: Partial<Record<TaskRole, number>>, candid
   candidates.forEach((candidate, position) => {
     if (!needs[candidate.job]) return;
     const variable = `x:${position}`;
-    model.variables[variable] = { value: SEAT + Math.max(-SEAT / 2, Math.min(SEAT / 2, candidate.score)), [`p:${index.get(candidate.key)}`]: 1, [`job:${candidate.job}`]: 1 };
+    model.variables[variable] = { value: SEAT + (priority[candidate.job] ?? 0) + Math.max(-SEAT / 4, Math.min(SEAT / 4, candidate.score)), [`p:${index.get(candidate.key)}`]: 1, [`job:${candidate.job}`]: 1 };
     ints[variable] = 1;
   });
   const solution = solver.Solve(model) as Record<string, number | boolean>;

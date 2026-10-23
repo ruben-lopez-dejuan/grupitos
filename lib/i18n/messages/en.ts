@@ -264,6 +264,23 @@ export const en: Messages = {
     lane: "Room or stage",
     roundValue: "round",
   },
+  taskOrder: {
+    title: "Assignment priority",
+    rules: "In each round, the first task chooses first among the free people.",
+    weighted: "With scoring, scramblers, runners and judges are chosen together: the order decides which seats are filled first when people run short.",
+    hint: "For example, with Scramblers before Judges, fast people are kept for scrambling. With Delegate on duty first, their times are set aside for the whole competition before anything else (recommended).",
+    off: "switched off in the rules",
+    up: "Move {task} up",
+    down: "Move {task} down",
+    reset: "Reset the order",
+    items: {
+      delegate: "Delegate on duty",
+      scrambler: "Scramblers",
+      dataentry: "Data entry",
+      runner: "Runners",
+      judge: "Judges",
+    },
+  },
   jobs: {
     range: "Between {min} and {max} people depending on the event",
     title: "Who can do each task",

@@ -26,7 +26,18 @@ export type AssignmentOptions = {
   normalTasksForDelegatesAndOrganizers: boolean;
   assignDelegateDuties: boolean;
   assignDataEntry: boolean;
+  /** Which task chooses first among the free people (rules), or is filled first when people run short (scoring). */
+  taskOrder: TaskOrderItem[];
 };
+
+export const TASK_ORDER_ITEMS = ["delegate", "scrambler", "dataentry", "runner", "judge"] as const;
+export type TaskOrderItem = typeof TASK_ORDER_ITEMS[number];
+
+/** A complete order of the five tasks, whatever was saved. */
+export function normalizeTaskOrder(order: unknown): TaskOrderItem[] {
+  const known = Array.isArray(order) ? order.filter((item, index): item is TaskOrderItem => (TASK_ORDER_ITEMS as readonly string[]).includes(item) && order.indexOf(item) === index) : [];
+  return [...known, ...TASK_ORDER_ITEMS.filter(item => !known.includes(item))];
+}
 
 export const DEFAULT_OPTIONS: AssignmentOptions = {
   sortingRule: "scrambler-safe",
@@ -39,6 +50,7 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   normalTasksForDelegatesAndOrganizers: false,
   assignDelegateDuties: false,
   assignDataEntry: false,
+  taskOrder: [...TASK_ORDER_ITEMS],
 };
 
 /** The event whose results tell who can scramble another one (blindfolded and one-handed use the cube). */
@@ -254,6 +266,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   // Delegate duty is planned for the whole competition first, scarcest group first: groups in a
   // side room, or at times when most delegates compete, are served before the busy main stages
   // take every delegate.
+  const taskOrder = normalizeTaskOrder(options.taskOrder);
+  // First in the order: delegates' duty times are reserved before any other task is given.
+  const delegateFirst = taskOrder[0] === "delegate";
   const delegatePlan = new Map<string, { key: string; candidates: number }>();
   if (options.assignDelegateDuties) {
     const candidates = accepted.filter(person => delegateDuty.has(personKey(person)));
@@ -261,11 +276,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const duties = new Map<string, number>();
     const taken = new Set<string>();
     const pending = plans.flatMap(plan => plan.groups.flatMap((members, index) => members.length ? [{ plan, group: index + 1 }] : []));
+    /** Planned duty times when they are not reserved, so the plan itself stays consistent. */
+    const planBusy = new Map<string, TimeWindow[]>();
     const free = (seat: typeof pending[number], key: string) => {
       if (seat.plan.groups[seat.group - 1].some(person => personKey(person) === key)) return false;
       if (blockedHere(seat.plan.round.id, seat.group, key)) return false;
       if (taken.has(`${seat.plan.round.id}:${seat.group}:${key}`)) return false;
-      return !windowsFor(seat.plan.round.id, seat.group).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
+      return !windowsFor(seat.plan.round.id, seat.group).some(window => [...(busyTimes.get(key) ?? []), ...(planBusy.get(key) ?? [])].some(busy => overlaps(busy, window)));
     };
     while (pending.length) {
       let index = 0;
@@ -286,7 +303,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       duties.set(key, (duties.get(key) ?? 0) + 1);
       taken.add(`${seat.plan.round.id}:${seat.group}:${key}`);
       const windows = windowsFor(seat.plan.round.id, seat.group);
-      if (windows.length) busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
+      // Later in the order, the plan is a preference and other tasks may take the time first.
+      const reserving = delegateFirst ? busyTimes : planBusy;
+      if (windows.length) reserving.set(key, [...(reserving.get(key) ?? []), ...windows]);
     }
   }
 
@@ -409,7 +428,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const reserveKeys = new Set(reserve.map(personKey));
     const scramblersNeeded = (group: number) => staffing?.(round.id, group)?.scramblers ?? round.scramblers;
     const runnersNeeded = (group: number) => staffing?.(round.id, group)?.runners ?? round.runners;
-    if (!weighted) fill("scrambler", scramblersNeeded, scramblerPool, (person, group) => {
+    const scramblerStep = () => {
+    fill("scrambler", scramblersNeeded, scramblerPool, (person, group) => {
       const key = personKey(person);
       // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
       if (strictScramblers) return [roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
@@ -429,31 +449,40 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         ...bestAverageAndSingle(person, round.eventId)];
     });
 
-    if (!weighted && reserve.length) {
+    if (reserve.length) {
       const scramblingIn = (group: number) => [...rows.values()].filter(row => row.tasks.some(task => task.group === group && task.role === "scrambler")).length;
       fill("scrambler", group => Math.max(0, scramblersNeeded(group) - scramblingIn(group)), reserve, (person, group) => {
         const key = personKey(person);
         return [roundLoad(key), Math.floor(load(key) / 4), load(key), beforeOwn(key, group), ...bestAverageAndSingle(person, scrambleEvent)];
       });
     }
+    };
 
-    for (let group = 1; group <= groups.length; group += 1) {
-      const planned = delegatePlan.get(`${round.id}:${group}`);
-      const person = planned && accepted.find(candidate => personKey(candidate) === planned.key);
-      if (!planned || !person) continue;
-      const why: Why = { group, role: "delegate", candidates: planned.candidates, load: load(planned.key), reasons: reasonsFor("delegate", planned.key, group) };
-      assign(person, group, "delegate");
-      rowFor(person).why.push(why);
-    }
+    const delegateStep = () => {
+      for (let group = 1; group <= groups.length; group += 1) {
+        const planned = delegatePlan.get(`${round.id}:${group}`);
+        // Unless delegate duty goes first, a task given earlier may have taken the planned delegate.
+        let person = planned && (delegateFirst || freeIn(planned.key, group)) ? accepted.find(candidate => personKey(candidate) === planned.key) : undefined;
+        let candidates = planned?.candidates ?? 0;
+        if (!person && !delegateFirst) {
+          const free = accepted.filter(candidate => delegateDuty.has(personKey(candidate)) && freeIn(personKey(candidate), group));
+          person = best(free, candidate => [teamHere(round.id, group, personKey(candidate)) ? 0 : 1, roundLoad(personKey(candidate)), beforeOwn(personKey(candidate), group), load(personKey(candidate))]);
+          candidates = free.length;
+        }
+        if (!person) continue;
+        const key = personKey(person);
+        const why: Why = { group, role: "delegate", candidates, load: load(key), reasons: reasonsFor("delegate", key, group) };
+        assign(person, group, "delegate");
+        rowFor(person).why.push(why);
+      }
+    };
 
-    if (options.assignDataEntry) {
-      fill("dataentry", () => 1, accepted.filter(person => dataEntry.has(personKey(person))), person => [roundLoad(personKey(person)), load(personKey(person))]);
-    }
+    const dataEntryStep = () => fill("dataentry", () => 1, accepted.filter(person => dataEntry.has(personKey(person))), person => [roundLoad(personKey(person)), load(personKey(person))]);
 
     const normalPool = accepted.filter(person => normalTasksAllowed(personKey(person)));
     const poolFor = (role: "runner" | "judge") => allowed(role) ? normalPool.filter(person => allowed(role)!.has(personKey(person))) : normalPool;
 
-    if (weighted) {
+    const weightedStep = () => {
       // Weighted engine: every group of the round, in time order, gets its scramblers, runners and
       // judges together from an integer program over the people free and allowed for each job.
       const scramblerKeys = new Set(scramblerPool.map(personKey));
@@ -520,36 +549,48 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           // The best few per seat keep the program small without changing its answer in practice.
           candidates.push(...scored.slice(0, Math.max(need * 6, 40)));
         }
-        for (const [key, job] of solveGroupStaff(needs, candidates)) {
+        for (const [key, job] of solveGroupStaff(needs, candidates, seatPriority)) {
           const chosen = candidates.find(candidate => candidate.key === key && candidate.job === job)!;
           const why: Why = { group, role: job, candidates: counts[job] ?? 0, load: load(key), reasons: reasonsFor(job, key, group), score: Math.round(chosen.score * 10) / 10, breakdown: chosen.breakdown };
           assign(chosen.person, group, job);
           rowFor(chosen.person).why.push(why);
         }
       }
-    }
+    };
 
-    if (options.assignJudges && !weighted) {
-      const staffPreferred = (key: string) => staff.has(key) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
-      const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
-        const key = personKey(person);
-        if (staffPreferred(key)) return [0, load(key), beforeOwn(key, group)];
-        return [1,
-          role === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country ? 1 : 0,
-          options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
-          options.tasksForOwnEventsOnly && !registeredForEvent(person) ? 1 : 0,
-          youngerThan10(person),
-          busyRoles(key),
-          loadInEvent(key) >= 2 ? 1 : 0,
-          // Coarse load first, so people in many events do not end up with most of the work.
-          Math.floor(load(key) / 4),
-          inRoundKeys.has(key) ? 0 : 1,
-          load(key),
-          beforeOwn(key, group),
-          role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
-      };
-      fill("runner", runnersNeeded, poolFor("runner"), othersKey("runner"));
-      fill("judge", (group, size) => judgesNeeded(size, stationsIn(group)), poolFor("judge"), othersKey("judge"));
+    const staffPreferred = (key: string) => staff.has(key) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
+    const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
+      const key = personKey(person);
+      if (staffPreferred(key)) return [0, load(key), beforeOwn(key, group)];
+      return [1,
+        role === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country ? 1 : 0,
+        options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
+        options.tasksForOwnEventsOnly && !registeredForEvent(person) ? 1 : 0,
+        youngerThan10(person),
+        busyRoles(key),
+        loadInEvent(key) >= 2 ? 1 : 0,
+        // Coarse load first, so people in many events do not end up with most of the work.
+        Math.floor(load(key) / 4),
+        inRoundKeys.has(key) ? 0 : 1,
+        load(key),
+        beforeOwn(key, group),
+        role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
+    };
+    const runnerStep = () => fill("runner", runnersNeeded, poolFor("runner"), othersKey("runner"));
+    const judgeStep = () => fill("judge", (group, size) => judgesNeeded(size, stationsIn(group)), poolFor("judge"), othersKey("judge"));
+
+    // Tasks in the chosen order. With scoring, scramblers, runners and judges of a group are solved
+    // together where the first of them comes, and the order decides which seats are filled first.
+    const seatPriority = Object.fromEntries(taskOrder.map((item, index) => [item, (taskOrder.length - index) * 1000])) as Partial<Record<TaskRole, number>>;
+    let weightedDone = false;
+    for (const item of taskOrder) {
+      if (weighted && (item === "scrambler" || item === "runner" || item === "judge")) {
+        if (!weightedDone) weightedStep();
+        weightedDone = true;
+      } else if (item === "scrambler") scramblerStep();
+      else if (item === "delegate") { if (options.assignDelegateDuties) delegateStep(); }
+      else if (item === "dataentry") { if (options.assignDataEntry) dataEntryStep(); }
+      else if (options.assignJudges) (item === "runner" ? runnerStep : judgeStep)();
     }
 
     const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));

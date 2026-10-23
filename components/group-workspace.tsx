@@ -13,6 +13,7 @@ import { ProSchedulePanel } from "@/components/pro-schedule-panel";
 import { ProScoringPanel } from "@/components/pro-scoring-panel";
 import { ProSegmentsPanel } from "@/components/pro-segments-panel";
 import { SortingRuleIcon } from "@/components/rule-icons";
+import { TaskOrderPanel } from "@/components/task-order-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TASK_CODES, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
@@ -40,7 +41,7 @@ const PHOTOS_KEY = "wca-easy-groups:show-photos";
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
 const SORTING_RULES: SortingRule[] = ["scrambler-safe", "symmetric", "balanced", "ranks", "name-optimised"];
 
-type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule">;
+type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder">;
 const MAIN_OPTIONS: Array<{ key: OptionKey; codes?: TaskRole[] }> = [
   { key: "assignJudges", codes: ["judge", "runner"] },
   { key: "avoidBeforeOwnGroup" },
@@ -349,6 +350,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           <div className="sorting-rules" role="radiogroup" aria-label={t("rules.sortingTitle")}>{SORTING_RULES.map(rule => <button key={rule} role="radio" aria-checked={options.sortingRule === rule} title={t(keyOf("rules.sorting", `${rule}.help`))} className={options.sortingRule === rule ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule } })}><span className="rule-title"><span className="preset-radio" /><SortingRuleIcon rule={rule} /></span><strong>{t(keyOf("rules.sorting", `${rule}.label`))}</strong><small>{t(keyOf("rules.sorting", `${rule}.short`))}</small>{rule === "scrambler-safe" && <em className="recommended">{t("rules.recommended")}</em>}</button>)}</div>
           <h3 className="panel-subheading">{t("rules.tasksTitle")}</h3>
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
+          <h3 className="panel-subheading">{t("taskOrder.title")} <Hint align="start" text={t("taskOrder.hint")} /></h3>
+          <TaskOrderPanel order={options.taskOrder} onChange={taskOrder => update({ options: { ...options, taskOrder } })} weighted={!!pro && scoring.enabled} active={{ delegate: options.assignDelegateDuties, scrambler: true, dataentry: options.assignDataEntry, runner: options.assignJudges, judge: options.assignJudges }} />
           {pro && <>
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
             <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
