@@ -1,6 +1,6 @@
 # Modo PRO — diseño
 
-Estado (23/10/2026): fases 1 y 2 hechas; fase 3 casi completa (falta la puntuación con pesos e ILP). El detalle del estado y el relevo están en [`HANDOFF.md`](../HANDOFF.md).
+Estado (23/10/2026): fases 1, 2 y 3 hechas. El detalle del estado y el relevo están en [`HANDOFF.md`](../HANDOFF.md).
 
 ## Objetivo
 
@@ -91,7 +91,7 @@ Cada fase deja algo usable.
    - 23/10/2026: los grupos paralelos comparten número; el total de grupos se fija por ronda y se reparte entre los bloques; multi-blind por intentos y entrega de cubos; impresión por escenario.
    - Pendiente para fases siguientes: estaciones por escenario, nombres de escenario en las hojas de tiempos y publicación del horario al WCIF.
 2. **Personas y segmentos.** Etiquetas, importación de CSV, voluntarios extra, indisponibilidades y constructor de filtros. *Hecha (23/10/2026):* propiedades (con las de natshelper), voluntarios, indisponibilidades (franja o «mientras compite X»), importación de Google Sheets (cuenta de servicio, pendiente de crear) o CSV, segmentos con constructor visual y plantillas, filtro por segmento en la revisión.
-3. **Motor de personal.** Trabajos por escenario, elegibilidad, puntuación con pesos y «¿por qué?». *Casi completa (23/10/2026):* elegibilidad por segmento y por prueba (límites de marca por prueba con correspondencias, como `CanScramble`), estaciones y personal por sala y escenario, «¿por qué esta persona?» y solapes cortos encadenados. Falta la puntuación con pesos y el ILP.
+3. **Motor de personal.** Trabajos por escenario, elegibilidad, puntuación con pesos y «¿por qué?». *Hecha (23/10/2026):* elegibilidad por segmento y por prueba (límites de marca por prueba con correspondencias, como `CanScramble`), personal predeterminado por sala y escenario, puntuación con pesos y perfiles e ILP por grupo, «¿por qué esta persona?» con la puntuación desglosada y solapes cortos encadenados.
 4. **Reparto de grupos avanzado.** Conjuntos ordenados, estaciones y destacados.
 5. **Equipos.** Rotación por día y equipos equilibrados automáticos.
 6. **Publicación e informes.** Escribir en el WCIF (también para el modo normal) e informes exportables.

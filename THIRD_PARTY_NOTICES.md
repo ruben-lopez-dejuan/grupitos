@@ -15,6 +15,19 @@ Derived from commit `e44cb094eb7177b65c62fd06bdcb021a416a1654` (2026-10-12):
 | `lib/group-generator.ts` | `src/logic/groups.js`, `src/logic/formulas.js`, `src/logic/competitors.js` | Reimplemented for a model without schedule times; the "name-optimised" rule no longer drops people; extra roles (delegate duty, data entry, staff) and a strict scrambler mode. |
 | `lib/rounds.ts` | `src/logic/formulas.js`, `src/logic/competitors.js` | Group, scrambler and runner suggestions; expected competitors in later rounds. |
 
+## CompScript
+
+The PRO mode follows the design of [CompScript](https://github.com/cubingusa/compscript) (MIT,
+by CubingUSA): rooms with natshelper stages (`CreateStage`), groups split like `CreateGroups`,
+eligibility conditions such as `CanScramble`, and the staff scorers and per-group integer program
+of `staff/scorers.js` and `staff/assign.js`. The ideas were reimplemented in TypeScript for this
+app (`lib/pro/*`); no CompScript source file was copied.
+
+## javascript-lp-solver
+
+The PRO staff engine solves each group with [javascript-lp-solver](https://github.com/JWally/jsLPSolver),
+released into the public domain under the Unlicense.
+
 ## Delegate Dashboard
 
 The list of staff assignment types (delegate, stage lead, announcer, data entry, other) follows
