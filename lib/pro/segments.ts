@@ -143,11 +143,19 @@ export const SCRAMBLE_LIMITS: { limits: Record<string, number>; mapping: Record<
 };
 
 /** Starting points from real CompScript scripts (EligibleVolunteer, EligibleRunner, CanScramble, EligibleScrambler). */
-export const SEGMENT_TEMPLATES: Array<{ id: "volunteers" | "runners" | "scramblers" | "eventScramblers"; segment: Omit<Segment, "id" | "name"> }> = [
+export const SEGMENT_TEMPLATES: Array<{ id: "volunteers" | "runners" | "scramblers" | "eventScramblers" | "delegating" | "organizers" | "delegates" | "newcomers" | "adults" | "sideRoom" | "staffAndVolunteers"; segment: Omit<Segment, "id" | "name"> }> = [
   { id: "volunteers", segment: { match: "all", rules: [{ kind: "role", role: "organizer", negate: true }, { kind: "role", role: "delegate", negate: true }, { kind: "role", role: "trainee-delegate", negate: true }, { kind: "newcomer", negate: true }] } },
   { id: "runners", segment: { match: "all", rules: [{ kind: "age", op: "lt", value: 45 }] } },
   { id: "scramblers", segment: { match: "any", rules: [{ kind: "pb", eventId: "333", type: "average", value: 2000 }, { kind: "role", role: "trusted" }] } },
   { id: "eventScramblers", segment: { match: "all", rules: [{ kind: "roundPb", ...SCRAMBLE_LIMITS }] } },
+  // IsDelegating in the Amore scripts: delegates who are not also organising.
+  { id: "delegating", segment: { match: "all", rules: [{ kind: "role", role: "delegate" }, { kind: "role", role: "organizer", negate: true }] } },
+  { id: "organizers", segment: { match: "all", rules: [{ kind: "role", role: "organizer" }] } },
+  { id: "delegates", segment: { match: "any", rules: [{ kind: "role", role: "delegate" }, { kind: "role", role: "trainee-delegate" }] } },
+  { id: "newcomers", segment: { match: "all", rules: [{ kind: "newcomer" }] } },
+  { id: "adults", segment: { match: "all", rules: [{ kind: "age", op: "gte", value: 18 }] } },
+  { id: "sideRoom", segment: { match: "all", rules: [{ kind: "property", key: "team", op: "contains", value: "side" }] } },
+  { id: "staffAndVolunteers", segment: { match: "any", rules: [{ kind: "role", role: "staff" }, { kind: "role", role: "volunteer" }] } },
 ];
 
 /** Jobs whose eligibility a segment can restrict (CompScript's Job(..., eligibility=...)). */
