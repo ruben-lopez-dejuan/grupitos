@@ -404,3 +404,14 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .change-competition.refresh:hover{color:var(--blue)}
 .refresh-note{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
 .workspace-actions>div:last-child{display:flex;gap:8px}
+
+/* Landing: what the app does */
+.landing-features{display:grid;gap:22px;margin-top:30px}
+.landing-features h2{margin:0 0 8px;font-size:15px;font-weight:750}
+.landing-features ul{display:grid;gap:7px;margin:0;padding-left:18px;color:var(--muted);font-size:15px;line-height:1.5}
+.landing-features li::marker{color:var(--line)}
+.login-intro h1{font-size:clamp(32px,3.6vw,46px);letter-spacing:-.03em}
+@media (max-width:800px){.login-layout{grid-template-columns:1fr;gap:36px;padding-block:32px}.login-panel{max-width:none}}
+@media (max-width:560px){.login-page .topbar .plain-link{display:none}.login-intro h1{font-size:30px}}
+.login-footer a{color:inherit}
+.login-footer a:hover{color:var(--blue)}
