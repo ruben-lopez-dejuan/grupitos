@@ -597,8 +597,8 @@ export const es = {
   },
   printing: {
     stagesTitle: "Escenarios y grupos",
-    stagesHelp: "Marca qué grupos imprimir. Cada escenario marca o desmarca todos sus grupos de las rondas elegidas; las hojas salen ordenadas por escenario.",
-    stageToggle: "{name}: {count} de {total} grupos",
+    stagesHelp: "Marca qué escenarios imprimir en cada ronda, o usa los botones de escenario para todas las rondas elegidas a la vez. Las hojas salen ordenadas por escenario.",
+    stageToggle: "{name}: {count} de {total} rondas",
     title: "Hojas de tiempos",
     hint: "Mismo formato que Groupifier. Se generan con la propuesta actual, incluidos tus cambios. Los nombres en escrituras no latinas, griegas o cirílicas se imprimen solo con el nombre latino.",
     format: "Formato",

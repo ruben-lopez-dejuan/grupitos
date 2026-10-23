@@ -7,7 +7,7 @@ import { useEventName, useI18n } from "@/components/i18n";
 import { keyOf } from "@/lib/i18n";
 import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
-import { clockOf, scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
+import { scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 import { UNSUPPORTED_SCORECARD_LANGUAGES } from "@/lib/scorecards/scorecards";
@@ -37,20 +37,27 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   // Rounds with a proposal, plus later rounds whose groups are planned but whose competitors are unknown.
   const printable = rounds.filter(round => withAssignments.has(round.id) || (round.roundNumber > 1 && !round.competitorsKnown && round.competitors > 0));
   const [chosen, setChosen] = useState<string[]>(() => printable.filter(round => withAssignments.has(round.id)).map(round => round.id));
-  /** Groups left out of the print, as "roundId:group". */
+  /** Stages left out of the print, as "roundId|laneKey". */
   const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState<"rounds" | "blank">();
   const [message, setMessage] = useState("");
   const set = <K extends keyof PrintingOptions>(key: K, value: PrintingOptions[K]) => onChange({ ...printing, [key]: value });
   const source = { competition, assignments, rounds, stations, zoneMode, printing, schedule, slots };
   const selectedIds = chosen.filter(id => printable.some(round => round.id === id));
-  const groupKey = (roundId: string, group: number) => `${roundId}:${group}`;
   const lanes = schedule ? scheduleLanes(schedule) : [];
-  // Chosen rounds whose groups are spread over several stages: those can be filtered by stage.
-  const staged = selectedIds.filter(id => new Set(slots?.get(id)?.map(slot => targetKey(slot.roomId, slot.stageId))).size > 1);
-  const stagedGroups = staged.flatMap(roundId => slots!.get(roundId)!.map(slot => ({ roundId, slot, key: groupKey(roundId, slot.group), lane: targetKey(slot.roomId, slot.stageId) })));
-  const usedLanes = lanes.filter(lane => stagedGroups.some(item => item.lane === lane.key));
-  const toggleGroups = (keys: string[], include: boolean) => setExcluded(current => include ? current.filter(key => !keys.includes(key)) : [...new Set([...current, ...keys])]);
+  /** Lanes a round's groups run in, in schedule order; empty when it runs in a single one. */
+  const lanesOf = (roundId: string) => {
+    const used = new Set(slots?.get(roundId)?.map(slot => targetKey(slot.roomId, slot.stageId)));
+    return used.size > 1 ? lanes.filter(lane => used.has(lane.key)) : [];
+  };
+  const stageKey = (roundId: string, lane: string) => `${roundId}|${lane}`;
+  const toggleStages = (keys: string[], include: boolean) => setExcluded(current => include ? current.filter(key => !keys.includes(key)) : [...new Set([...current, ...keys])]);
+  // Stage buttons on top act on every chosen round that runs in that stage.
+  const usedLanes = lanes.filter(lane => selectedIds.some(id => lanesOf(id).some(item => item.key === lane.key)));
+  const includeGroup = (roundId: string, group: number) => {
+    const slot = slots?.get(roundId)?.find(item => item.group === group);
+    return !slot || !excluded.includes(stageKey(roundId, targetKey(slot.roomId, slot.stageId)));
+  };
   const eventIds = [...new Set(rounds.map(round => round.eventId))];
   const roundNumbers = [...new Set(rounds.map(round => round.roundNumber))].sort((a, b) => a - b);
 
@@ -64,7 +71,7 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     setMessage("");
     try {
       const { downloadBlankScorecards, downloadRoundScorecards } = await import("@/lib/scorecards/download");
-      if (kind === "rounds") await downloadRoundScorecards(source, selectedIds, `${competition.id}-scorecards.pdf`, (roundId, group) => !excluded.includes(groupKey(roundId, group)));
+      if (kind === "rounds") await downloadRoundScorecards(source, selectedIds, `${competition.id}-scorecards.pdf`, includeGroup);
       else await downloadBlankScorecards(source, `${competition.id}-blank-scorecards.pdf`);
       setMessage(t("printing.done"));
     } catch (error) {
@@ -89,7 +96,13 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     <div className="option-list printing-options four">{CHECKER_OPTIONS.map(checkbox)}</div>
     <h3 className="panel-subheading">{t("printing.what")}</h3>
     <div className="print-rounds">
-      <div className="print-rounds-head"><strong>{t("printing.roundsTitle")} <Hint align="start" text={t("printing.roundsHelp")} /></strong><button className="plain" type="button" onClick={() => setChosen(selectedIds.length === printable.length ? [] : printable.map(round => round.id))}>{selectedIds.length === printable.length ? t("printing.selectNone") : t("printing.selectAll")}</button></div>
+      <div className="print-rounds-head"><strong>{t("printing.roundsTitle")} <Hint align="start" text={t("printing.roundsHelp")} /></strong>
+        {usedLanes.length > 0 && <div className="stage-filter" aria-label={t("printing.stagesTitle")}>{usedLanes.map(lane => {
+          const keys = selectedIds.filter(id => lanesOf(id).some(item => item.key === lane.key)).map(id => stageKey(id, lane.key));
+          const included = keys.filter(key => !excluded.includes(key)).length;
+          return <button key={lane.key} type="button" aria-pressed={included === keys.length} className={included === 0 ? "off" : included < keys.length ? "partial" : ""} style={{ ["--stage" as string]: lane.color }} title={t("printing.stageToggle", { name: lane.name, count: included, total: keys.length })} onClick={() => toggleStages(keys, included < keys.length)}><i />{lane.name}<small>{included}/{keys.length}</small></button>;
+        })}<Hint text={t("printing.stagesHelp")} /></div>}
+        <button className="plain" type="button" onClick={() => setChosen(selectedIds.length === printable.length ? [] : printable.map(round => round.id))}>{selectedIds.length === printable.length ? t("printing.selectNone") : t("printing.selectAll")}</button></div>
       <table className="print-table">
         <thead><tr><th>{t("printing.columnEvent")}</th>{roundNumbers.map(number => <th key={number}>{t("printing.roundNumber", { number })}</th>)}</tr></thead>
         <tbody>{eventIds.map(eventId => <tr key={eventId}>
@@ -99,30 +112,18 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
             if (!round) return <td key={number} className="none" />;
             const canPrint = printable.some(item => item.id === round.id);
             if (!canPrint) return <td key={number} className="none" title={t("printing.noProposal")}>—</td>;
-            return <td key={number}><label><input type="checkbox" checked={chosen.includes(round.id)} onChange={event => setChosen(current => event.target.checked ? [...current, round.id] : current.filter(id => id !== round.id))} /><span>{withAssignments.has(round.id) ? t("printing.generated") : t("printing.notGenerated")}</span></label></td>;
+            const roundLanes = lanesOf(round.id);
+            return <td key={number}><label><input type="checkbox" checked={chosen.includes(round.id)} onChange={event => setChosen(current => event.target.checked ? [...current, round.id] : current.filter(id => id !== round.id))} /><span>{withAssignments.has(round.id) ? t("printing.generated") : t("printing.notGenerated")}</span></label>
+              {roundLanes.length > 0 && chosen.includes(round.id) && <span className="cell-stages">{roundLanes.map(lane => {
+                const key = stageKey(round.id, lane.key);
+                const on = !excluded.includes(key);
+                return <button key={lane.key} type="button" aria-pressed={on} className={on ? "" : "off"} style={{ ["--stage" as string]: lane.color }} title={lane.name} onClick={() => toggleStages([key], !on)}><i />{lane.name}</button>;
+              })}</span>}
+            </td>;
           })}
         </tr>)}</tbody>
       </table>
     </div>
-    {stagedGroups.length > 0 && <div className="print-stages">
-      <div className="print-rounds-head"><strong>{t("printing.stagesTitle")} <Hint align="start" text={t("printing.stagesHelp")} /></strong></div>
-      <div className="stage-filter">{usedLanes.map(lane => {
-        const keys = stagedGroups.filter(item => item.lane === lane.key).map(item => item.key);
-        const included = keys.filter(key => !excluded.includes(key)).length;
-        return <button key={lane.key} type="button" aria-pressed={included === keys.length} className={included === 0 ? "off" : included < keys.length ? "partial" : ""} style={{ ["--stage" as string]: lane.color }} title={t("printing.stageToggle", { name: lane.name, count: included, total: keys.length })} onClick={() => toggleGroups(keys, included < keys.length)}><i />{lane.name}<small>{included}/{keys.length}</small></button>;
-      })}</div>
-      <div className="print-groups">{staged.map(roundId => {
-        const round = rounds.find(item => item.id === roundId)!;
-        return <div key={roundId} className="print-group-row">
-          <span className="print-group-round"><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><span>{eventName(round.eventId)} <small>{t("printing.roundNumber", { number: round.roundNumber })}</small></span></span>
-          <span className="print-group-chips">{[...slots!.get(roundId)!].sort((a, b) => lanes.findIndex(lane => lane.key === targetKey(a.roomId, a.stageId)) - lanes.findIndex(lane => lane.key === targetKey(b.roomId, b.stageId)) || a.group - b.group).map(slot => {
-            const lane = lanes.find(item => item.key === targetKey(slot.roomId, slot.stageId));
-            const key = groupKey(roundId, slot.group);
-            return <label key={key} className="group-toggle" style={{ ["--stage" as string]: lane?.color }} title={`${lane?.name ?? ""} · ${clockOf(slot.windows[0].start)}–${clockOf(slot.windows[0].end)}`}><input type="checkbox" checked={!excluded.includes(key)} onChange={event => toggleGroups([key], event.target.checked)} /><i />G{slot.number} {lane?.name}</label>;
-          })}</span>
-        </div>;
-      })}</div>
-    </div>}
     <div className="print-actions">
       <button className="button primary" type="button" disabled={!selectedIds.length || !!busy} onClick={() => download("rounds")}><ScorecardIcon filled />{busy === "rounds" ? t("printing.generating") : tp("printing.download", selectedIds.length)}</button>
       <button className="button secondary" type="button" disabled={!!busy} onClick={() => download("blank")}><ScorecardIcon />{busy === "blank" ? t("printing.generating") : t("printing.blank")}</button>

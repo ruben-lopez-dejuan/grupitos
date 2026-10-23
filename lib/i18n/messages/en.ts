@@ -595,8 +595,8 @@ export const en: Messages = {
   },
   printing: {
     stagesTitle: "Stages and groups",
-    stagesHelp: "Tick the groups to print. Each stage ticks or unticks all its groups in the chosen rounds; scorecards come out sorted by stage.",
-    stageToggle: "{name}: {count} of {total} groups",
+    stagesHelp: "Tick which stages to print in each round, or use the stage buttons for all chosen rounds at once. Scorecards come out sorted by stage.",
+    stageToggle: "{name}: {count} of {total} rounds",
     title: "Scorecards",
     hint: "Same format as Groupifier. They are built from the current proposal, including your changes. Names in scripts other than Latin, Greek or Cyrillic are printed with the Latin name only.",
     format: "Format",
