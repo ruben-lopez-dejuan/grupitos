@@ -576,6 +576,20 @@ export const es = {
     tasks_other: "{count} tareas",
     goTo: "Ver en la matriz",
   },
+  why: {
+    picked: "Elegida entre {count} personas libres; llevaba {load} tareas",
+    reasons: {
+      staff: "staff con prioridad",
+      volunteer: "voluntario que no compite (cuenta como staff)",
+      trusted: "personal de confianza",
+      segment: "está en el segmento de esta tarea",
+      fastHalf: "en la mitad más rápida de la ronda",
+      delegateDuty: "delegado de turno",
+      dataEntry: "data entry",
+      notInRound: "no compite en esta ronda",
+      beforeOwn: "trabaja justo antes de competir (no había otra opción mejor)",
+    },
+  },
   issues: {
     "no-group": "{name} está en la ronda y no compite en ningún grupo.",
     "several-groups": "{name} compite en varios grupos ({groups}).",

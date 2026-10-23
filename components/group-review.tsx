@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EventIcon } from "@/components/event-icon";
-import { useEventName, useI18n, useIssueText } from "@/components/i18n";
+import { useEventName, useI18n, useIssueText, useWhyText } from "@/components/i18n";
 import { PersonCard } from "@/components/person-card";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
-import { applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
+import { whyOf, applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
@@ -114,6 +114,7 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
     return lanes.size > 1 && lane ? `${slot.number} ${lane.name}` : String(slot.number);
   }, [slots, laneByKey]);
   const issueText = useIssueText(groupLabel);
+  const whyText = useWhyText();
   const taskLabel = (value: CellValue) => value ? t(keyOf("tasks", value)) : t("tasks.empty");
   const severityCount = (severity: IssueSeverity, count: number) => severity === "error" ? tp("review.errors", count) : tp("review.warnings", count);
   const [history, dispatch] = useReducer(historyReducer, initialAssignments, initial => ({ past: [], present: normalizeAssignments(initial), future: [] }));
@@ -515,7 +516,8 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
           const severity = worstSeverity(cellIssues);
           const isCursor = cursor?.id === item.id && cursor.group === group;
           const classes = [value || "empty", isCursor && "cursor", selected.has(key) && "in-selection", severity && `issue-${severity}`].filter(Boolean).join(" ");
-          const description = `${taskLabel(value)} · G${group}${cellIssues ? `\n${cellIssues.map(issueText).join("\n")}` : ""}`;
+          const why = whyOf(item, group);
+          const description = `${taskLabel(value)} · G${groupLabel(roundId, group)}${why ? `\n${whyText(why)}` : ""}${cellIssues ? `\n${cellIssues.map(issueText).join("\n")}` : ""}`;
           if (stationEdit?.id === item.id && stationEdit.group === group) {
             return <td key={group} className={`matrix-cell ${startsBlock(position) ? "block-start" : ""}`}><input
               className="station-input"

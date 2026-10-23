@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { createTranslator, keyOf, LOCALE_COOKIE, LOCALES, type Locale, type Translate, type TranslatePlural } from "@/lib/i18n";
+import type { Why } from "@/lib/assignments";
 import type { Issue } from "@/lib/validation";
 
 type I18n = { locale: Locale; t: Translate; tp: TranslatePlural; setLocale: (locale: Locale) => void };
@@ -58,6 +59,12 @@ export function useIssueText(groupLabel?: (roundId: string, group: number) => st
     if (otherRound) params.otherRound = roundName(otherRound, eventName, t);
     return t(keyOf("issues", issue.code), params);
   }, [t, eventName, groupLabel]);
+}
+
+/** "Why this person?" for a generated duty, in the current language. */
+export function useWhyText() {
+  const { t } = useI18n();
+  return useCallback((why: Why) => [t("why.picked", { count: why.candidates, load: why.load }), ...why.reasons.map(reason => t(keyOf("why.reasons", reason)))].join(" · "), [t]);
 }
 
 /** "3x3x3 Cube · Round 2" from "333-r2". */

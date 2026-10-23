@@ -574,6 +574,20 @@ export const en: Messages = {
     tasks_other: "{count} tasks",
     goTo: "Show in the matrix",
   },
+  why: {
+    picked: "Picked among {count} free people; had {load} tasks",
+    reasons: {
+      staff: "staff, with priority",
+      volunteer: "non-competing volunteer (counts as staff)",
+      trusted: "trusted person",
+      segment: "in this task's segment",
+      fastHalf: "in the faster half of the round",
+      delegateDuty: "delegate on duty",
+      dataEntry: "data entry",
+      notInRound: "does not compete in this round",
+      beforeOwn: "works right before competing (no better option)",
+    },
+  },
   issues: {
     "no-group": "{name} is in the round but competes in no group.",
     "several-groups": "{name} competes in several groups ({groups}).",

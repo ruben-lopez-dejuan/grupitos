@@ -5,7 +5,7 @@
  * (lib/pro/schedule.ts) and nobody gets a task while busy elsewhere.
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
-import { sortTasks, type GeneratedAssignment, type Task, type TaskRole } from "@/lib/assignments";
+import { sortTasks, type GeneratedAssignment, type PickReason, type Task, type TaskRole, type Why } from "@/lib/assignments";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
@@ -42,7 +42,7 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
 /** Events where Groupifier's "balanced" rule keeps the plain ranking order. */
 const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "skewb", "clock", "sq1"];
 
-type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number };
+type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number; why: Why[] };
 type CompetitorPlan = {
   round: GenerationRound;
   competitors: WcifPerson[];
@@ -238,12 +238,12 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     groups.forEach((members, groupIndex) => {
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
-        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined });
+        rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [{ group: groupIndex + 1, role: "competitor" }], station: fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined, why: [] });
       });
     });
     const rowFor = (person: WcifPerson) => {
       const key = personKey(person);
-      if (!rows.has(key)) rows.set(key, { person, key, inRound: false, seedIndex: Number.MAX_SAFE_INTEGER, tasks: [] });
+      if (!rows.has(key)) rows.set(key, { person, key, inRound: false, seedIndex: Number.MAX_SAFE_INTEGER, tasks: [], why: [] });
       return rows.get(key)!;
     };
     const ownGroup = (key: string) => rows.get(key)?.tasks.find(task => task.role === "competitor")?.group;
@@ -282,13 +282,32 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       for (let slot = 0; slot < Math.max(0, ...needs); slot += 1) {
         for (let group = 1; group <= groups.length; group += 1) {
           if (slot >= needs[group - 1]) continue;
-          const pick = best(candidates.filter(person => freeIn(personKey(person), group)), person => sortKey(person, group));
-          if (pick) assign(pick, group, role);
+          const available = candidates.filter(person => freeIn(personKey(person), group));
+          const pick = best(available, person => sortKey(person, group));
+          if (!pick) continue;
+          const key = personKey(pick);
+          const why: Why = { group, role, candidates: available.length, load: load(key), reasons: reasonsFor(role, key, group) };
+          assign(pick, group, role);
+          rowFor(pick).why.push(why);
         }
       }
     };
 
     const allowed = (role: "judge" | "scrambler" | "runner") => eligible[role]?.get(round.eventId);
+    const volunteers = new Set(extraPeople.map(personKey));
+    const reasonsFor = (role: TaskRole, key: string, group: number): PickReason[] => {
+      const reasons: PickReason[] = [];
+      if (role === "delegate") reasons.push("delegateDuty");
+      if (role === "dataentry") reasons.push("dataEntry");
+      if (volunteers.has(key)) reasons.push("volunteer");
+      else if (staff.has(key) && role !== "delegate" && role !== "dataentry") reasons.push("staff");
+      if (trusted.has(key) && role === "scrambler") reasons.push("trusted");
+      if ((role === "judge" || role === "scrambler" || role === "runner") && allowed(role)) reasons.push("segment");
+      else if (role === "scrambler" && strictScramblers && !trusted.has(key)) reasons.push("fastHalf");
+      if (!inRoundKeys.has(key)) reasons.push("notInRound");
+      if (beforeOwn(key, group)) reasons.push("beforeOwn");
+      return reasons;
+    };
     const strictScramblers = options.sortingRule === "scrambler-safe";
     const inRoundKeys = new Set(competitors.map(personKey));
     // Strict: trusted people, or people with a result in the faster half of the round
@@ -372,6 +391,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         inRound: row.inRound,
         station: row.station,
         tasks: row.tasks,
+        ...(row.why.length ? { why: row.why } : {}),
       });
     }
   }

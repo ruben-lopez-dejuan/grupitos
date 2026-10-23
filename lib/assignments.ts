@@ -14,6 +14,11 @@ export function wcifAssignmentCode(role: TaskRole) {
   return role === "competitor" ? "competitor" : `staff-${role}`;
 }
 
+/** What made the generator pick someone for a task, shown as "why this person?". */
+export const PICK_REASONS = ["staff", "volunteer", "trusted", "segment", "fastHalf", "delegateDuty", "dataEntry", "notInRound", "beforeOwn"] as const;
+export type PickReason = typeof PICK_REASONS[number];
+export type Why = { group: number; role: TaskRole; /** People free and allowed at that moment. */ candidates: number; /** Tasks the person had before this one. */ load: number; reasons: PickReason[] };
+
 export type GeneratedAssignment = {
   id: string;
   roundId: string;
@@ -28,7 +33,15 @@ export type GeneratedAssignment = {
   station?: number;
   /** At most one task per group. Anything is allowed here; the validator reports what is wrong. */
   tasks: Task[];
+  /** Why the generator gave each duty; stale entries (edited cells) are ignored. */
+  why?: Why[];
 };
+
+/** Why entry for a cell, only while the cell still holds that task. */
+export function whyOf(item: GeneratedAssignment, group: number) {
+  const role = cellValue(item, group);
+  return role ? item.why?.find(entry => entry.group === group && entry.role === role) : undefined;
+}
 
 /** Formats saved by earlier versions of the app. */
 type LegacyAssignment = Omit<GeneratedAssignment, "tasks" | "inRound"> & {

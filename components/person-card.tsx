@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { EventIcon } from "@/components/event-icon";
-import { useEventName, useI18n, useIssueText } from "@/components/i18n";
+import { useEventName, useI18n, useIssueText, useWhyText } from "@/components/i18n";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
-import { competingGroups, duties, TASK_CODES, type GeneratedAssignment } from "@/lib/assignments";
+import { competingGroups, duties, TASK_CODES, type GeneratedAssignment, whyOf } from "@/lib/assignments";
 import { keyOf } from "@/lib/i18n";
 import type { Issue } from "@/lib/validation";
 
@@ -24,6 +24,7 @@ export function PersonCard({ rows, roundOrder, photo, roles, issues, groupLabel 
   const { t, tp } = useI18n();
   const eventName = useEventName();
   const issueText = useIssueText(groupLabel);
+  const whyText = useWhyText();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -56,7 +57,7 @@ export function PersonCard({ rows, roundOrder, photo, roles, issues, groupLabel 
           <span className="round-label">{eventName(row.eventId)}<small>{t("rounds.roundNumber", { number: row.roundId.split("-r").at(-1) ?? "" })}</small></span>
           <span className="round-tasks">
             {groups.map(group => <span key={`c${group}`} className="cell-chip mini competitor">C G{groupLabel(row.roundId, group)}{row.station && groups.length === 1 ? ` · P${row.station}` : ""}</span>)}
-            {duties(row).map(duty => <span key={`${duty.role}${duty.group}`} className={`cell-chip mini ${duty.role}`} title={t(keyOf("tasks", duty.role))}>{TASK_CODES[duty.role]} G{groupLabel(row.roundId, duty.group)}</span>)}
+            {duties(row).map(duty => <span key={`${duty.role}${duty.group}`} className={`cell-chip mini ${duty.role}`} title={[t(keyOf("tasks", duty.role)), ...(whyOf(row, duty.group) ? [whyText(whyOf(row, duty.group)!)] : [])].join("\n")}>{TASK_CODES[duty.role]} G{groupLabel(row.roundId, duty.group)}</span>)}
             {!groups.length && !duties(row).length && <span className="muted-mark">—</span>}
           </span>
           {rowIssues.length > 0 && <i className={`issue-dot static ${rowIssues.some(issue => issue.severity === "error") ? "error" : "warning"}`} title={rowIssues.map(issueText).join("\n")} />}

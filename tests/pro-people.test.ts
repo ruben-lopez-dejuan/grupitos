@@ -70,6 +70,8 @@ describe("generator with PRO people", () => {
     const rows = assignments.filter(item => item.personId.startsWith("vol-"));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every(item => !item.inRound && item.tasks.every(task => task.role !== "competitor"))).toBe(true);
+    // "Why this person?": every duty explains itself, and volunteers say they count as staff.
+    expect(rows.every(item => item.tasks.every(task => item.why?.some(why => why.group === task.group && why.role === task.role && why.candidates > 0 && why.reasons.includes("volunteer"))))).toBe(true);
   });
 
   it("gives no task to someone unavailable, also while the person they accompany competes", () => {
