@@ -3,8 +3,8 @@ import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
-import { peopleFromWcif } from "@/lib/people";
-import { everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
+import { nonCompetingStaff, peopleFromWcif } from "@/lib/people";
+import { applyTeamRoles, everyone, importPersonProperties, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, suggestTeamRole, unavailableWindows, volunteerPerson } from "@/lib/pro/people";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
 import { validateAvailability } from "@/lib/validation";
@@ -95,5 +95,41 @@ describe("availability check", () => {
     const assignments = [row("ana", [{ group: 1, role: "competitor" }, { group: 2, role: "judge" }]), row("kid", [{ group: 2, role: "competitor" }]), row("dad", [{ group: 1, role: "competitor" }, { group: 2, role: "scrambler" }])];
     const issues = validateAvailability(assignments, slots, [{ id: "u1", personKey: "ana", start: day("10:30"), end: day("12:00") }, { id: "u2", personKey: "dad", whileCompeting: "kid" }]);
     expect(issues.map(issue => [issue.code, issue.severity, issue.params.name, issue.group])).toEqual([["unavailable", "warning", "ana", 2], ["unavailable", "warning", "dad", 2]]);
+  });
+});
+
+describe("teams and non-competing staff", () => {
+  it("suggests a role for the national championship's teams", () => {
+    const suggested = Object.fromEntries(["Voluntario normal", "Data entry", "Registro / Stand AES", "Streaming", "Médico", "Control de Accesos", "Side room", "Delegado", "Organizador", "Aceptado SIN categorizar", "Otro"].map(team => [team, suggestTeamRole(team)]));
+    expect(suggested).toEqual({
+      "Voluntario normal": "staff", "Data entry": "dataentry", "Registro / Stand AES": "notasks", Streaming: "notasks", "Médico": "notasks", "Control de Accesos": "notasks",
+      "Side room": "none", Delegado: "none", Organizador: "none", "Aceptado SIN categorizar": "none", Otro: "none",
+    });
+  });
+
+  it("adds people to role lists by team, keeping who was there", () => {
+    const pro = normalizeProPeople({ propertyKeys: ["team"], properties: { a: { team: "Voluntario normal" }, b: { team: "Streaming" }, c: { team: "Otro" }, d: { team: "Voluntario normal" } } });
+    const settings = { roles: { staff: ["d", "z"] }, trustedIds: [], delegateDutyIds: [] };
+    const result = applyTeamRoles(settings, pro, { property: "team", map: { "Voluntario normal": "staff", Streaming: "notasks", Otro: "none" } });
+    expect(result.settings.roles).toEqual({ staff: ["d", "z", "a"], notasks: ["b"] });
+    expect(result.added).toBe(2);
+    expect(propertyValues(pro, "team")).toEqual([["Voluntario normal", 2], ["Otro", 1], ["Streaming", 1]]);
+  });
+
+  it("brings in organizers without a registration as non-competing people", () => {
+    const source = buildDemoCompetition({ id: "Org", name: "Org", people: 10, events: ["333"], newcomerShare: 0, seed: 2 });
+    const competition: StoredCompetition = { ...source, persons: [...source.persons!, { registrantId: null, wcaUserId: 9999, name: "Organizadora Sin Inscripción", wcaId: "2010ORGA01", roles: ["organizer"] }] };
+    const staffOnly = nonCompetingStaff(competition);
+    expect(staffOnly.map(person => [person.name, person.registration?.isCompeting])).toEqual([["Organizadora Sin Inscripción", false]]);
+    expect(peopleFromWcif(competition).roles.organizer).toContain("2010ORGA01");
+    expect(everyone(competition)).toHaveLength(11);
+  });
+
+  it("gives no normal tasks to people without normal tasks", () => {
+    const competition = buildDemoCompetition({ id: "NoTasks", name: "NoTasks", people: 30, events: ["333"], newcomerShare: 0, seed: 4 });
+    const people = peopleFromWcif(competition);
+    const quiet = competition.persons!.slice(0, 8).map(personKey);
+    const assignments = generateAssignments({ competition, rounds: initialRounds(competition, 8, "fixed"), stations: 8, zoneMode: "fixed", people: { ...people, roles: { ...people.roles, notasks: quiet } }, options: DEFAULT_OPTIONS });
+    expect(assignments.filter(item => quiet.includes(item.personId)).every(item => item.tasks.every(task => task.role === "competitor"))).toBe(true);
   });
 });

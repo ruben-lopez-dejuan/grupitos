@@ -10,7 +10,7 @@ import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
-import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
+import { ageOf, competitionCountry, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
@@ -173,7 +173,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   /** PRO mode: person properties, for preference weights (`weight-judge`…). */
   personProperties?: Record<string, Record<string, string>>;
 }): GeneratedAssignment[] {
-  const accepted = [...acceptedPeople(competition), ...extraPeople];
+  const accepted = [...acceptedPeople(competition), ...nonCompetingStaff(competition), ...extraPeople];
   const country = competitionCountry(competition);
   const set = (ids?: string[]) => new Set(ids ?? []);
   const delegates = new Set([...set(people.roles.delegate), ...set(people.roles["trainee-delegate"])]);
@@ -181,6 +181,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   // Volunteers who do not compete come to work: they count as staff.
   const staff = new Set([...set(people.roles.staff), ...extraPeople.map(personKey)]);
   const dataEntry = set(people.roles.dataentry);
+  const noTasks = set(people.roles.notasks);
   const trusted = set(people.trustedIds);
   const delegateDuty = set(people.delegateDutyIds);
   const globalLoad = new Map<string, number>();
@@ -199,7 +200,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const competingStarts = new Map<string, number[]>();
 
   const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0);
-  const normalTasksAllowed = (key: string) => !dataEntry.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
+  const normalTasksAllowed = (key: string) => !dataEntry.has(key) && !noTasks.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
   const othersCount = Math.max(1, accepted.filter(person => normalTasksAllowed(personKey(person)) && !staff.has(personKey(person))).length);
 
   // Build every competitor split first. In PRO mode they are then repaired together, so the

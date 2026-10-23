@@ -389,6 +389,12 @@ export const es = {
     },
   },
   proPeople: {
+    teams: "Equipos → roles",
+    teamsHint: "Convierte los equipos de una propiedad (como «team» de CompScript) en roles de la app. Las sugerencias se pueden cambiar; «Aplicar» añade a esas personas a las listas de roles de arriba sin quitar a nadie.",
+    teamProperty: "Propiedad del equipo",
+    teamNone: "Nada",
+    applyTeams: "Aplicar a los roles",
+    teamsApplied: "Personas añadidas a los roles: {count}.",
     importTitle: "Importar de hoja de cálculo",
     importHint: "Lee el formulario de voluntarios (Google Sheets o CSV) y vuelca sus columnas como propiedades, como ReadSpreadsheet de CompScript.",
     "not-eligible": "{name} tiene «{task}» en G{group}, pero no está en el segmento que puede hacerlo.",
@@ -443,6 +449,7 @@ export const es = {
       staff: "Staff",
       dataentry: "Data entry",
       trusted: "Personal de confianza",
+      notasks: "Sin tareas normales",
     },
     descriptions: {
       delegate: "Marca quién hace tareas de delegado de turno.",
@@ -451,6 +458,7 @@ export const es = {
       staff: "Se eligen antes que nadie para juzgar y hacer de runner, hasta unas dos veces la carga media. Para mezclar se prefieren entre quienes son igual de aptos.",
       dataentry: "No hacen tareas normales. Pueden recibir la tarea de data entry.",
       trusted: "Prioridad para mezclar.",
+      notasks: "No juzgan, ni mezclan ni hacen de runner: registro, streaming, personal médico…",
     },
     roleTags: {
       delegate: "Delegado",
@@ -459,6 +467,7 @@ export const es = {
       staff: "Staff",
       dataentry: "Data entry",
       trusted: "Confianza",
+      notasks: "Sin tareas",
     },
     newcomer: "Nuevo",
     newcomerHelp: "Nuevo competidor: todavía no tiene WCA ID",

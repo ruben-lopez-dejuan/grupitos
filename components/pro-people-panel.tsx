@@ -2,17 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { Hint } from "@/components/hint";
+import { keyOf } from "@/lib/i18n";
 import { SheetImportPanel } from "@/components/sheet-import-panel";
 import { useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
-import { newVolunteerKey, type ProPeople, type Unavailability } from "@/lib/pro/people";
+import type { PeopleSettings } from "@/lib/people";
+import { applyTeamRoles, newVolunteerKey, propertyValues, suggestTeamRole, TEAM_ROLES, type ProPeople, type TeamRole, type Unavailability } from "@/lib/pro/people";
 import { personKey } from "@/lib/rounds";
 
 /** Rows shown before "show all", so typing stays fast in a 400-person table. */
 const PAGE = 80;
 
 /** PRO people: volunteers who do not compete and free-form properties per person. */
-export function ProPeoplePanel({ people, days, value, onChange, onReimport }: {
+export function ProPeoplePanel({ people, days, value, onChange, onReimport, peopleSettings, onPeopleSettingsChange }: {
   /** Accepted competitors and volunteers. */
   people: WcifPerson[];
   /** Competition days, for unavailabilities. */
@@ -20,12 +22,27 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport }: {
   value: ProPeople;
   onChange: (value: ProPeople) => void;
   onReimport: () => void;
+  /** Role lists, so teams can be turned into roles. */
+  peopleSettings: PeopleSettings;
+  onPeopleSettingsChange: (settings: PeopleSettings) => void;
 }) {
   const { t, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [newProperty, setNewProperty] = useState("");
   const [volunteer, setVolunteer] = useState({ name: "", wcaId: "" });
+  const teamProperty = value.teamRoles?.property ?? (value.propertyKeys.find(key => /^(team|equipo)$/i.test(key)) ?? value.propertyKeys[0] ?? "");
+  const teams = teamProperty ? propertyValues(value, teamProperty) : [];
+  const teamRole = (team: string): TeamRole | "none" => value.teamRoles?.property === teamProperty && value.teamRoles.map[team] ? value.teamRoles.map[team] : suggestTeamRole(team);
+  const [teamMessage, setTeamMessage] = useState("");
+  const setTeamRole = (team: string, role: TeamRole | "none") => onChange({ ...value, teamRoles: { property: teamProperty, map: { ...Object.fromEntries(teams.map(([name]) => [name, teamRole(name)])), [team]: role } } });
+  function applyTeams() {
+    const teamRoles = { property: teamProperty, map: Object.fromEntries(teams.map(([name]) => [name, teamRole(name)])) };
+    const result = applyTeamRoles(peopleSettings, value, teamRoles);
+    onPeopleSettingsChange(result.settings);
+    onChange({ ...value, teamRoles });
+    setTeamMessage(t("proPeople.teamsApplied", { count: result.added }));
+  }
   const [absence, setAbsence] = useState({ person: "", kind: "time" as "time" | "competing", day: days[0] ?? "", start: "09:00", end: "13:00", other: "", note: "" });
   const sortedPeople = useMemo(() => [...people].sort((a, b) => a.name.localeCompare(b.name)), [people]);
   const nameOf = (key: string) => people.find(person => personKey(person) === key)?.name ?? key;
@@ -104,6 +121,17 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport }: {
         {volunteerError && <small className="form-error">{volunteerError}</small>}
       </form>
     </div>
+
+    {teams.length > 0 && <>
+      <h3 className="panel-subheading">{t("proPeople.teams")} <Hint align="start" text={t("proPeople.teamsHint")} /></h3>
+      <div className="volunteer-area">
+        <div className="volunteer-form"><span>{t("proPeople.teamProperty")}</span><select value={teamProperty} onChange={event => onChange({ ...value, teamRoles: { property: event.target.value, map: {} } })} aria-label={t("proPeople.teamProperty")}>{value.propertyKeys.map(key => <option key={key} value={key}>{key}</option>)}</select></div>
+        <div className="team-roles">{teams.map(([team, count]) => <label key={team}><span>{team} <small>{count}</small></span>
+          <select value={teamRole(team)} onChange={event => setTeamRole(team, event.target.value as TeamRole | "none")}><option value="none">{t("proPeople.teamNone")}</option>{TEAM_ROLES.map(role => <option key={role} value={role}>{t(keyOf("people.lists", role))}</option>)}</select>
+        </label>)}</div>
+        <div className="volunteer-form"><button className="button secondary" type="button" onClick={applyTeams}>{t("proPeople.applyTeams")}</button>{teamMessage && <small role="status">{teamMessage}</small>}</div>
+      </div>
+    </>}
 
     <h3 className="panel-subheading">{t("proPeople.unavailable")} <span className="count-chip">{value.unavailable.length}</span> <Hint align="start" text={t("proPeople.unavailableHint")} /></h3>
     <div className="volunteer-area">

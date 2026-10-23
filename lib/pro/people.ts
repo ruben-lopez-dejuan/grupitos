@@ -4,6 +4,7 @@
  * (UnavailableBetween, and "while X competes" for parents who come with a child).
  */
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
+import { nonCompetingStaff, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, personKey } from "@/lib/rounds";
 import type { TimeWindow } from "@/lib/pro/schedule";
 
@@ -14,6 +15,11 @@ export type ProVolunteer = { key: string; name: string; wcaId?: string; countryI
 /** A time range, or the times another person competes. */
 export type Unavailability = { id: string; personKey: string; note?: string } & ({ start: string; end: string; whileCompeting?: undefined } | { whileCompeting: string; start?: undefined; end?: undefined });
 
+/** What a team (a property value such as natshelper's `team`) means for the app. */
+export const TEAM_ROLES = ["staff", "dataentry", "notasks"] as const;
+export type TeamRole = typeof TEAM_ROLES[number];
+export type TeamRoles = { property: string; map: Record<string, TeamRole | "none"> };
+
 export type ProPeople = {
   /** Column order of the properties table. */
   propertyKeys: string[];
@@ -21,6 +27,8 @@ export type ProPeople = {
   properties: Record<string, Record<string, string>>;
   volunteers: ProVolunteer[];
   unavailable: Unavailability[];
+  /** Last team-to-role choice, to show it again. */
+  teamRoles?: TeamRoles;
 };
 
 export const EMPTY_PRO_PEOPLE: ProPeople = { propertyKeys: [], properties: {}, volunteers: [], unavailable: [] };
@@ -55,6 +63,7 @@ export function normalizeProPeople(value: unknown): ProPeople {
     properties: record(value.properties) ? value.properties as ProPeople["properties"] : {},
     volunteers: Array.isArray(value.volunteers) ? value.volunteers as ProVolunteer[] : [],
     unavailable: Array.isArray(value.unavailable) ? value.unavailable as Unavailability[] : [],
+    ...(record(value.teamRoles) && typeof value.teamRoles.property === "string" && record(value.teamRoles.map) ? { teamRoles: value.teamRoles as TeamRoles } : {}),
   };
 }
 
@@ -69,9 +78,45 @@ export function newVolunteerKey(volunteers: ProVolunteer[]) {
   return `vol-${index}`;
 }
 
-/** Competitors and volunteers, everyone who can be given something to do. */
+/** Competitors, non-competing staff and volunteers: everyone who can be given something to do. */
 export function everyone(competition: StoredCompetition, people?: ProPeople): WcifPerson[] {
-  return [...acceptedPeople(competition), ...(people?.volunteers ?? []).map(volunteerPerson)];
+  return [...acceptedPeople(competition), ...nonCompetingStaff(competition), ...(people?.volunteers ?? []).map(volunteerPerson)];
+}
+
+const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** A first guess for a team name: volunteers judge and run, data entry enters results, desks and streaming do no normal tasks. */
+export function suggestTeamRole(team: string): TeamRole | "none" {
+  const name = plain(team);
+  if (/data/.test(name)) return "dataentry";
+  if (/voluntari|volunteer|staff|juez|judge/.test(name)) return "staff";
+  if (/registr|stand|stream|medic|acceso|access|check|info|foto|photo|prensa|press/.test(name)) return "notasks";
+  return "none";
+}
+
+/** Distinct values of a property, with how many people have each. */
+export function propertyValues(people: ProPeople, property: string) {
+  const counts = new Map<string, number>();
+  for (const own of Object.values(people.properties)) {
+    const value = own[property]?.trim();
+    if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+/** Adds everyone whose team maps to a role to that role's list; returns the new lists and how many were added. */
+export function applyTeamRoles(settings: PeopleSettings, people: ProPeople, teamRoles: TeamRoles) {
+  const roles = { ...settings.roles };
+  let added = 0;
+  for (const [key, own] of Object.entries(people.properties)) {
+    const role = teamRoles.map[own[teamRoles.property]?.trim() ?? ""];
+    if (!role || role === "none") continue;
+    const list = roles[role] ?? [];
+    if (list.includes(key)) continue;
+    roles[role] = [...list, key];
+    added += 1;
+  }
+  return { settings: { ...settings, roles }, added };
 }
 
 /**

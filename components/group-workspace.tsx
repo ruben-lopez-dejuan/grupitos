@@ -19,7 +19,7 @@ import { keyOf } from "@/lib/i18n";
 import { getCompetition, type StoredCompetition } from "@/lib/competition-store";
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
-import { isDelegate, peopleFromWcif } from "@/lib/people";
+import { isDelegate, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { JOB_ROLES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
 import { staffingOf, type LaneStaffing } from "@/lib/pro/schedule";
@@ -140,6 +140,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   }, [competition, settings, generatedWith, proposal]);
 
   const people = useMemo(() => competition ? acceptedPeople(competition) : [], [competition]);
+  /** People who can hold a role: competitors and staff who do not compete (organizers without a registration…). */
+  const rolePeople = useMemo(() => competition ? [...acceptedPeople(competition), ...nonCompetingStaff(competition)] : [], [competition]);
   const roleLabels = useMemo(() => {
     const labels: Record<string, string[]> = {};
     if (!settings) return labels;
@@ -149,6 +151,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     add(settings.people.roles.organizer, t("people.roleTags.organizer"));
     add(settings.people.roles.staff, t("people.roleTags.staff"));
     add(settings.people.roles.dataentry, t("people.roleTags.dataentry"));
+    add(settings.people.roles.notasks, t("people.roleTags.notasks"));
     add(settings.people.trustedIds, t("people.roleTags.trusted"));
     if (settings.pro?.enabled) add(settings.pro.people?.volunteers.map(volunteer => volunteer.key), t("proPeople.volunteerTag"));
     return labels;
@@ -162,7 +165,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const roundRules = useMemo(() => {
     if (!settings) return {};
     const { people: roles, options, stations, zoneMode } = settings;
-    const noNormalTasks = new Set([...(roles.roles.dataentry ?? []), ...(options.normalTasksForDelegatesAndOrganizers ? [] : [...(roles.roles.delegate ?? []), ...(roles.roles["trainee-delegate"] ?? []), ...(roles.roles.organizer ?? [])])]);
+    const noNormalTasks = new Set([...(roles.roles.dataentry ?? []), ...(roles.roles.notasks ?? []), ...(options.normalTasksForDelegatesAndOrganizers ? [] : [...(roles.roles.delegate ?? []), ...(roles.roles["trainee-delegate"] ?? []), ...(roles.roles.organizer ?? [])])]);
     return Object.fromEntries(effectiveRounds.map(round => {
       const competitors = proposal.filter(item => item.roundId === round.id && item.inRound).length || round.competitors;
       return [round.id, {
@@ -344,8 +347,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           {showMoreOptions && <div className="option-list">{MORE_OPTIONS.map(key => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>}
         </section>}
 
-        {tab === "people" && <><PeoplePanel people={people} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
-          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
+        {tab === "people" && <><PeoplePanel people={rolePeople} settings={settings.people} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
+          {pro && <ProPeoplePanel people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} peopleSettings={settings.people} onPeopleSettingsChange={next => update({ people: next })} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
         </>}
 
         {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={settings.people} proPeople={proPeople} segments={segments} onChange={setSegments} />}

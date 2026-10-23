@@ -11,7 +11,7 @@ import { personKey } from "@/lib/rounds";
 
 type ListId = PersonRole | "trusted";
 
-const ORDER: ListId[] = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "trusted"];
+const ORDER: ListId[] = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "notasks", "trusted"];
 
 export function PeoplePanel({ people, settings, onChange, delegateDuties, showPhotos, onShowPhotosChange }: {
   showPhotos: boolean;

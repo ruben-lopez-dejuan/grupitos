@@ -387,6 +387,12 @@ export const en: Messages = {
     },
   },
   proPeople: {
+    teams: "Teams → roles",
+    teamsHint: "Turns the teams in a property (like CompScript's \"team\") into roles in the app. Suggestions can be changed; \"Apply\" adds those people to the role lists above without removing anyone.",
+    teamProperty: "Team property",
+    teamNone: "Nothing",
+    applyTeams: "Apply to roles",
+    teamsApplied: "People added to roles: {count}.",
     importTitle: "Import from a spreadsheet",
     importHint: "Reads the volunteer form (Google Sheets or CSV) and turns its columns into properties, like CompScript's ReadSpreadsheet.",
     "not-eligible": "{name} has “{task}” in G{group} but is not in the segment allowed to do it.",
@@ -441,6 +447,7 @@ export const en: Messages = {
       staff: "Staff",
       dataentry: "Data entry",
       trusted: "Trusted people",
+      notasks: "No normal tasks",
     },
     descriptions: {
       delegate: "Mark who takes delegate duty.",
@@ -449,6 +456,7 @@ export const en: Messages = {
       staff: "Picked first for judging and running, up to about twice the average load. For scrambling they are preferred among equally suitable people.",
       dataentry: "No normal tasks. They can get the data entry task.",
       trusted: "Priority for scrambling.",
+      notasks: "They do not judge, scramble or run: registration desk, streaming, medical staff…",
     },
     roleTags: {
       delegate: "Delegate",
@@ -457,6 +465,7 @@ export const en: Messages = {
       staff: "Staff",
       dataentry: "Data entry",
       trusted: "Trusted",
+      notasks: "No tasks",
     },
     newcomer: "New",
     newcomerHelp: "Newcomer: no WCA ID yet",
