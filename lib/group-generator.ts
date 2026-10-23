@@ -311,6 +311,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const firstStart = (plan: CompetitorPlan) => Math.min(...(slots?.get(plan.round.id) ?? []).flatMap(slot => slot.windows.map(window => toMinutes(window.start))), Number.MAX_SAFE_INTEGER);
   const staffingOrder = weighted ? [...plans].sort((a, b) => firstStart(a) - firstStart(b)) : plans;
   const outputByRound = new Map<string, GeneratedAssignment[]>();
+  /** Times already covered by a data entry person, across rounds and rooms. */
+  const dataEntryTimes: TimeWindow[] = [];
 
   for (const plan of staffingOrder) {
     const { round, competitors, groups, fixed, seedIndex } = plan;
@@ -480,7 +482,24 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       }
     };
 
-    const dataEntryStep = () => fill("dataentry", () => 1, accepted.filter(person => dataEntry.has(personKey(person))), person => [roundLoad(personKey(person)), load(personKey(person))]);
+    // Data entry types the results of every stage at once: one person per time slot is enough,
+    // given to the first group found at that time (in any round or room).
+    const dataEntryStep = () => {
+      const typists = accepted.filter(person => dataEntry.has(personKey(person)));
+      const byTime = groups.map((_, index) => index + 1).sort((a, b) => (windowsOf(a)[0]?.start ?? "").localeCompare(windowsOf(b)[0]?.start ?? "") || a - b);
+      for (const group of byTime) {
+        if (!groups[group - 1].length) continue;
+        const windows = windowsOf(group);
+        if (windows.length && windows.some(window => dataEntryTimes.some(covered => overlaps(covered, window)))) continue;
+        const available = typists.filter(person => freeIn(personKey(person), group));
+        const pick = best(available, person => [roundLoad(personKey(person)), load(personKey(person))]);
+        if (!pick) continue;
+        const why: Why = { group, role: "dataentry", candidates: available.length, load: load(personKey(pick)), reasons: reasonsFor("dataentry", personKey(pick), group) };
+        assign(pick, group, "dataentry");
+        rowFor(pick).why.push(why);
+        dataEntryTimes.push(...windows);
+      }
+    };
 
     const normalPool = accepted.filter(person => normalTasksAllowed(personKey(person)));
     const poolFor = (role: "runner" | "judge") => allowed(role) ? normalPool.filter(person => allowed(role)!.has(personKey(person))) : normalPool;

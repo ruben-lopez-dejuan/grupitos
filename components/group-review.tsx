@@ -480,7 +480,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
           scrambler: groupLimits(currentRules, group).scramblers,
           ...(currentRules.checkJudges ? { judge: judgesNeeded(groupCounts.competitor, groupLimits(currentRules, group).stations), runner: groupLimits(currentRules, group).runners } : {}),
           ...(currentRules.checkDelegates ? { delegate: 1 } : {}),
-          ...(currentRules.checkDataEntry ? { dataentry: 1 } : {}),
+          ...(currentRules.checkDataEntry && !currentRules.dataEntryCovered?.has(group) ? { dataentry: 1 } : {}),
         };
         const roles = (["scrambler", "judge", "runner", ...extraRoles] as TaskRole[]).filter(role => groupCounts[role] > 0 || needs[role]);
         const summary = [tp("review.groupCompetitors", groupCounts.competitor), ...roles.map(role => needs[role] !== undefined ? t("review.roleCountOf", { role: taskLabel(role), count: groupCounts[role], need: needs[role]! }) : t("review.roleCount", { role: taskLabel(role), count: groupCounts[role] })), ...(groupIssues ?? []).map(issueText)].join("\n");

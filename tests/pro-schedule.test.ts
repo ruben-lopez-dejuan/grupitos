@@ -7,6 +7,7 @@ import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { eventBusyWindows, groupSlots, importSchedule, isoToLocal, minScheduledGroups, setRoundGroups, scheduleProblems, splitBlock, staffingOf, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { initialRounds, personKey } from "@/lib/rounds";
+import { volunteerPerson } from "@/lib/pro/people";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { roundScorecards } from "@/lib/scorecards/scorecards";
 import { groupLimits, validateRound, validateTimes } from "@/lib/validation";
@@ -291,5 +292,24 @@ describe("side room staffing", () => {
     const sideStaff = new Set(assignments.filter(item => item.roundId === "444bf-r1" && item.tasks.some(task => task.role !== "competitor")).map(item => item.personId));
     // The team does not compete in 4BLD, so all of it is free and works there.
     for (const key of team) expect(sideStaff.has(key)).toBe(true);
+  });
+});
+
+describe("data entry per time slot", () => {
+  it("gives one data entry person per time, in the first stage found, and does not ask for more", () => {
+    const competition = demoCompetition("small");
+    const slots = groupSlots(schedule([block("a", "333-r1", 1, "10:00", "11:00", 2), block("b", "333-r1", 2, "10:00", "11:00", 2)]));
+    const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots);
+    const people = peopleFromWcif(competition);
+    // Two typists who do not compete, so both time slots can be covered.
+    const volunteers = [volunteerPerson({ key: "vol-1", name: "Typist 1" }), volunteerPerson({ key: "vol-2", name: "Typist 2" })];
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: { ...people, roles: { ...people.roles, dataentry: ["vol-1", "vol-2"] } }, options: { ...DEFAULT_OPTIONS, assignDataEntry: true }, slots, extraPeople: volunteers });
+    const typing = assignments.filter(item => item.roundId === "333-r1").flatMap(item => item.tasks.filter(task => task.role === "dataentry").map(task => slots.get("333-r1")!.find(slot => slot.group === task.group)!));
+    // Two time slots (10:00 and 10:30), each covered once, in Rojo.
+    expect(typing.map(slot => [slot.number, slot.stageId]).sort()).toEqual([[1, 1], [2, 1]]);
+    const covered = new Set(slots.get("333-r1")!.filter(slot => typing.some(other => other.windows[0].start === slot.windows[0].start)).map(slot => slot.group));
+    const round = rounds.find(item => item.id === "333-r1")!;
+    const rules = { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations: 12, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: true, dataEntryCovered: covered, noNormalTasks: new Set<string>() };
+    expect(validateRound("333-r1", assignments.filter(item => item.roundId === "333-r1"), rules).filter(issue => issue.code === "missing-dataentry")).toEqual([]);
   });
 });

@@ -56,6 +56,8 @@ export type RoundRules = {
   checkJudges: boolean;
   checkDelegates: boolean;
   checkDataEntry: boolean;
+  /** PRO mode: groups whose time is covered by data entry in a parallel group (any room or round). */
+  dataEntryCovered?: Set<number>;
   /** People who should not get judging, scrambling or running (data entry, and delegates/organizers unless allowed). */
   noNormalTasks: Set<string>;
   /** PRO mode: who may do each job, from segments. */
@@ -147,7 +149,7 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       if (counts.runner < limits.runners) add({ severity: "warning", code: "missing-runners", group, params: { group, count: counts.runner, need: limits.runners } });
     }
     if (rules.checkDelegates && counts.delegate === 0) add({ severity: "warning", code: "missing-delegate", group, params: { group } });
-    if (rules.checkDataEntry && counts.dataentry === 0) add({ severity: "warning", code: "missing-dataentry", group, params: { group } });
+    if (rules.checkDataEntry && counts.dataentry === 0 && !rules.dataEntryCovered?.has(group)) add({ severity: "warning", code: "missing-dataentry", group, params: { group } });
   }
 
   return issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0));

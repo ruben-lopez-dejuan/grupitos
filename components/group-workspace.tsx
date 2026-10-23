@@ -166,6 +166,9 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const roundRules = useMemo(() => {
     if (!settings) return {};
     const { people: roles, options, stations, zoneMode } = settings;
+    // PRO: one data entry per time slot covers every group running then.
+    const typingWindows = slots ? proposal.flatMap(item => item.tasks.filter(task => task.role === "dataentry").flatMap(task => slots.get(item.roundId)?.find(slot => slot.group === task.group)?.windows ?? [])) : [];
+    const coveredGroups = (roundId: string) => new Set((slots?.get(roundId) ?? []).filter(slot => slot.windows.some(window => typingWindows.some(typing => typing.start < window.end && window.start < typing.end))).map(slot => slot.group));
     const noNormalTasks = new Set([...(roles.roles.dataentry ?? []), ...(roles.roles.notasks ?? []), ...(options.normalTasksForDelegatesAndOrganizers ? [] : [...(roles.roles.delegate ?? []), ...(roles.roles["trainee-delegate"] ?? []), ...(roles.roles.organizer ?? [])])]);
     return Object.fromEntries(effectiveRounds.map(round => {
       const competitors = proposal.filter(item => item.roundId === round.id && item.inRound).length || round.competitors;
@@ -178,10 +181,11 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         checkJudges: options.assignJudges,
         checkDelegates: options.assignDelegateDuties,
         checkDataEntry: options.assignDataEntry,
+        dataEntryCovered: coveredGroups(round.id),
         noNormalTasks,
       } satisfies RoundRules];
     }));
-  }, [settings, proposal, effectiveRounds]);
+  }, [settings, proposal, effectiveRounds, slots]);
   const handleReviewChange = useCallback((next: GeneratedAssignment[]) => setProposal(next), []);
 
   if (loading) return <main className="workspace-loading"><div /><p>{t("workspace.loading")}</p></main>;
