@@ -478,6 +478,9 @@ export const en: Messages = {
     "444bf": "4x4x4 Blindfolded", "555bf": "5x5x5 Blindfolded", clock: "Clock", minx: "Megaminx", pyram: "Pyraminx", skewb: "Skewb", sq1: "Square-1",
   },
   review: {
+    columnOrder: "Column order",
+    columnsByGroup: "Columns by group",
+    columnsByStage: "Columns by stage",
     roundTabs: "Rounds",
     problems_one: "{count} issue",
     problems_other: "{count} issues",

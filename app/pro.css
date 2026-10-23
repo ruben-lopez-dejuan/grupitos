@@ -250,3 +250,6 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .cell-stages button{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;color:var(--ink);background:color-mix(in srgb,var(--stage) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--stage) 50%,var(--line));border-radius:4px;font-size:12px;font-weight:650;cursor:pointer}
 .cell-stages button i{width:7px;height:7px;background:var(--stage);border-radius:50%}
 .cell-stages button.off{color:var(--muted);background:var(--surface);border-color:var(--line);text-decoration:line-through;opacity:.7}
+
+/* Review: a marked border where a new group number or stage starts */
+.assignment-matrix .block-start{border-left:3px solid var(--muted)!important}

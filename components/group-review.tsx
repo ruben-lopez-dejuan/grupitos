@@ -132,6 +132,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<RowFilter>("all");
   const [sortBy, setSortBy] = useState<RowSort>("seed");
+  /** PRO with several stages: columns in time order (G1 of every stage together) or stage by stage. */
+  const [columnOrder, setColumnOrder] = useState<"group" | "stage">("group");
   const [cardPersonId, setCardPersonId] = useState<string>();
   /** Station being typed into a competitor cell. */
   const [stationEdit, setStationEdit] = useState<{ id: string; group: number; value: string }>();
@@ -193,6 +195,23 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
   // Group totals count the whole round, whatever the filter or search shows.
   const groupCount = Math.max(currentRules.groups, usedGroupCount(roundRows), 1);
   const totals = groupTotals(roundRows, groupCount);
+  const laneOrder = useMemo(() => new Map([...laneByKey.keys()].map((key, index) => [key, index])), [laneByKey]);
+  const slotOf = (group: number) => roundSlots?.find(item => item.group === group);
+  const laneKeyOf = (group: number) => { const slot = slotOf(group); return slot ? targetKey(slot.roomId, slot.stageId) : undefined; };
+  const severalLanes = new Set(roundSlots?.map(slot => targetKey(slot.roomId, slot.stageId))).size > 1;
+  /** Matrix columns (group numbers) in display order. */
+  const columns = (() => {
+    const all = Array.from({ length: groupCount }, (_, index) => index + 1);
+    if (!severalLanes || columnOrder === "group") return all;
+    const position = (group: number) => laneOrder.get(laneKeyOf(group) ?? "") ?? Number.MAX_SAFE_INTEGER;
+    return [...all].sort((a, b) => position(a) - position(b) || a - b);
+  })();
+  // A thick border where a new block starts: a new group number, or a new stage.
+  const startsBlock = (index: number) => {
+    if (!severalLanes || index === 0) return false;
+    const [previous, current] = [columns[index - 1], columns[index]];
+    return columnOrder === "group" ? slotOf(previous)?.number !== slotOf(current)?.number : laneKeyOf(previous) !== laneKeyOf(current);
+  };
   const extraRoles = EXTRA_ROLES.filter(role => totals.some(total => total.counts[role] > 0) || (role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry));
   const selected = useMemo(() => new Set(selection), [selection]);
   const currentRound = rounds.find(round => round.id === roundId);
@@ -217,7 +236,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
     const b = rowIndex.get(to.id) ?? 0;
     const keys: string[] = [];
     for (let row = Math.min(a, b); row <= Math.max(a, b); row += 1) {
-      for (let group = Math.min(from.group, to.group); group <= Math.max(from.group, to.group); group += 1) keys.push(cellKey(visible[row].id, group));
+      const [x, y] = [columns.indexOf(from.group), columns.indexOf(to.group)];
+      for (let position = Math.min(x, y); position <= Math.max(x, y); position += 1) keys.push(cellKey(visible[row].id, columns[position]));
     }
     return keys;
   }
@@ -369,7 +389,7 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
     const row = rowIndex.get(from.id) ?? 0;
     const next = {
       id: visible[key === "arrowup" ? Math.max(0, row - 1) : key === "arrowdown" ? Math.min(visible.length - 1, row + 1) : row].id,
-      group: key === "arrowleft" ? Math.max(1, from.group - 1) : key === "arrowright" ? Math.min(groupCount, from.group + 1) : from.group,
+      group: key === "arrowleft" ? columns[Math.max(0, columns.indexOf(from.group) - 1)] : key === "arrowright" ? columns[Math.min(columns.length - 1, columns.indexOf(from.group) + 1)] : from.group,
     };
     if (event.shiftKey) {
       setCursor(next);
@@ -442,13 +462,15 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t("review.search")} aria-label={t("review.search")} />
         <select value={filter} onChange={event => setFilter(event.target.value as RowFilter)} aria-label={t("review.filter")}>{FILTERS.map(key => <option key={key} value={key}>{t(keyOf("review.filters", key))}</option>)}{segmentFilters.length > 0 && <optgroup label={t("segments.title")}>{segmentFilters.map(segment => <option key={segment.id} value={`segment:${segment.id}`}>{segment.name}</option>)}</optgroup>}</select>
         <select value={sortBy} onChange={event => setSortBy(event.target.value as RowSort)} aria-label={t("review.sort")}>{SORTS.map(key => <option key={key} value={key}>{t(keyOf("review.sorts", key))}</option>)}</select>
+        {severalLanes && <select value={columnOrder} onChange={event => setColumnOrder(event.target.value as "group" | "stage")} aria-label={t("review.columnOrder")}><option value="group">{t("review.columnsByGroup")}</option><option value="stage">{t("review.columnsByStage")}</option></select>}
       </div>
     </div>
     {openSeverity && issues.some(issue => issue.severity === openSeverity) && <ul className="issue-items">{issues.filter(issue => issue.severity === openSeverity).map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{issue.severity === "error" ? t("review.severityError") : t("review.severityWarning")}</span>{issueText(issue)}</button></li>)}</ul>}
 
     <div className="assignment-matrix-wrap" ref={matrixRef}><table className="assignment-matrix" aria-label={t("review.matrix")}><thead>
       <tr><th className="rank-column">#</th><th className="name-column">{t("review.columnPerson")}</th><th>{t("review.columnAge")}</th><th>{t("review.columnSeed")}</th><th>{t("review.columnInRound")}</th><th className="groups-heading" colSpan={groupCount}>{roundSlots ? "" : roomName ?? t("review.area")}</th><th className="tasks-column">{t("review.columnTotals")}</th></tr>
-      <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{totals.map(({ group, counts: groupCounts }) => {
+      <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{columns.map((group, position) => {
+        const groupCounts = totals[group - 1].counts;
         const groupIssues = issueIndex.groups.get(group);
         const severity = worstSeverity(groupIssues);
         const extra = group > currentRules.groups;
@@ -461,7 +483,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         };
         const roles = (["scrambler", "judge", "runner", ...extraRoles] as TaskRole[]).filter(role => groupCounts[role] > 0 || needs[role]);
         const summary = [tp("review.groupCompetitors", groupCounts.competitor), ...roles.map(role => needs[role] !== undefined ? t("review.roleCountOf", { role: taskLabel(role), count: groupCounts[role], need: needs[role]! }) : t("review.roleCount", { role: taskLabel(role), count: groupCounts[role] })), ...(groupIssues ?? []).map(issueText)].join("\n");
-        return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""}`} title={summary}>
+        return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""} ${startsBlock(position) ? "block-start" : ""}`} title={summary}>
           <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group: groupLabel(roundId, group) })}\n${summary}`}>G{roundSlots?.find(item => item.group === group)?.number ?? group}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
           {(() => {
             const slot = roundSlots?.find(item => item.group === group);
@@ -485,8 +507,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         <td>{ageFromBirthdate(item.birthdate)}</td>
         <td>{formatSeed(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label={t("review.competesHere")}>✓</span> : <span className="muted-mark" aria-label={t("review.onlyWorks")}>—</span>}</td>
-        {Array.from({ length: groupCount }, (_, groupIndex) => {
-          const group = groupIndex + 1;
+        {columns.map((group, position) => {
           const cell = { id: item.id, group };
           const key = cellKey(item.id, group);
           const value = cellValue(item, group);
@@ -496,7 +517,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
           const classes = [value || "empty", isCursor && "cursor", selected.has(key) && "in-selection", severity && `issue-${severity}`].filter(Boolean).join(" ");
           const description = `${taskLabel(value)} · G${group}${cellIssues ? `\n${cellIssues.map(issueText).join("\n")}` : ""}`;
           if (stationEdit?.id === item.id && stationEdit.group === group) {
-            return <td key={group} className="matrix-cell"><input
+            return <td key={group} className={`matrix-cell ${startsBlock(position) ? "block-start" : ""}`}><input
               className="station-input"
               autoFocus
               inputMode="numeric"
@@ -511,7 +532,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
               onBlur={() => finishStationEdit(true)}
             /></td>;
           }
-          return <td key={group} className="matrix-cell"><button
+          return <td key={group} className={`matrix-cell ${startsBlock(position) ? "block-start" : ""}`}><button
             data-cell={key}
             className={classes}
             tabIndex={tabbable?.id === item.id && tabbable.group === group ? 0 : -1}
