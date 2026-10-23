@@ -254,8 +254,10 @@ export const en: Messages = {
     stepperRunners: "runners",
   },
   staffing: {
+    note: "Defaults for each room or stage. Scramblers and runners can be changed later for each round in Groups.",
+    auto: "Suggestion: not set yet. Unless you change it, each round uses its own suggestion.",
     title: "Per room and stage",
-    hint: "Stations, scramblers and runners per group in each room or stage. Empty: the general value (stations) or each round's (scramblers and runners). Judges needed follow each stage's stations.",
+    hint: "Stations, scramblers and runners per group in each room or stage. Stations decide how many judges are needed. If you change a round's scramblers or runners in Groups, that round uses its value in all its stages.",
     lane: "Room or stage",
     roundValue: "round",
   },

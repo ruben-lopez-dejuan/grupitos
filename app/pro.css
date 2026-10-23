@@ -274,3 +274,11 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .criterion output.negative{color:var(--error)}
 .criterion output.off{color:var(--muted)}
 @media (max-width:900px){.scoring-criteria{grid-template-columns:1fr}}
+
+/* Staffing per room and stage, in the rounds table's look */
+.staffing-note{margin:-4px 22px 10px}
+.staffing-grid{margin:0 22px 18px;border:1px solid var(--line);border-radius:6px}
+.staffing-grid .round-table-head,.staffing-grid .round-row{grid-template-columns:minmax(200px,1.4fr) 150px 140px 140px;min-width:0}
+.staffing-grid .round-row>div:first-child{display:flex;align-items:center;gap:10px}
+.lane-dot{width:12px;height:12px;flex:none;border-radius:50%}
+.mini-stepper.auto strong{color:var(--muted);font-weight:600}

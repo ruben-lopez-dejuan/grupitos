@@ -22,6 +22,8 @@ export type GenerationRound = {
 
 export type RoundConfig = GenerationRound & {
   label: string;
+  /** PRO: scramblers or runners changed in the Groups tab, which then win over the stages' defaults. */
+  staffSetByHand?: boolean;
   /** Registered people for first rounds, results for later ones, otherwise an estimate from the advancement condition. */
   competitors: number;
   competitorsKnown: boolean;

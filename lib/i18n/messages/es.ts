@@ -256,8 +256,10 @@ export const es = {
     stepperRunners: "runners",
   },
   staffing: {
+    note: "Valores predeterminados de cada sala o escenario. Mezcladores y runners se pueden cambiar después para cada ronda en Grupos.",
+    auto: "Sugerencia: aún no lo has fijado. Si no lo cambias, cada ronda usa su propia sugerencia.",
     title: "Por sala y escenario",
-    hint: "Estaciones, mezcladores y runners por grupo en cada sala o escenario. Vacío: el valor general (estaciones) o el de cada ronda (mezcladores y runners). Los jueces que hacen falta salen de las estaciones de cada escenario.",
+    hint: "Estaciones, mezcladores y runners por grupo en cada sala o escenario. Las estaciones deciden cuántos jueces hacen falta. Si cambias mezcladores o runners de una ronda en Grupos, esa ronda usa su valor en todos sus escenarios.",
     lane: "Sala o escenario",
     roundValue: "ronda",
   },

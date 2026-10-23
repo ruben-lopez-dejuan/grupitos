@@ -25,7 +25,7 @@ import { JOB_ROLES, segmentMembers, type JobEligibility, type JobRole, type Segm
 import { staffingOf, type LaneStaffing } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, personKey, initialRounds, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
@@ -212,7 +212,20 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     const { [lane]: _previous, ...rest } = staffing;
     update({ pro: { ...settings.pro!, enabled: true, staffing: Object.keys(next).length ? { ...rest, [lane]: next } : rest } });
   };
-  const staffingFor = pro && slots ? staffingOf(slots, staffing) : undefined;
+  // Stage values are defaults: a round whose scramblers or runners were changed in Groups keeps its own.
+  const laneStaffing = pro && slots ? staffingOf(slots, staffing) : undefined;
+  /** Groups tab: a round not set by hand shows its stages' default when they all agree on one. */
+  const shownStaff = (round: RoundConfig, field: "scramblers" | "runners") => {
+    if (!laneStaffing || round.staffSetByHand) return round[field];
+    const values = new Set((slots?.get(round.id) ?? []).map(slot => laneStaffing(round.id, slot.group)?.[field]));
+    const [only] = values;
+    return values.size === 1 && only !== undefined ? only : round[field];
+  };
+  const staffingFor = laneStaffing && ((roundId: string, group: number) => {
+    const own = laneStaffing(roundId, group);
+    if (!own || !settings.rounds.find(round => round.id === roundId)?.staffSetByHand) return own;
+    return own.stations === undefined ? undefined : { stations: own.stations };
+  });
   const scoring = settings.pro?.scoring ?? DEFAULT_SCORING;
   const setScoring = (next: ScoringConfig) => update({ pro: { ...settings.pro!, enabled: true, scoring: next } });
   const setJob = (role: JobRole, segmentId: string) => {
@@ -288,13 +301,21 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
             </div>
             {pro && <>
               <h3 className="panel-subheading">{t("staffing.title")} <Hint align="start" text={t("staffing.hint")} /></h3>
-              <table className="staffing-table">
-                <thead><tr><th>{t("staffing.lane")}</th><th>{t("zone.stations")}</th><th><i className="cell-chip mini scrambler" aria-hidden="true">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</th><th><i className="cell-chip mini runner" aria-hidden="true">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</th></tr></thead>
-                <tbody>{scheduleLanes(pro.schedule).map(lane => <tr key={lane.key}>
-                  <th scope="row"><i style={{ background: lane.color }} />{lane.name}{lane.stageId !== undefined && <small>{lane.roomName}</small>}</th>
-                  {(["stations", "scramblers", "runners"] as const).map(field => <td key={field}><input type="number" min={field === "stations" ? 1 : 0} value={staffing[lane.key]?.[field] ?? ""} placeholder={field === "stations" ? String(stations) : t("staffing.roundValue")} aria-label={`${lane.name} · ${field === "stations" ? t("zone.stations") : field === "scramblers" ? t("rounds.columnScramblers") : t("rounds.columnRunners")}`} onChange={event => setStaffing(lane.key, { [field]: event.target.value === "" ? undefined : Math.max(field === "stations" ? 1 : 0, Number(event.target.value)) })} /></td>)}
-                </tr>)}</tbody>
-              </table>
+              <p className="setup-note staffing-note">{t("staffing.note")}</p>
+              <div className="round-table staffing-grid">
+                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span></div>
+                {scheduleLanes(pro.schedule).map(lane => {
+                  const own = staffing[lane.key] ?? {};
+                  const laneStations = own.stations ?? stations;
+                  return <div key={lane.key} className="round-row">
+                    <div><i className="lane-dot" style={{ background: lane.color }} /><div className="round-name"><strong>{lane.name}</strong>{lane.stageId !== undefined && <small>{lane.roomName}</small>}</div></div>
+                    <Stepper label={t("zone.stations")} value={laneStations} min={1} big onChange={value => setStaffing(lane.key, { stations: value })} />
+                    {/* Without a value of its own, each round keeps its suggestion; a click starts from the usual one per five or eight stations. */}
+                    <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={own.scramblers ?? suggestScramblers(laneStations, 1, laneStations)} auto={own.scramblers === undefined} min={0} onChange={value => setStaffing(lane.key, { scramblers: value })} />
+                    <Stepper label={t("rounds.stepperRunners")} variant="runner" value={own.runners ?? suggestRunners(laneStations, 1, laneStations)} auto={own.runners === undefined} min={0} onChange={value => setStaffing(lane.key, { runners: value })} />
+                  </div>;
+                })}
+              </div>
             </>}
             {roomCount > 1 && !pro && <p className="setup-note">{t("zone.rooms", { count: roomCount })}</p>}
           </section>
@@ -358,8 +379,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                           return count ? [<span key={lane.key} title={lane.name}><i style={{ background: lane.color }} />{count}</span>] : [];
                         })}</button></>
                       : <Stepper label={t("rounds.stepperGroups")} value={round.groups} min={1} big disabled={excluded} onChange={groups => updateRound(round.id, { groups })} />}<small>{perGroup}</small></div>
-                    <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={round.scramblers} min={0} disabled={excluded} onChange={scramblers => updateRound(round.id, { scramblers })} />
-                    <Stepper label={t("rounds.stepperRunners")} variant="runner" value={round.runners} min={0} disabled={excluded || !options.assignJudges} onChange={runners => updateRound(round.id, { runners })} />
+                    <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={shownStaff(round, "scramblers")} min={0} disabled={excluded} onChange={scramblers => updateRound(round.id, { scramblers, ...(pro ? { staffSetByHand: true } : {}) })} />
+                    <Stepper label={t("rounds.stepperRunners")} variant="runner" value={shownStaff(round, "runners")} min={0} disabled={excluded || !options.assignJudges} onChange={runners => updateRound(round.id, { runners, ...(pro ? { staffSetByHand: true } : {}) })} />
                     {!canGenerate
                       ? <span className="round-planned" title={t("rounds.plannedHelp")}>{t("rounds.planned")}</span>
                       : excluded
@@ -393,7 +414,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   </main>;
 }
 
-function Stepper({ label, value, min, disabled = false, big = false, variant, onChange }: { label: string; value: number; min: number; disabled?: boolean; big?: boolean; variant?: "scrambler" | "runner"; onChange: (value: number) => void }) {
+/** `auto`: the value is a suggestion nobody has set yet, shown muted. */
+function Stepper({ label, value, min, disabled = false, big = false, auto = false, variant, onChange }: { label: string; value: number; min: number; disabled?: boolean; big?: boolean; auto?: boolean; variant?: "scrambler" | "runner"; onChange: (value: number) => void }) {
   const { t } = useI18n();
-  return <div className={["mini-stepper", big && "big", variant].filter(Boolean).join(" ")}><button disabled={disabled || value <= min} aria-label={t("rounds.remove", { thing: label })} onClick={() => onChange(value - 1)}>−</button><strong aria-label={`${value} ${label}`}>{value}</strong><button disabled={disabled} aria-label={t("rounds.add", { thing: label })} onClick={() => onChange(value + 1)}>+</button></div>;
+  return <div className={["mini-stepper", big && "big", auto && "auto", variant].filter(Boolean).join(" ")} title={auto ? t("staffing.auto") : undefined}><button disabled={disabled || value <= min} aria-label={t("rounds.remove", { thing: label })} onClick={() => onChange(value - 1)}>−</button><strong aria-label={`${value} ${label}`}>{value}</strong><button disabled={disabled} aria-label={t("rounds.add", { thing: label })} onClick={() => onChange(value + 1)}>+</button></div>;
 }
