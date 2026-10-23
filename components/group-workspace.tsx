@@ -10,6 +10,7 @@ import { GroupReview } from "@/components/group-review";
 import { Hint } from "@/components/hint";
 import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
+import { ProTemplatePanel } from "@/components/pro-template-panel";
 import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
 import { ProScoringPanel } from "@/components/pro-scoring-panel";
@@ -26,6 +27,7 @@ import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } f
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
+import { applyTemplate, exportTemplate, type ProTemplate } from "@/lib/pro/template";
 import { resolveStationRules, type StationRuleConfig } from "@/lib/pro/station-rules";
 import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
@@ -247,6 +249,12 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const teamClusters = teamState ? [...new Set(teamState.values.values())].sort().filter(team => !savedAs(team)).map(team => ({ id: teamClusterId(team), name: t("proPeople.teamCluster", { team }), members: new Set([...teamState.values].filter(([, value]) => value === team).map(([key]) => key)) })) : [];
   const peopleInUse = teamState?.people ?? settings.people;
   const sets = settings.pro?.sets ?? [];
+  /** Applies a PRO template over the current setup; the schedule and people's data stay. */
+  const applyProTemplate = (template: ProTemplate) => {
+    const result = applyTemplate(settings, settings.pro?.schedule ?? freshSchedule(), template);
+    setSettings(result.settings);
+    return result.warnings;
+  };
   const setSets = (next: AssignmentSetConfig[]) => updatePro(() => ({ sets: next }));
   const stationRuleList = settings.pro?.stationRules ?? [];
   const setStationRules = (next: StationRuleConfig[]) => updatePro(() => ({ stationRules: next }));
@@ -401,6 +409,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
               <div className="preset-field"><span>{t("zone.entry")}</span><div className="segmented three">{ZONE_MODES.map(mode => <button key={mode} className={zoneMode === mode ? "selected" : ""} title={t(keyOf("zone.modes", `${mode}.help`))} onClick={() => changeZone({ zoneMode: mode })}>{t(keyOf("zone.modes", `${mode}.label`))}</button>)}</div><small>{t(keyOf("zone.modes", `${zoneMode}.help`))}</small></div>
             </div>
             {pro && <>
+              <h3 className="panel-subheading">{t("templates.title")} <Hint align="start" text={t("templates.hint")} /></h3>
+              <ProTemplatePanel onApply={applyProTemplate} onExport={() => exportTemplate(settings, `${competition.shortName ?? competition.name} PRO`)} />
               <h3 className="panel-subheading">{t("staffing.title")} <Hint align="start" text={t("staffing.hint")} /></h3>
               <p className="setup-note staffing-note">{t("staffing.note")}</p>
               <div className="round-table staffing-grid">
@@ -414,7 +424,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                     {/* Without a value of its own, each round keeps its suggestion; a click starts from the usual one per five or eight stations. */}
                     <Stepper label={t("rounds.stepperScramblers")} variant="scrambler" value={own.scramblers ?? suggestScramblers(laneStations, 1, laneStations)} auto={own.scramblers === undefined} min={0} onChange={value => setStaffing(lane.key, { scramblers: value })} />
                     <Stepper label={t("rounds.stepperRunners")} variant="runner" value={own.runners ?? suggestRunners(laneStations, 1, laneStations)} auto={own.runners === undefined} min={0} onChange={value => setStaffing(lane.key, { runners: value })} />
-                    <select className="lane-team" value={own.team ?? ""} onChange={event => setStaffing(lane.key, { team: event.target.value || undefined })} aria-label={`${lane.name} · ${t("staffing.team")}`}><option value="">{t("staffing.noTeam")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>
+                    <select className="lane-team" value={own.team ?? ""} onChange={event => setStaffing(lane.key, { team: event.target.value || undefined })} aria-label={`${lane.name} · ${t("staffing.team")}`}><option value="">{t("staffing.noTeam")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}{teamClusters.length > 0 && <optgroup label={t("proPeople.teams")}>{teamClusters.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</optgroup>}</select>
                   </div>;
                 })}
               </div>
