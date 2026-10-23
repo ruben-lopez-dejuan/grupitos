@@ -202,3 +202,19 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .segment-members span{padding:2px 7px;background:var(--surface-subtle);border-radius:4px;font-size:13px}
 .segment-members em{color:var(--muted);font-size:13px}
 @media (max-width:800px){.segments-layout{grid-template-columns:1fr}}
+
+/* Spreadsheet import */
+.sheet-import{display:grid;gap:10px;margin:0 22px 14px;padding-bottom:12px;border:1px solid var(--line);border-radius:6px}
+.sheet-import .round-subtabs{padding:4px 10px 0}
+.sheet-source,.sheet-mapping{display:grid;gap:10px;padding:0 12px}
+.sheet-status{margin:0;padding:0 12px;color:var(--muted);font-size:14px}
+.sheet-source .sheet-status,.sheet-mapping .sheet-status{padding:0}
+.sheet-import .wide{flex:1;min-width:260px}
+.sheet-import textarea{width:100%;padding:8px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:13px/1.4 ui-monospace,monospace;resize:vertical}
+.sheet-import select{padding:7px 9px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;font:inherit;font-size:14px}
+.sheet-import .volunteer-form{font-size:14px}
+.file-button{position:relative;overflow:hidden;cursor:pointer}
+.file-button input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.sheet-columns{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:14px}
+.sheet-columns strong{display:inline-flex;align-items:center;gap:4px;width:100%}
+.sheet-columns label{display:inline-flex;align-items:center;gap:5px}

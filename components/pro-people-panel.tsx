@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Hint } from "@/components/hint";
+import { SheetImportPanel } from "@/components/sheet-import-panel";
 import { useI18n } from "@/components/i18n";
 import type { WcifPerson } from "@/lib/competition-store";
 import { newVolunteerKey, type ProPeople, type Unavailability } from "@/lib/pro/people";
@@ -124,6 +125,9 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport }: {
         <button className="button secondary" type="submit" disabled={!absenceReady}>{t("people.add")}</button>
       </form>
     </div>
+
+    <h3 className="panel-subheading">{t("proPeople.importTitle")} <Hint align="start" text={t("proPeople.importHint")} /></h3>
+    <SheetImportPanel people={people} value={value} onApply={onChange} />
 
     <h3 className="panel-subheading">{t("proPeople.properties")} <Hint align="start" text={t("proPeople.propertiesHint")} /></h3>
     <div className="property-toolbar">
