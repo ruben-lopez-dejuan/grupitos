@@ -157,23 +157,32 @@ describe("a maximum per group on some stages", () => {
   });
 });
 
-describe("a set keeps its count per group", () => {
-  it("when the overlap repair moves people: it swaps within the same set only", () => {
-    const [a, b, c, d] = bestFirst;
-    const window = (start: string, end: string) => ({ start: `2026-02-21T${start}`, end: `2026-02-21T${end}` });
-    const slots = new Map([
-      ["333-r1", [{ group: 1, roomId: 1, number: 1, windows: [window("10:00", "10:30")] }, { group: 2, roomId: 1, number: 2, windows: [window("10:30", "11:00")] }]],
-      ["222-r1", [{ group: 1, roomId: 1, number: 1, windows: [window("10:00", "10:30")] }]],
-    ]);
-    const plan = (roundId: string, groups: typeof bestFirst[], setOf?: Map<string, string>) => ({
-      round: { id: roundId, eventId: roundId.split("-")[0], roundNumber: 1, groups: groups.length, scramblers: 0, runners: 0, enabled: true },
-      competitors: groups.flat(), groups, fixed: false, seedIndex: new Map(groups.flat().map((person, index) => [personKey(person), index])), preferredGroup: new Map(), setOf,
-      allowed: setOf && new Map([...setOf.keys()].map(key => [key, new Set([1, 2])])),
-    });
-    // a and b are featured in G1; c and d come from another set in G2; a also competes in 222 G1 at 10:00.
+describe("the overlap repair and assignment sets", () => {
+  const [a, b, c, d, e] = bestFirst;
+  const window = (start: string, end: string) => ({ start: `2026-02-21T${start}`, end: `2026-02-21T${end}` });
+  const slots = new Map([
+    ["333-r1", [{ group: 1, roomId: 1, number: 1, windows: [window("10:00", "10:30")] }, { group: 2, roomId: 1, number: 2, windows: [window("10:30", "11:00")] }]],
+    ["222-r1", [{ group: 1, roomId: 1, number: 1, windows: [window("10:00", "10:30")] }]],
+  ]);
+  const plan = (roundId: string, groups: typeof bestFirst[], setOf?: Map<string, string>) => ({
+    round: { id: roundId, eventId: roundId.split("-")[0], roundNumber: 1, groups: groups.length, scramblers: 0, runners: 0, enabled: true },
+    competitors: groups.flat(), groups, fixed: false, seedIndex: new Map(groups.flat().map((person, index) => [personKey(person), index])), preferredGroup: new Map(), setOf,
+    allowed: setOf && new Map([...setOf.keys()].map(key => [key, new Set([1, 2])])),
+  });
+
+  it("swaps within the same set when it can, so the set keeps its count per group", () => {
+    // a and b are featured in G1; G2 has c (top) and e (featured); a also competes in 222 G1 at 10:00.
+    const setOf = new Map([[personKey(a), "featured"], [personKey(b), "featured"], [personKey(c), "top"], [personKey(e), "featured"]]);
+    const plans = [plan("333-r1", [[a, b], [c, e]], setOf), plan("222-r1", [[a]])];
+    resolveCompetitorOverlaps(plans as never, slots);
+    expect(keys(plans[0].groups[0]).sort()).toEqual(keys([e, b]).sort());
+  });
+
+  it("fixes a real clash across sets when nothing else can", () => {
+    // Only people of another set (c, d) can take a's place: the clash wins over the set's count.
     const setOf = new Map([[personKey(a), "featured"], [personKey(b), "featured"], [personKey(c), "top"], [personKey(d), "top"]]);
     const plans = [plan("333-r1", [[a, b], [c, d]], setOf), plan("222-r1", [[a]])];
     resolveCompetitorOverlaps(plans as never, slots);
-    expect(keys(plans[0].groups[0]).sort()).toEqual(keys([a, b]).sort());
+    expect(keys(plans[0].groups[1])).toContain(keys([a])[0]);
   });
 });

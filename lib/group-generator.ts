@@ -137,7 +137,12 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
   const flexibility = (byPerson: Map<string, Placement[]>, placement: Placement) => placement.plan.groups.reduce((count, _, index) => count + (cost(byPerson, placement.person, placement.planIndex, index + 1) === 0 ? 1 : 0), 0);
   const moveCost = (plan: CompetitorPlan, person: WcifPerson, group: number) => Math.abs((plan.preferredGroup.get(personKey(person)) ?? group) - group);
 
-  const tryRelocate = (byPerson: Map<string, Placement[]>, placement: Placement) => {
+  /**
+   * Moves someone to a group with less overlap. `strict`: people placed by a set only swap with
+   * someone of the same set, so every set keeps its count per group; when that cannot fix a real
+   * clash, the clash wins and any swap that lowers the overlap is allowed.
+   */
+  const tryRelocate = (byPerson: Map<string, Placement[]>, placement: Placement, strict: boolean) => {
     const { plan, planIndex, group: fromGroup, person } = placement;
     const source = plan.groups[fromGroup - 1];
     const sourceIndex = source.findIndex(candidate => personKey(candidate) === personKey(person));
@@ -151,8 +156,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       const nextSizes = plan.groups.map((members, index) => members.length + (index === fromGroup - 1 ? -1 : index === targetGroup - 1 ? 1 : 0));
       // A move keeps groups even, or within their target sizes when stages have a maximum.
       const fits = plan.targets ? nextSizes[targetGroup - 1] <= plan.targets[targetGroup - 1] : Math.max(...nextSizes) - Math.min(...nextSizes) <= 1;
-      // People placed by a set only swap, so their set keeps its count in each group.
-      if (fits && !plan.setOf?.has(personKey(person))) {
+      if (fits && (!strict || !plan.setOf?.has(personKey(person)))) {
         source.splice(sourceIndex, 1);
         target.push(person);
         return true;
@@ -165,7 +169,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
       for (const swapper of swappers) {
         // The swapper must not end up worse off, so the total overlap still goes down.
         if (cost(byPerson, swapper, planIndex, fromGroup) > cost(byPerson, swapper, planIndex, targetGroup)) continue;
-        if (!allowedIn(plan, swapper, fromGroup) || !sameSet(plan, person, swapper)) continue;
+        if (!allowedIn(plan, swapper, fromGroup) || (strict && !sameSet(plan, person, swapper))) continue;
         const targetIndex = target.findIndex(candidate => personKey(candidate) === personKey(swapper));
         source[sourceIndex] = swapper;
         target[targetIndex] = person;
@@ -176,22 +180,29 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
   };
 
   /** Placements of room-team members that overlap their room's working times (outside its own rounds). */
-  const reservedClashes = (byPerson: Map<string, Placement[]>) => [...(reserved?.keys() ?? [])].flatMap(key => (byPerson.get(key) ?? []).filter(placement => {
+  const reservedClashes = (byPerson: Map<string, Placement[]>) => [...(reserved?.keys() ?? [])].flatMap(key => (byPerson.get(key) ?? []).flatMap(placement => {
     const slot = slotOf(placement);
-    return !!slot && reserved!.get(key)!.some(({ roundId, window, competing }) => roundId !== placement.plan.round.id && overlapMinutes(slot, { windows: [window] }) > (competing ? COMPETING_OVERLAP_TOLERANCE : 0));
-  }).map(placement => [placement]));
+    const hits = slot ? reserved!.get(key)!.filter(({ roundId, window, competing }) => roundId !== placement.plan.round.id && overlapMinutes(slot, { windows: [window] }) > (competing ? COMPETING_OVERLAP_TOLERANCE : 0)) : [];
+    // Fixed tasks (weight 1) are real clashes; a room team's time is only a preference.
+    return hits.length ? [{ choices: [placement], hard: hits.some(hit => (hit.weight ?? 0.1) >= 1) }] : [];
+  }));
 
   const limit = Math.max(1, plans.reduce((sum, plan) => sum + plan.competitors.length, 0) * 4);
   for (let iteration = 0; iteration < limit; iteration += 1) {
     const byPerson = placements();
     const conflicts = clashes(byPerson);
     // Competing twice first; then keeping room teams free, when a move makes nobody worse off.
-    const candidates: Placement[][] = [...conflicts, ...reservedClashes(byPerson)];
+    const candidates = [...conflicts.map(conflict => ({ choices: conflict as Placement[], hard: true })), ...reservedClashes(byPerson)];
     if (!candidates.length) return;
     let repaired = false;
-    for (const conflict of candidates) {
-      const choices = [...conflict].sort((a, b) => flexibility(byPerson, b) - flexibility(byPerson, a) || b.plan.groups.length - a.plan.groups.length || a.planIndex - b.planIndex);
-      if (choices.some(choice => tryRelocate(byPerson, choice))) { repaired = true; break; }
+    // First within each set; then, for real clashes only, across sets: a working schedule comes first.
+    for (const strict of [true, false]) {
+      for (const { choices, hard } of candidates) {
+        if (!strict && !hard) continue;
+        const ordered = [...choices].sort((a, b) => flexibility(byPerson, b) - flexibility(byPerson, a) || b.plan.groups.length - a.plan.groups.length || a.planIndex - b.planIndex);
+        if (ordered.some(choice => tryRelocate(byPerson, choice, strict))) { repaired = true; break; }
+      }
+      if (repaired) break;
     }
     if (!repaired) return;
   }
