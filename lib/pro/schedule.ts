@@ -4,6 +4,7 @@
  */
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
 import type { ProPeople } from "@/lib/pro/people";
+import type { ScoringConfig } from "@/lib/pro/scoring";
 import type { JobEligibility, Segment } from "@/lib/pro/segments";
 
 export type LocalTime = string;
@@ -38,7 +39,7 @@ export type ProSchedule = {
 /** Per room or stage (lane key): stations and staff per group; empty means the round's value. */
 export type LaneStaffing = { stations?: number; scramblers?: number; runners?: number };
 
-export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing> };
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**

@@ -10,6 +10,7 @@ import { PeoplePanel } from "@/components/people-panel";
 import { PrintingPanel } from "@/components/printing-panel";
 import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
+import { ProScoringPanel } from "@/components/pro-scoring-panel";
 import { ProSegmentsPanel } from "@/components/pro-segments-panel";
 import { SortingRuleIcon } from "@/components/rule-icons";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,6 +23,7 @@ import { isDelegate, peopleFromWcif } from "@/lib/people";
 import { EMPTY_PRO_PEOPLE, everyone, importPersonProperties, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { JOB_ROLES, segmentMembers, type JobEligibility, type JobRole, type Segment } from "@/lib/pro/segments";
 import { staffingOf, type LaneStaffing } from "@/lib/pro/schedule";
+import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, resuggestRounds, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
@@ -211,6 +213,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     update({ pro: { ...settings.pro!, enabled: true, staffing: Object.keys(next).length ? { ...rest, [lane]: next } : rest } });
   };
   const staffingFor = pro && slots ? staffingOf(slots, staffing) : undefined;
+  const scoring = settings.pro?.scoring ?? DEFAULT_SCORING;
+  const setScoring = (next: ScoringConfig) => update({ pro: { ...settings.pro!, enabled: true, scoring: next } });
   const setJob = (role: JobRole, segmentId: string) => {
     const { [role]: _previous, ...rest } = jobs;
     update({ pro: { ...settings.pro!, enabled: true, jobs: segmentId ? { ...rest, [role]: segmentId } : rest } });
@@ -245,7 +249,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor }));
+    setProposal(generateAssignments({ competition, rounds: activeRounds, stations, zoneMode, people: settings.people, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? proPeople.unavailable : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined }));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -311,6 +315,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
               {eligibleRange(role) && <small>{eligibleRange(role)![0] === eligibleRange(role)![1] ? tp("segments.members", eligibleRange(role)![0]) : t("jobs.range", { min: eligibleRange(role)![0], max: eligibleRange(role)![1] })}</small>}
             </label>)}</div>
             {!segments.length && <p className="setup-note">{t("jobs.noSegments")}</p>}
+            <h3 className="panel-subheading">{t("scoring.title")} <Hint align="start" text={t("scoring.hint")} /></h3>
+            <ProScoringPanel value={scoring} onChange={setScoring} />
           </>}
           {delegatesWithoutDuties && <p className="setup-note warning-note">{t("rules.noDelegateDuties")}</p>}
           <button className="plain more-toggle" type="button" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions(value => !value)}>{showMoreOptions ? t("rules.lessOptions") : t("rules.moreOptions")}</button>

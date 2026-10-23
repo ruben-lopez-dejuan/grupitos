@@ -7,6 +7,8 @@
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type PickReason, type Task, type TaskRole, type Why } from "@/lib/assignments";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
+import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
+import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, isNewcomer, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, bestAverageAndSingle, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
@@ -147,7 +149,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {} }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -166,6 +168,10 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   eligible?: Partial<Record<"judge" | "scrambler" | "runner", Map<string, Set<string>>>>;
   /** PRO mode: stations and staff per group where a room or stage overrides the round's values. */
   staffing?: (roundId: string, group: number) => { stations?: number; scramblers?: number; runners?: number } | undefined;
+  /** PRO mode: weighted criteria; scramblers, runners and judges are then chosen per group by an integer program. */
+  scoring?: ScoringConfig;
+  /** PRO mode: person properties, for preference weights (`weight-judge`…). */
+  personProperties?: Record<string, Record<string, string>>;
 }): GeneratedAssignment[] {
   const accepted = [...acceptedPeople(competition), ...extraPeople];
   const country = competitionCountry(competition);
@@ -186,6 +192,11 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const output: GeneratedAssignment[] = [];
   /** PRO mode: when each person is already competing or working, across rounds. */
   const busyTimes = new Map<string, TimeWindow[]>();
+  const weighted = !!(scoring?.enabled && slots);
+  /** Weighted engine: staff tasks given so far, in minutes since 1970 (for streaks and hours per day). */
+  const staffLog = new Map<string, Array<{ start: number; end: number; role: TaskRole }>>();
+  /** Start minutes of the groups each person competes in. */
+  const competingStarts = new Map<string, number[]>();
 
   const busyRoles = (key: string) => (delegates.has(key) ? 1 : 0) + (organizers.has(key) ? 1 : 0) + (dataEntry.has(key) ? 1 : 0);
   const normalTasksAllowed = (key: string) => !dataEntry.has(key) && (options.normalTasksForDelegatesAndOrganizers || (!delegates.has(key) && !organizers.has(key)));
@@ -223,11 +234,20 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const windows = slots.get(plan.round.id)?.find(slot => slot.group === groupIndex + 1)?.windows ?? [];
       for (const person of members) competing.set(personKey(person), [...(competing.get(personKey(person)) ?? []), ...windows]);
     });
+    for (const [key, windows] of competing) competingStarts.set(key, windows.map(window => toMinutes(window.start)));
     for (const [key, windows] of unavailableWindows(unavailable, other => competing.get(other) ?? [])) busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
   }
 
-  for (const plan of plans) {
+  // The weighted engine counts hours and streaks, so it staffs rounds in time order; the output
+  // keeps the rounds' order.
+  const firstStart = (plan: CompetitorPlan) => Math.min(...(slots?.get(plan.round.id) ?? []).flatMap(slot => slot.windows.map(window => toMinutes(window.start))), Number.MAX_SAFE_INTEGER);
+  const staffingOrder = weighted ? [...plans].sort((a, b) => firstStart(a) - firstStart(b)) : plans;
+  const outputByRound = new Map<string, GeneratedAssignment[]>();
+
+  for (const plan of staffingOrder) {
     const { round, competitors, groups, fixed, seedIndex } = plan;
+    const roundOutput: GeneratedAssignment[] = [];
+    outputByRound.set(round.id, roundOutput);
 
     const roundSlots = slots?.get(round.id);
     const windowsOf = (group: number) => roundSlots?.find(slot => slot.group === group)?.windows ?? [];
@@ -270,6 +290,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const row = rowFor(person);
       row.tasks = sortTasks([...row.tasks, { group, role }]);
       markBusy(row.key, group);
+      const window = windowsOf(group)[0];
+      if (window) staffLog.set(row.key, [...(staffLog.get(row.key) ?? []), { start: toMinutes(window.start), end: toMinutes(window.end), role }]);
       globalLoad.set(row.key, load(row.key) + 1);
       if (!staff.has(row.key) && (role === "judge" || role === "scrambler" || role === "runner")) othersTotalLoad += 1;
       eventLoad.set(`${row.key}|${round.eventId}`, loadInEvent(row.key) + 1);
@@ -321,7 +343,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key)) return false;
       return !strictScramblers || trusted.has(key) || (hasResult(person) && (seedIndex.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
-    fill("scrambler", group => staffing?.(round.id, group)?.scramblers ?? round.scramblers, scramblerPool, (person, group) => {
+    const scramblersNeeded = (group: number) => staffing?.(round.id, group)?.scramblers ?? round.scramblers;
+    const runnersNeeded = (group: number) => staffing?.(round.id, group)?.runners ?? round.runners;
+    if (!weighted) fill("scrambler", scramblersNeeded, scramblerPool, (person, group) => {
       const key = personKey(person);
       // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
       if (strictScramblers) return [roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
@@ -352,8 +376,84 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       fill("dataentry", () => 1, accepted.filter(person => dataEntry.has(personKey(person))), person => [roundLoad(personKey(person)), load(personKey(person))]);
     }
 
-    if (options.assignJudges) {
-      const normalPool = accepted.filter(person => normalTasksAllowed(personKey(person)));
+    const normalPool = accepted.filter(person => normalTasksAllowed(personKey(person)));
+    const poolFor = (role: "runner" | "judge") => allowed(role) ? normalPool.filter(person => allowed(role)!.has(personKey(person))) : normalPool;
+
+    if (weighted) {
+      // Weighted engine: every group of the round, in time order, gets its scramblers, runners and
+      // judges together from an integer program over the people free and allowed for each job.
+      const scramblerKeys = new Set(scramblerPool.map(personKey));
+      const startOf = (group: number) => toMinutes(windowsOf(group)[0]?.start ?? "1970-01-01T00:00");
+      const endOf = (group: number) => toMinutes(windowsOf(group)[0]?.end ?? "1970-01-01T00:00");
+      const streak = (key: string, start: number, sameRole?: TaskRole) => {
+        const log = staffLog.get(key) ?? [];
+        let minutes = 0;
+        let cursor = start;
+        for (;;) {
+          const previous = log.find(entry => Math.abs(entry.end - cursor) <= 1 && (!sameRole || entry.role === sameRole));
+          if (!previous) return minutes;
+          minutes += previous.end - previous.start;
+          cursor = previous.start;
+        }
+      };
+      const factsFor = (person: WcifPerson, group: number, job: TaskRole): ScoringFacts => {
+        const key = personKey(person);
+        const [start, end] = [startOf(group), endOf(group)];
+        const day = Math.floor(start / 1440);
+        const preference = Number(personProperties[key]?.[`weight-${job}`]);
+        return {
+          load: load(key),
+          hoursToday: (staffLog.get(key) ?? []).filter(entry => Math.floor(entry.start / 1440) === day && entry.end <= start).reduce((sum, entry) => sum + (entry.end - entry.start) / 60, 0),
+          sameJobStreak: streak(key, start, job),
+          staffStreak: streak(key, start) + (end - start),
+          competesRightAfter: (competingStarts.get(key) ?? []).some(other => other >= end && other - end <= 10),
+          competesInEvent: registeredForEvent(person) && !delegates.has(key),
+          canScramble: scramblerKeys.has(key),
+          isStaff: staff.has(key),
+          isTrusted: trusted.has(key),
+          speed: hasResult(person) && seedIndex.has(key) ? 1 - seedIndex.get(key)! / Math.max(1, competitors.length) : 0,
+          preference: Number.isFinite(preference) ? preference : 0,
+          youngerThan10: !!youngerThan10(person),
+        };
+      };
+      // The usual options stay as near-hard rules.
+      const penalty = (person: WcifPerson, job: TaskRole) => {
+        const key = personKey(person);
+        let value = -20 * busyRoles(key);
+        if (options.noTasksForNewcomers && isNewcomer(person)) value -= 5000;
+        if (options.tasksForOwnEventsOnly && !registeredForEvent(person)) value -= 5000;
+        if (job === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country) value -= 5000;
+        return value;
+      };
+      const groupOrder = groups.map((_, index) => index + 1).sort((a, b) => startOf(a) - startOf(b) || a - b);
+      for (const group of groupOrder) {
+        const size = groups[group - 1].length;
+        if (!size) continue;
+        const needs: Partial<Record<TaskRole, number>> = { scrambler: scramblersNeeded(group), ...(options.assignJudges ? { runner: runnersNeeded(group), judge: judgesNeeded(size, stationsIn(group)) } : {}) };
+        const candidates: Array<IlpCandidate & { person: WcifPerson; breakdown: Partial<Record<string, number>> }> = [];
+        const counts: Partial<Record<TaskRole, number>> = {};
+        for (const [job, need] of Object.entries(needs) as Array<[TaskRole, number]>) {
+          if (!need) continue;
+          const pool = (job === "scrambler" ? scramblerPool : poolFor(job as "runner" | "judge")).filter(person => freeIn(personKey(person), group));
+          counts[job] = pool.length;
+          const scored = pool.map(person => {
+            const breakdown = scoreBreakdown(factsFor(person, group, job), job, scoring!.weights);
+            const score = Object.values(breakdown).reduce((sum, value) => sum + (value ?? 0), 0) + penalty(person, job);
+            return { key: personKey(person), job, score, person, breakdown };
+          }).sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+          // The best few per seat keep the program small without changing its answer in practice.
+          candidates.push(...scored.slice(0, Math.max(need * 6, 40)));
+        }
+        for (const [key, job] of solveGroupStaff(needs, candidates)) {
+          const chosen = candidates.find(candidate => candidate.key === key && candidate.job === job)!;
+          const why: Why = { group, role: job, candidates: counts[job] ?? 0, load: load(key), reasons: reasonsFor(job, key, group), score: Math.round(chosen.score * 10) / 10, breakdown: chosen.breakdown };
+          assign(chosen.person, group, job);
+          rowFor(chosen.person).why.push(why);
+        }
+      }
+    }
+
+    if (options.assignJudges && !weighted) {
       const staffPreferred = (key: string) => staff.has(key) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
       const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
         const key = personKey(person);
@@ -372,14 +472,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           beforeOwn(key, group),
           role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
       };
-      const poolFor = (role: "runner" | "judge") => allowed(role) ? normalPool.filter(person => allowed(role)!.has(personKey(person))) : normalPool;
-      fill("runner", group => staffing?.(round.id, group)?.runners ?? round.runners, poolFor("runner"), othersKey("runner"));
+      fill("runner", runnersNeeded, poolFor("runner"), othersKey("runner"));
       fill("judge", (group, size) => judgesNeeded(size, stationsIn(group)), poolFor("judge"), othersKey("judge"));
     }
 
     const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));
     for (const row of ordered) {
-      output.push({
+      roundOutput.push({
         id: `${round.id}:${row.key}`,
         roundId: round.id,
         eventId: round.eventId,
@@ -396,6 +495,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     }
   }
 
+  for (const plan of plans) output.push(...(outputByRound.get(plan.round.id) ?? []));
   return output;
 }
 

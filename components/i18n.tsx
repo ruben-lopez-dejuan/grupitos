@@ -64,7 +64,14 @@ export function useIssueText(groupLabel?: (roundId: string, group: number) => st
 /** "Why this person?" for a generated duty, in the current language. */
 export function useWhyText() {
   const { t } = useI18n();
-  return useCallback((why: Why) => [t("why.picked", { count: why.candidates, load: why.load }), ...why.reasons.map(reason => t(keyOf("why.reasons", reason)))].join(" · "), [t]);
+  return useCallback((why: Why) => {
+    const parts = [t("why.picked", { count: why.candidates, load: why.load }), ...why.reasons.map(reason => t(keyOf("why.reasons", reason)))];
+    if (why.score !== undefined) {
+      const top = Object.entries(why.breakdown ?? {}).filter((entry): entry is [string, number] => typeof entry[1] === "number").sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 4);
+      parts.push(`${t("why.score", { score: why.score })}${top.length ? `: ${top.map(([criterion, value]) => `${t(keyOf("scoring.criteria", `${criterion}.label`))} ${value > 0 ? "+" : ""}${value}`).join(", ")}` : ""}`);
+    }
+    return parts.join(" · ");
+  }, [t]);
 }
 
 /** "3x3x3 Cube · Round 2" from "333-r2". */

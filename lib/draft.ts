@@ -2,6 +2,7 @@ import { normalizeAssignments, type GeneratedAssignment } from "@/lib/assignment
 import type { AssignmentOptions } from "@/lib/group-generator";
 import type { PeopleSettings } from "@/lib/people";
 import { normalizeProPeople } from "@/lib/pro/people";
+import { normalizeScoring } from "@/lib/pro/scoring";
 import { normalizeJobs, normalizeSegments } from "@/lib/pro/segments";
 import { normalizeProSchedule, type ProConfig } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
@@ -47,6 +48,8 @@ export function generationSignature(settings: WorkspaceSettings) {
       // Segment rules decide who may do each job, so they shape the proposal too.
       jobs: settings.pro.jobs,
       staffing: settings.pro.staffing,
+      scoring: settings.pro.scoring?.enabled ? settings.pro.scoring : undefined,
+      preferences: settings.pro.scoring?.enabled && settings.pro.scoring.weights.preferences ? settings.pro.people?.properties : undefined,
       segments: settings.pro.jobs && Object.keys(settings.pro.jobs).length ? settings.pro.segments : undefined,
       properties: settings.pro.jobs && Object.keys(settings.pro.jobs).length ? settings.pro.people?.properties : undefined,
     } : undefined,
@@ -66,7 +69,7 @@ export function parseDraft(raw: string | null): Draft | undefined {
       const draft = data as { version?: number; assignments?: unknown[] };
       if (draft.version === 3) {
         const current = data as Draft;
-        const settings = current.settings?.pro ? { ...current.settings, pro: { ...current.settings.pro, schedule: normalizeProSchedule(current.settings.pro.schedule), ...(current.settings.pro.people ? { people: normalizeProPeople(current.settings.pro.people) } : {}), segments: normalizeSegments(current.settings.pro.segments), jobs: normalizeJobs(current.settings.pro.jobs) } } : current.settings;
+        const settings = current.settings?.pro ? { ...current.settings, pro: { ...current.settings.pro, schedule: normalizeProSchedule(current.settings.pro.schedule), ...(current.settings.pro.people ? { people: normalizeProPeople(current.settings.pro.people) } : {}), segments: normalizeSegments(current.settings.pro.segments), jobs: normalizeJobs(current.settings.pro.jobs), scoring: normalizeScoring(current.settings.pro.scoring) } } : current.settings;
         return { ...current, settings, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };
       }
       if (draft.version === 2) return { version: 3, assignments: normalizeAssignments((draft.assignments ?? []) as never[]) };

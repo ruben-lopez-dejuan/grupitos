@@ -17,7 +17,18 @@ export function wcifAssignmentCode(role: TaskRole) {
 /** What made the generator pick someone for a task, shown as "why this person?". */
 export const PICK_REASONS = ["staff", "volunteer", "trusted", "segment", "fastHalf", "delegateDuty", "dataEntry", "notInRound", "beforeOwn"] as const;
 export type PickReason = typeof PICK_REASONS[number];
-export type Why = { group: number; role: TaskRole; /** People free and allowed at that moment. */ candidates: number; /** Tasks the person had before this one. */ load: number; reasons: PickReason[] };
+export type Why = {
+  group: number;
+  role: TaskRole;
+  /** People free and allowed at that moment. */
+  candidates: number;
+  /** Tasks the person had before this one. */
+  load: number;
+  reasons: PickReason[];
+  /** Weighted engine: total score and each criterion's contribution (lib/pro/scoring.ts). */
+  score?: number;
+  breakdown?: Partial<Record<string, number>>;
+};
 
 export type GeneratedAssignment = {
   id: string;
