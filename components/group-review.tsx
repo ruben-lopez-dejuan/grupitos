@@ -10,6 +10,7 @@ import { keyOf } from "@/lib/i18n";
 import { judgesNeeded } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
 import { clockOf, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
+import { formatResult } from "@/lib/results";
 import { countBySeverity, groupLimits, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
 
 type Tool = CellValue | "select";
@@ -60,15 +61,6 @@ function ageFromBirthdate(birthdate?: string) {
   return age;
 }
 
-function formatSeed(value: number | undefined, eventId: string) {
-  if (value === undefined) return "—";
-  if (eventId === "333fm") return value >= 1000 ? (value / 100).toFixed(2) : String(value);
-  if (eventId === "333mbf") return String(value);
-  const seconds = value / 100;
-  if (seconds < 60) return seconds.toFixed(2);
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
-}
 
 function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
   return { groups: Math.max(1, usedGroupCount(rows)), scramblers: 0, runners: 0, stations: Number.MAX_SAFE_INTEGER, fixedStations: false, checkJudges: false, checkDelegates: false, checkDataEntry: false, noNormalTasks: new Set() };
@@ -506,7 +498,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
         <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issueText).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title={t("review.openCard")}>{item.name}</button>{item.featured && <span className="featured-star" title={t("sets.featuredHelp")} aria-label={t("sets.featured")}>★</span>}<small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
-        <td>{formatSeed(item.seedResult, item.eventId)}</td>
+        <td>{formatResult(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label={t("review.competesHere")}>✓</span> : <span className="muted-mark" aria-label={t("review.onlyWorks")}>—</span>}</td>
         {columns.map((group, position) => {
           const cell = { id: item.id, group };
