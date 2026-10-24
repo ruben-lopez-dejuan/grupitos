@@ -25,6 +25,8 @@ export type Draft = {
   /** Signature of the settings the current proposal was generated with. */
   generatedWith?: string;
   assignments: GeneratedAssignment[];
+  /** When the settings saved at the WCA that this draft last loaded or published were saved. */
+  remoteSavedAt?: string;
 };
 
 export function draftStorageKey(competitionId: string) {

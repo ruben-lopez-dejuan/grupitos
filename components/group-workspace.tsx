@@ -2,6 +2,7 @@
 
 import { AppMark } from "@/components/app-mark";
 import { ResumeFromFile, savedAtText, storeSession, type ReadFile } from "@/components/resume-from-file";
+import { readSettings, type SavedSettings } from "@/lib/wca-sync";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { AssignmentSetsPanel } from "@/components/assignment-sets-panel";
@@ -95,7 +96,7 @@ function laneChoices(schedule: ProSchedule) {
   return scheduleLanes(schedule).map(lane => ({ key: lane.key, name: lane.name, color: lane.color, hasStages: lane.stageId !== undefined || (schedule.rooms.find(room => room.id === lane.roomId)?.stages.length ?? 0) > 0 }));
 }
 
-export function GroupWorkspace({ competitionId, userName }: { competitionId: string; userName: string }) {
+export function GroupWorkspace({ competitionId, userName, offline = false }: { competitionId: string; userName: string; /** The demo: no WCA to read from or publish to. */ offline?: boolean }) {
   const { t, tp, locale } = useI18n();
   const eventName = useEventName();
   const [competition, setCompetition] = useState<StoredCompetition>();
@@ -115,6 +116,10 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
   const [refreshing, setRefreshing] = useState(false);
   /** Mid-competition messages: what refreshing from the WCA found, which rounds were generated. */
   const [refreshNote, setRefreshNote] = useState<string>();
+  /** When the WCA settings this browser last loaded or published were saved. */
+  const [remoteSavedAt, setRemoteSavedAt] = useState<string>();
+  /** Settings at the WCA newer than this browser's, offered with a button. */
+  const [remoteNewer, setRemoteNewer] = useState<{ data: StoredCompetition; saved: SavedSettings }>();
 
   /** Opens the WCIF's own groups in the review. */
   const openWcifGroups = useCallback((data: StoredCompetition, base: WorkspaceSettings) => {
@@ -137,14 +142,56 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
     setProposal(draft?.assignments ?? []);
     setGeneratedWith(draft?.generatedWith);
+    setRemoteSavedAt(draft?.remoteSavedAt);
   }, [openWcifGroups]);
 
+  /**
+   * Settings saved at the WCA (by anyone who manages the competition): the settings, with the
+   * WCIF's groups as the proposal. `data` becomes the stored WCIF.
+   */
+  const openRemote = useCallback(async (data: StoredCompetition, saved: SavedSettings) => {
+    await saveCompetition(data);
+    setCompetition(data);
+    const defaults = defaultSettings(data);
+    const base = { ...defaults, ...saved.settings, people: migrateWcaStaffRoles(saved.settings.people, data), options: { ...defaults.options, ...saved.settings.options }, printing: { ...defaults.printing, ...saved.settings.printing } };
+    const result = hasWcifGroups(data) ? withWcifGroups(data, base) : { settings: base, proposal: [] };
+    setSettings(result.settings);
+    setProposal(result.proposal);
+    setGeneratedWith(saved.generatedWith);
+    setRemoteSavedAt(saved.savedAt);
+    setProposalVersion(version => version + 1);
+    setRemoteNewer(undefined);
+    setWcifNote(undefined);
+    return result.proposal.length > 0;
+  }, []);
+
   useEffect(() => {
-    getCompetition(competitionId).then(data => {
+    let active = true;
+    getCompetition(competitionId).then(async data => {
       if (!data) return setCompetition(undefined);
-      openCompetition(data, parseDraft(localStorage.getItem(draftStorageKey(data.id))));
+      const draft = parseDraft(localStorage.getItem(draftStorageKey(data.id)));
+      const stored = await readSettings(data);
+      if (!active) return;
+      // First time here and the WCA has the app's settings: open them, with the WCIF's groups.
+      if (!draft && stored) {
+        if (await openRemote(data, stored)) { setTab("review"); history.replaceState(null, "", "#review"); }
+        setRefreshNote(remoteText("sync.remoteLoaded", stored));
+        return;
+      }
+      openCompetition(data, draft);
+      if (stored && stored.savedAt > (draft?.remoteSavedAt ?? "")) setRemoteNewer({ data, saved: stored });
+      // Someone may have saved newer settings since this WCIF was imported: look, quietly.
+      if (offline) return;
+      const response = await fetch(`/api/wca/competitions/${encodeURIComponent(data.id)}`, { cache: "no-store" }).catch(() => undefined);
+      if (!response?.ok || !active) return;
+      const fresh = await response.json() as StoredCompetition;
+      const saved = await readSettings(fresh);
+      if (active && saved && saved.savedAt > (draft?.remoteSavedAt ?? "") && saved.savedAt > (stored?.savedAt ?? "")) setRemoteNewer({ data: fresh, saved });
     }).finally(() => setLoading(false));
-  }, [competitionId, openCompetition]);
+    return () => { active = false; };
+    // remoteText only formats a message.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [competitionId, openCompetition, openRemote, offline]);
 
   // Showing photos is a per-viewer preference, kept in this browser only.
   useEffect(() => {
@@ -186,13 +233,34 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 
   useEffect(() => {
     if (!competition || !settings) return;
-    const draft: Draft = { version: 3, settings, generatedWith, assignments: proposal };
+    const draft: Draft = { version: 3, settings, generatedWith, assignments: proposal, ...(remoteSavedAt ? { remoteSavedAt } : {}) };
     try {
       localStorage.setItem(draftStorageKey(competition.id), JSON.stringify(draft));
     } catch {
       // Storage can be full or blocked; the work stays in memory for this session.
     }
-  }, [competition, settings, generatedWith, proposal]);
+  }, [competition, settings, generatedWith, proposal, remoteSavedAt]);
+
+  /** "Saved on 24 Oct, 18:40 by Ana" for settings at the WCA. */
+  function remoteText(key: "sync.remoteLoaded" | "sync.remoteNewer", saved: SavedSettings) {
+    return t(key, { date: savedAtText(saved.savedAt, locale), by: saved.savedBy ? t("sync.remoteBy", { name: saved.savedBy }) : "" });
+  }
+
+  /** Loads the newer settings the WCA has, replacing this browser's. */
+  async function loadRemoteSettings() {
+    if (!remoteNewer) return;
+    const { data, saved } = remoteNewer;
+    if (await openRemote(data, saved)) changeTab("review");
+    setRefreshNote(remoteText("sync.remoteLoaded", saved));
+  }
+
+  /** After publishing: the WCIF as the WCA has it now, and the settings saved with it. */
+  async function afterPublish(fresh: StoredCompetition, savedAt: string) {
+    await saveCompetition(fresh);
+    setCompetition(fresh);
+    setRemoteSavedAt(savedAt);
+    setRemoteNewer(undefined);
+  }
 
   const people = useMemo(() => competition ? acceptedPeople(competition) : [], [competition]);
   /** People who can hold a role: competitors and staff who do not compete (organizers without a registration…). */
@@ -502,6 +570,9 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
       const data = await response.json() as StoredCompetition;
       await saveCompetition(data);
       setCompetition(data);
+      // Someone else may have saved newer settings at the WCA.
+      const saved = await readSettings(data);
+      if (saved && saved.savedAt > (remoteSavedAt ?? "")) setRemoteNewer({ data, saved });
       const fresh = initialRounds(data, stations, zoneMode);
       const opened: string[] = [];
       setSettings(current => current && {
@@ -563,6 +634,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
         {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
       </nav>
       <div className="workspace-content">
+        {remoteNewer && <p className="setup-note refresh-note remote-newer" role="status"><span>{remoteText("sync.remoteNewer", remoteNewer.saved)}</span><button type="button" className="button secondary" onClick={loadRemoteSettings}>{t("sync.loadRemote")}</button><button type="button" className="rule-remove" onClick={() => setRemoteNewer(undefined)} aria-label={t("workspace.dismiss")}>×</button></p>}
         {refreshNote && <p className="setup-note refresh-note" role="status">{refreshNote}<button type="button" className="rule-remove" onClick={() => setRefreshNote(undefined)} aria-label={t("workspace.dismiss")}>×</button></p>}
         {tab === "zone" && <>
           <section className="data-strip" id="summary">
@@ -693,7 +765,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : undefined} segmentFilters={segmentFilters} />}
         </>}
 
-        {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
+        {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} outdated={proposalOutdated} userName={userName} offline={offline} onPublished={afterPublish} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
       </div>
       <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {

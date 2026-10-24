@@ -457,3 +457,7 @@ button.plain.danger{justify-self:start;color:var(--error)}
 
 /* Later rounds: place in the previous round */
 .previous-place{color:var(--muted);font-size:12px}
+
+/* Newer settings at the WCA */
+.remote-newer span{flex:1 1 auto}
+.remote-newer .button{flex:0 0 auto}

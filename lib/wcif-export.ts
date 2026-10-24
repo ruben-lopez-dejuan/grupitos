@@ -20,11 +20,18 @@ const GROUP_CODE = /-g\d+(?:-a\d+)?$/;
 
 export type WcifExportReport = { people: number; assignments: number; groupsReused: number; groupsCreated: number; groupsRemoved: number; skipped: string[] };
 
+/** The WCA refuses an extension without a spec URL: these are the ones CompScript and Groupifier use. */
+export function specUrlOf(id: string) {
+  if (id.startsWith("org.cubingusa.natshelper.")) return "https://github.com/cubingusa/natshelper/blob/main/specification.md";
+  if (id.startsWith("groupifier.")) return `https://groupifier.jonatanklosko.com/wcif-extensions/${id.slice("groupifier.".length)}.json`;
+  return undefined;
+}
+
 function setExtension(extensions: WcifExtension[] | undefined, id: string, change: (data: Record<string, unknown>) => Record<string, unknown>) {
   const list = [...(extensions ?? [])];
   const index = list.findIndex(item => item.id === id);
   const current = index >= 0 && list[index].data && typeof list[index].data === "object" ? list[index].data as Record<string, unknown> : {};
-  const next = { id, specUrl: index >= 0 ? list[index].specUrl : undefined, data: change(current) };
+  const next = { id, specUrl: (index >= 0 ? list[index].specUrl : undefined) ?? specUrlOf(id), data: change(current) };
   if (!next.specUrl) delete next.specUrl;
   if (index >= 0) list[index] = next;
   else list.push(next);
@@ -89,7 +96,7 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
         let child = (parent.childActivities ?? []).find(item => GROUP_CODE.test(item.activityCode) && !used.has(item.id) && local(item.startTime) === window.start && stageOf(item) === slot.stageId);
         if (child) report.groupsReused += 1;
         else {
-          child = { id: nextId++, name: `${eventName(round)}, Group ${slot.number}`, activityCode: `${round.id}-g${slot.number}${suffix}`, startTime: localToIso(window.start, timeZone), endTime: localToIso(window.end, timeZone), childActivities: [], extensions: slot.stageId === undefined ? [] : [{ id: GROUP_EXTENSION_ID, data: { stageId: slot.stageId } }] };
+          child = { id: nextId++, name: `${eventName(round)}, Group ${slot.number}`, activityCode: `${round.id}-g${slot.number}${suffix}`, startTime: localToIso(window.start, timeZone), endTime: localToIso(window.end, timeZone), childActivities: [], extensions: slot.stageId === undefined ? [] : [{ id: GROUP_EXTENSION_ID, specUrl: specUrlOf(GROUP_EXTENSION_ID), data: { stageId: slot.stageId } }] };
           parent.childActivities = [...(parent.childActivities ?? []), child];
           report.groupsCreated += 1;
         }

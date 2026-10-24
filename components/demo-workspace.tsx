@@ -16,5 +16,5 @@ export function DemoWorkspace({ size }: { size: DemoSize }) {
   }, [size]);
 
   if (!competitionId) return <main className="workspace-loading"><div /><p>{t("workspace.preparingDemo")}</p></main>;
-  return <GroupWorkspace key={competitionId} competitionId={competitionId} userName="Demo" />;
+  return <GroupWorkspace key={competitionId} competitionId={competitionId} userName="Demo" offline />;
 }

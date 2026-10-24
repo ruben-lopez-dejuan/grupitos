@@ -65,6 +65,8 @@ export type StoredCompetition = {
   persons?: WcifPerson[];
   events?: WcifEvent[];
   schedule?: { startDate?: string; numberOfDays?: number; venues?: WcifVenue[] };
+  /** Competition extensions (Groupifier's config, this app's settings…). */
+  extensions?: WcifExtension[];
   importedAt?: string;
 };
 

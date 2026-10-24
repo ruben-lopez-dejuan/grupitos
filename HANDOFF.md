@@ -241,6 +241,26 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Mezcla del multi** (actividad de Horario `multi-scramble`; se reconoce al importar por el nombre): los mezcladores de cada intento trabajan en la mezcla que acaba justo antes de ese intento, el mismo día (`GroupSlot.scrambleWindow`, `windowsForTask`). Generador y validación usan esa hora.
 - **Mitad de competición**: «Actualizar desde la WCA» (barra superior) vuelve a descargar el WCIF sin tocar configuración ni propuesta y activa las rondas que ya tienen competidores. «Generar rondas nuevas» (Grupos) genera solo esas rondas con `fixedAssignments`: las horas, cargas y rachas de lo ya asignado cuentan, y los nuevos competidores evitan los grupos donde ya compiten o trabajan.
 
+### 6.13. Publicar en la WCA y ajustes compartidos (24/10/2026)
+
+- **Ruta** `PATCH /api/wca/competitions/[id]` (`wcaPatchWcif` en `lib/wca.ts`): reenvía a la WCA con el token de la sesión. Exige `id` igual al de la URL y `formatVersion`, y rechaza cualquier cuerpo con `events`.
+- **Qué se envía** (`buildPatch` en `lib/wca-sync.ts`), siempre construido sobre el WCIF recién descargado:
+  - `schedule` con los grupos;
+  - `persons` solo con `wcaUserId`, `assignments` y `extensions` (sin `registration`: con `isCompeting: false` la WCA crearía inscripciones; sin `roles`);
+  - `extensions` de la competición: todas las que ya tenía más `wcaEasyGroups.Settings`.
+
+  Por qué así, según el código de la WCA (`Competition#set_wcif!`): solo exige `id` y `formatVersion`, pero **sustituye** el horario entero, la lista entera de extensiones de la competición y, por persona, la lista de asignaciones y de extensiones.
+- **Extensiones**: la WCA exige `specUrl` (URL) y un id de palabras separadas por puntos (sin guiones). Por eso el borrador de los archivos pasa a `wcaEasyGroups.Draft` (se sigue leyendo el id antiguo), y `specUrlOf` en `lib/wcif-export.ts` pone la URL de natshelper o Groupifier a las que no la tienen.
+- **Ajustes en la WCA** (`wcaEasyGroups.Settings`, [`docs/WCIF_EXTENSION.md`](docs/WCIF_EXTENSION.md)): `{ settings, generatedWith }` comprimido (deflate-raw + base64, `CompressionStream`), porque la WCA guarda cada extensión en un `TEXT` de 64 KB. Los del Nacional ocupan 40 KB en JSON y 7 KB comprimidos. Lleva `savedAt` y `savedBy`. Es público.
+- **Comprobación**: antes de publicar, `changedRounds` bloquea los grupos si las rondas del horario de la WCA cambiaron desde la importación. Después, `checkPublished` vuelve a leer el WCIF y comprueba asignaciones y ajustes.
+- **Al abrir una competición**:
+  - sin borrador local y con ajustes en el WCIF guardado, se abren esos ajustes con los grupos del WCIF;
+  - con borrador, si la WCA tiene ajustes más nuevos que `Draft.remoteSavedAt` (en el WCIF guardado o en uno descargado en segundo plano al abrir), sale un aviso con «Cargar los de la WCA».
+
+  «Actualizar desde la WCA» hace la misma comprobación.
+- **Demo**: `offline`, sin publicar ni descarga en segundo plano.
+- **Comprobado** en la demo con una WCA simulada en el navegador: publicar, comprobar, y cargar ajustes más nuevos de «otra persona». **Falta probarlo contra la WCA de verdad**: lo hará el usuario con una competición suya.
+
 ### 6.12. Seguir en otro dispositivo (24/10/2026)
 
 - **Exportar** (`components/publish-panel.tsx`): el WCIF descargado lleva el borrador entero (`Draft`: configuración, PRO, propuesta con cambios a mano y `generatedWith`) en la extensión de competición `wca-easy-groups.Draft`, con `savedAt` (`withDraft` en `lib/wcif-session.ts`). El botón ya no exige propuesta: sirve también para llevarse solo la configuración.
@@ -279,9 +299,9 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 2. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.
 3. **Fase 6, publicación e informes:**
    - **WCIF v2**: la importación ya pide `GET /api/v0/competitions/{id}/wcif/version/2` (formato 2.2; con el token del organizador devuelve el WCIF privado). Para publicar, `PATCH /api/v0/competitions/{id}/wcif` y **hay que mandar siempre `formatVersion` e `id`** (recomendación de la WCA que trasladó el usuario).
-   - Escribir actividades y `assignments` en el WCIF, conservando las extensiones desconocidas. *Hecho como descarga (6.9); falta el PATCH.*
+   - Escribir actividades y `assignments` en el WCIF, conservando las extensiones desconocidas. *Hecho: descarga (6.9) y PATCH (6.13).*
    - Escribir las extensiones natshelper de sala y grupo, con el número de grupo compartido en `-g{n}`.
-   - Mostrar el diff, pedir confirmación explícita, hacer el PATCH y volver a leer el WCIF para comprobarlo.
+   - Mostrar el diff, pedir confirmación explícita, hacer el PATCH y volver a leer el WCIF para comprobarlo. *Hecho (6.13).*
    - Informes.
 
 Pendientes conocidos:

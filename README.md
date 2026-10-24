@@ -37,7 +37,7 @@ Importas la competición desde la WCA, la app reparte a los competidores en grup
 | Grupos | Número de grupos, mezcladores y runners de cada ronda. Es el único paso que genera la propuesta. |
 | Revisar | La propuesta en una tabla editable, con validación en vivo. |
 | Hojas de tiempos | Scorecards en PDF. |
-| Publicar | Descarga del WCIF con los grupos. |
+| Publicar | Publicación en la WCA (grupos, tareas y ajustes) o descarga del WCIF. |
 
 Todo se guarda solo en el navegador mientras trabajas. Si cambias algo que afecta al reparto, la propuesta queda marcada como desactualizada hasta que vuelves a generarla.
 
@@ -196,6 +196,11 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
 - **Grupos existentes:** si el WCIF ya trae grupos (de CompScript, Groupifier…), se cargan como propuesta y se abre directamente la revisión.
 - **Empezar de cero:** borra el borrador de esa competición y vuelve a descargar el WCIF.
+- **Publicar en la WCA** (paso Publicar), como Groupifier y Delegate Dashboard:
+  - **Revisar cambios** descarga el WCIF que tiene ahora la WCA y enseña qué cambia: grupos reutilizados, nuevos y quitados, y cuántas personas ganan o pierden asignaciones. Si el horario de la WCA cambió desde la importación, no deja publicar los grupos hasta actualizar.
+  - **Publicar grupos y ajustes** pide confirmación, envía el cambio (`PATCH /api/v0/competitions/{id}/wcif`) y vuelve a leer el WCIF para comprobar que la WCA lo tiene todo. **Guardar solo los ajustes** no toca grupos ni tareas.
+  - Se envían el horario con los grupos, las asignaciones y extensiones de cada persona y las extensiones de la competición. Nunca pruebas, rondas, resultados, roles ni inscripciones.
+- **Ajustes compartidos:** los ajustes de la app se guardan en el WCIF de la competición (extensión `wcaEasyGroups.Settings`, ver [`docs/WCIF_EXTENSION.md`](docs/WCIF_EXTENSION.md)). Quien abra la competición en otro navegador o con otra cuenta con permisos encuentra los mismos ajustes y los grupos publicados. Si la WCA tiene ajustes más nuevos que los del navegador, la app lo avisa y deja cargarlos.
 - **Exportar WCIF** (paso Publicar):
   - **grupos:** reutiliza los del WCIF que coinciden en sala, escenario y hora, crea los que faltan y quita los que sobran;
   - **contenido:** escribe asignaciones con estación, destacados, propiedades natshelper y escenarios;
@@ -210,13 +215,12 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - el WCIF se guarda en IndexedDB y el borrador en `localStorage`, ambos en tu navegador;
   - no hay base de datos en el servidor;
   - el token OAuth queda en la sesión cifrada del servidor.
-- **Escritura:** todavía no se escribe nada en la WCA. El WCIF con los grupos se descarga como archivo.
+- **Escritura:** solo se escribe en la WCA al publicar, después de enseñar los cambios y pedir confirmación. Los ajustes de la app van en el WCIF público de la competición: no pongas datos privados en las notas.
 - **El archivo exportado** lleva datos personales (los del WCIF privado y tu propuesta). Guárdalo como guardarías el WCIF.
 - **Google Sheets:** las hojas se leen desde el servidor solo cuando lo pides, y solo las que hayas compartido con la cuenta de servicio.
 
 ## Lo que todavía no hace
 
-- **Publicar en la WCA:** enviar el WCIF directamente con un PATCH, después de enseñar las diferencias y pedir confirmación. Hoy se descarga y se sube con otra herramienta.
 - **Equipos automáticos:** rotación de equipos por día y escenario, y equipos equilibrados automáticamente.
 - **Scorers por grupo de CompScript:** «ha competido hace poco», mismo país…
 - **Opciones de impresión del WCIF:** no lee aún las de `groupifier.CompetitionConfig`.

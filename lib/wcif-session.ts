@@ -6,7 +6,10 @@
 import type { StoredCompetition, WcifExtension } from "@/lib/competition-store";
 import { parseDraft, type Draft } from "@/lib/draft";
 
-export const DRAFT_EXTENSION_ID = "wca-easy-groups.Draft";
+/** WCA extension ids are dot-separated words; the first files used a hyphenated id, still read. */
+export const DRAFT_EXTENSION_ID = "wcaEasyGroups.Draft";
+const OLD_DRAFT_EXTENSION_ID = "wca-easy-groups.Draft";
+export const isDraftExtension = (id: string) => id === DRAFT_EXTENSION_ID || id === OLD_DRAFT_EXTENSION_ID;
 
 type WithExtensions = StoredCompetition & { extensions?: WcifExtension[] };
 
@@ -16,15 +19,15 @@ type WithExtensions = StoredCompetition & { extensions?: WcifExtension[] };
  */
 export function withDraft(wcif: StoredCompetition, draft: Draft): StoredCompetition {
   const own = wcif as WithExtensions;
-  const extensions = (own.extensions ?? []).filter(item => item.id !== DRAFT_EXTENSION_ID);
+  const extensions = (own.extensions ?? []).filter(item => !isDraftExtension(item.id));
   return { ...own, extensions: [...extensions, { id: DRAFT_EXTENSION_ID, data: { ...draft, savedAt: new Date().toISOString() } }] } as StoredCompetition;
 }
 
 /** The WCIF without the app's draft. */
 export function withoutDraft(wcif: StoredCompetition): StoredCompetition {
   const own = wcif as WithExtensions;
-  if (!own.extensions?.some(item => item.id === DRAFT_EXTENSION_ID)) return wcif;
-  return { ...own, extensions: own.extensions.filter(item => item.id !== DRAFT_EXTENSION_ID) } as StoredCompetition;
+  if (!own.extensions?.some(item => isDraftExtension(item.id))) return wcif;
+  return { ...own, extensions: own.extensions.filter(item => !isDraftExtension(item.id)) } as StoredCompetition;
 }
 
 export type ReadSession =
@@ -41,7 +44,7 @@ export function readSession(text: string): ReadSession {
   }
   const wcif = data as Partial<WithExtensions> | null;
   if (!wcif || typeof wcif !== "object" || typeof wcif.id !== "string" || typeof wcif.name !== "string" || !Array.isArray(wcif.persons)) return { ok: false, reason: "not-wcif" };
-  const stored = (wcif.extensions ?? []).find(item => item.id === DRAFT_EXTENSION_ID)?.data as (Draft & { savedAt?: string }) | undefined;
+  const stored = (wcif.extensions ?? []).find(item => isDraftExtension(item.id))?.data as (Draft & { savedAt?: string }) | undefined;
   const draft = stored ? parseDraft(JSON.stringify(stored)) : undefined;
   return { ok: true, competition: withoutDraft(wcif as StoredCompetition), draft, savedAt: draft ? stored?.savedAt : undefined };
 }
