@@ -87,6 +87,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - un número sobre una celda C fija la estación;
   - deshacer y rehacer.
 - **Herramientas:** filtros, orden, búsqueda (siempre de la A a la Z), ficha de cada persona y total de tareas.
+- **Añadir persona:** en cada ronda se puede añadir a alguien que no tiene ninguna tarea en ella (inscrito, staff o voluntario) para darle una, por ejemplo para cubrir un grupo sin juez.
 - **Rondas siguientes:** en lugar de la marca personal se ve el puesto y el resultado de la ronda anterior, y el orden «por seed» sigue ese puesto.
 - **Validación en vivo** por ronda, grupo y fila. Detecta:
   - grupos sin juez, mezclador o delegado;

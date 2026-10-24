@@ -461,3 +461,6 @@ button.plain.danger{justify-self:start;color:var(--error)}
 /* Newer settings at the WCA */
 .remote-newer span{flex:1 1 auto}
 .remote-newer .button{flex:0 0 auto}
+
+/* Review: add someone with no task in the round */
+.row-controls .add-person{min-width:170px}

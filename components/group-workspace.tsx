@@ -532,6 +532,8 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     return [...segments.map(segment => ({ id: segment.id, name: segment.name, members: new Set(segmentMembers(segment, all, context).map(personKey)) })), ...teamClusters];
   })() : undefined;
 
+  /** Everyone who can be added to a round in the review: registered people, staff and, in PRO, volunteers. */
+  const reviewPeople = everyone(competition, pro ? proPeople : undefined);
   const activeRounds = rounds.filter(round => round.enabled);
   const firstRounds = rounds.filter(round => round.roundNumber === 1);
   const laterRounds = rounds.filter(round => round.roundNumber > 1);
@@ -758,7 +760,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         {tab === "review" && <>
           {wcifNote && <p className="setup-note wcif-note" role="status">{t("workspace.wcifGroups", { count: wcifNote.count })}{wcifNote.unplaced > 0 && ` ${t("workspace.wcifUnplaced", { count: wcifNote.unplaced })}`}</p>}
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} everyone={reviewPeople} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
             const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
             return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
