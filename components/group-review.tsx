@@ -72,8 +72,6 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
 const NO_UNAVAILABILITY: Unavailability[] = [];
 const NO_SEGMENTS: SegmentFilter[] = [];
 const NO_PEOPLE: WcifPerson[] = [];
-/** How a person is offered in "Add a person": the WCA ID tells namesakes apart. */
-const personOption = (person: WcifPerson) => person.wcaId ? `${person.name} · ${person.wcaId}` : person.name;
 
 export type SegmentFilter = { id: string; name: string; members: Set<string> };
 
@@ -99,7 +97,7 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
   unavailable?: Unavailability[];
   /** PRO mode: segments offered as row filters. */
   segmentFilters?: SegmentFilter[];
-  /** Everyone who can be given a task (registered people, staff and volunteers), to add to a round. */
+  /** Everyone who can be given a task (registered people, staff and volunteers): all are listed in every round. */
   everyone?: WcifPerson[];
   onChange: (assignments: GeneratedAssignment[]) => void;
 }) {
@@ -142,8 +140,6 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
   /** PRO with several stages: columns in time order (G1 of every stage together) or stage by stage. */
   const [columnOrder, setColumnOrder] = useState<"group" | "stage">("group");
   const [cardPersonId, setCardPersonId] = useState<string>();
-  /** Text typed in "Add a person". */
-  const [adding, setAdding] = useState("");
   /** Station being typed into a competitor cell. */
   const [stationEdit, setStationEdit] = useState<{ id: string; group: number; value: string }>();
   // Enter and the blur that follows must not save twice.
@@ -176,7 +172,21 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
     }
     return totals;
   }, [assignments]);
-  const roundRows = useMemo(() => assignments.filter(item => item.roundId === roundId), [assignments, roundId]);
+  /**
+   * Everyone without a row in this round, as empty rows at the bottom, so anyone can be given a
+   * task. They are not stored: a row is kept only once it has a task.
+   */
+  const virtualRows = useMemo(() => {
+    const round = rounds.find(item => item.id === roundId);
+    if (!round) return [];
+    const here = new Set(assignments.filter(item => item.roundId === roundId).map(item => item.personId));
+    return everyone.filter(person => !here.has(personKey(person))).map((person): GeneratedAssignment => {
+      const key = personKey(person);
+      return { id: `${roundId}:${key}`, roundId, eventId: round.eventId, personId: key, name: person.name, wcaId: person.wcaId, birthdate: person.birthdate, seedResult: seedResult(person, round.eventId), inRound: false, tasks: [] };
+    });
+  }, [assignments, everyone, rounds, roundId]);
+  const virtualIds = useMemo(() => new Set(virtualRows.map(item => item.id)), [virtualRows]);
+  const roundRows = useMemo(() => [...assignments.filter(item => item.roundId === roundId), ...virtualRows], [assignments, roundId, virtualRows]);
   // People in the round first; staff who only work in this round after them.
   const visible = useMemo(() => {
     const withIssues = new Set((issuesByRound.get(roundId) ?? []).map(issue => issue.assignmentId));
@@ -186,15 +196,16 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
       if (filter === "issues") return withIssues.has(item.id);
       if (filter === "scramblers") return duties(item).some(duty => duty.role === "scrambler");
       if (filter === "newcomers") return !item.wcaId;
-      if (filter === "staff-only") return !item.inRound;
+      if (filter === "staff-only") return !item.inRound && item.tasks.length > 0;
       if (filter.startsWith("segment:")) return !!segmentFilters.find(segment => `segment:${segment.id}` === filter)?.members.has(item.personId);
       return true;
     };
     // Later rounds: the place in the previous round, as the groups and scorecards follow it.
     const bySeed = (a: GeneratedAssignment, b: GeneratedAssignment) => (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER) || (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER);
     const order: Record<RowSort, (a: GeneratedAssignment, b: GeneratedAssignment) => number> = {
-      // After the round's competitors: those eliminated in the previous round by place, then the rest.
-      seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER)),
+      // After the round's competitors: those eliminated in the previous round by place, then everyone
+      // else, those with an official result in the event first (by it), then A to Z.
+      seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER) || (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER)),
       name: () => 0,
       group: (a, b) => (competingGroup(a) ?? Number.MAX_SAFE_INTEGER) - (competingGroup(b) ?? Number.MAX_SAFE_INTEGER) || bySeed(a, b),
       load: (a, b) => (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
@@ -203,28 +214,6 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
     return roundRows.filter(keep).sort((a, b) => (needle ? 0 : order[sortBy](a, b)) || byName(a, b));
   }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads, segmentFilters]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
-  // People with nothing in this round yet, A to Z, who can be added to give them a task.
-  const addable = useMemo(() => {
-    const here = new Set(roundRows.map(item => item.personId));
-    return everyone.filter(person => !here.has(personKey(person))).sort(byName);
-  }, [everyone, roundRows]);
-
-  /** Adds someone with no task in this round as an empty row, ready to type a task in a cell. */
-  function addPerson(text: string) {
-    const typed = text.trim().toLowerCase();
-    const person = addable.find(item => personOption(item).toLowerCase() === typed) ?? (addable.filter(item => item.name.toLowerCase() === typed).length === 1 ? addable.find(item => item.name.toLowerCase() === typed) : undefined);
-    const round = rounds.find(item => item.id === roundId);
-    if (!person || !round) return false;
-    const key = personKey(person);
-    const row: GeneratedAssignment = { id: `${roundId}:${key}`, roundId, eventId: round.eventId, personId: key, name: person.name, wcaId: person.wcaId, birthdate: person.birthdate, seedResult: seedResult(person, round.eventId), inRound: false, tasks: [] };
-    dispatch({ type: "commit", next: [...assignments, row] });
-    setAdding("");
-    // Show the new row: searching for the person lists them alone.
-    setFilter("all");
-    setQuery(person.name);
-    setStatus(t("review.personAdded", { name: person.name }));
-    return true;
-  }
   const currentRules = rules[roundId] ?? fallbackRules(visible);
   // Group totals count the whole round, whatever the filter or search shows.
   const groupCount = Math.max(currentRules.groups, usedGroupCount(roundRows), 1);
@@ -299,8 +288,9 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
 
   function apply(value: CellValue, keys = selection) {
     if (!keys.length) return;
-    const result = applyCells(assignments, keys.map(refFromKey), value, { stations: currentRules.stations, fixedStations: currentRules.fixedStations });
-    if (result.changed) dispatch({ type: "commit", next: result.assignments });
+    const result = applyCells([...assignments, ...virtualRows], keys.map(refFromKey), value, { stations: currentRules.stations, fixedStations: currentRules.fixedStations });
+    // Listed-only rows are kept once they have a task.
+    if (result.changed) dispatch({ type: "commit", next: result.assignments.filter(item => !virtualIds.has(item.id) || item.tasks.length > 0) });
     setStatus(!result.changed ? t("review.statusNoChange") : tp("review.statusUpdated", result.changed, { label: value ? t(keyOf("tasks", value)) : t("review.statusCleared") }));
   }
 
@@ -495,12 +485,6 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
       </div>
       <span className="review-status" role="status">{status}</span>
       <div className="row-controls">
-        {addable.length > 0 && <>
-          <input className="add-person" list="review-add-person" value={adding} placeholder={t("review.addPerson")} aria-label={t("review.addPerson")} title={t("review.addPersonHelp")}
-            onChange={event => { setAdding(event.target.value); if (addable.some(person => personOption(person) === event.target.value)) addPerson(event.target.value); }}
-            onKeyDown={event => { if (event.key === "Enter" && !addPerson(adding)) setStatus(t("review.personNotFound")); }} />
-          <datalist id="review-add-person">{addable.map(person => <option key={personKey(person)} value={personOption(person)} />)}</datalist>
-        </>}
         <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t("review.search")} aria-label={t("review.search")} />
         <select value={filter} onChange={event => setFilter(event.target.value as RowFilter)} aria-label={t("review.filter")}>{FILTERS.map(key => <option key={key} value={key}>{t(keyOf("review.filters", key))}</option>)}{segmentFilters.length > 0 && <optgroup label={t("segments.title")}>{segmentFilters.map(segment => <option key={segment.id} value={`segment:${segment.id}`}>{segment.name}</option>)}</optgroup>}</select>
         <select value={sortBy} onChange={event => setSortBy(event.target.value as RowSort)} aria-label={t("review.sort")}>{SORTS.map(key => <option key={key} value={key}>{t(keyOf("review.sorts", key))}</option>)}</select>

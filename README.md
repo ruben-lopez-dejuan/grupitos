@@ -76,7 +76,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - sin runners extranjeros;
   - delegados y organizadores con o sin tareas normales.
 - **Orden de las tareas:** se puede elegir qué se cubre antes cuando falta gente (delegado, mezcladores, data entry, runners y jueces).
-- **Rondas siguientes:** quienes compitieron en la ronda anterior y no pasaron van primero para las tareas (la mitad más rápida de ellos también puede mezclar). Aparecen al final de la revisión aunque no tengan tarea, con su puesto en la ronda anterior.
+- **Rondas siguientes:** quienes compitieron en la ronda anterior y no pasaron van primero para las tareas (la mitad más rápida de ellos también puede mezclar). Salen en la revisión justo después de los competidores, con su puesto en la ronda anterior.
 - **Carga repartida:** quien está en muchas pruebas no carga con la mayor parte del trabajo. Además, cada tarea guarda un «¿por qué esta persona?», con las personas libres que había y los motivos de la elección.
 
 ### Revisión
@@ -88,7 +88,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - un número sobre una celda C fija la estación;
   - deshacer y rehacer.
 - **Herramientas:** filtros, orden, búsqueda (siempre de la A a la Z), ficha de cada persona y total de tareas.
-- **Añadir persona:** en cada ronda se puede añadir a alguien que no tiene ninguna tarea en ella (inscrito, staff o voluntario) para darle una, por ejemplo para cubrir un grupo sin juez.
+- **Todo el mundo en cada ronda:** después de los competidores de la ronda salen los eliminados en la ronda anterior y luego el resto. Primero van los que tienen marca oficial en la prueba (de mejor a peor) y después los demás, de la A a la Z. Así se le puede dar una tarea a cualquiera tecleando la letra en su celda. Solo se guardan las filas con alguna tarea.
 - **Rondas siguientes:** en lugar de la marca personal se ve el puesto y el resultado de la ronda anterior, y el orden «por seed» sigue ese puesto.
 - **Validación en vivo** por ronda, grupo y fila. Detecta:
   - grupos sin juez, mezclador o delegado;

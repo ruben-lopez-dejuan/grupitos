@@ -462,9 +462,6 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .remote-newer span{flex:1 1 auto}
 .remote-newer .button{flex:0 0 auto}
 
-/* Review: add someone with no task in the round */
-.row-controls .add-person{min-width:170px}
-
 /* Volunteers linked to their WCA account */
 .volunteer-list .account-link{border:1px solid var(--line);background:transparent;color:var(--muted);font:inherit;font-size:12px;border-radius:4px;padding:1px 6px;cursor:pointer}
 .volunteer-list .account-link.linked{color:var(--green);border-color:currentColor}
