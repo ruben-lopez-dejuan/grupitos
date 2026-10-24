@@ -241,6 +241,16 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Mezcla del multi** (actividad de Horario `multi-scramble`; se reconoce al importar por el nombre): los mezcladores de cada intento trabajan en la mezcla que acaba justo antes de ese intento, el mismo día (`GroupSlot.scrambleWindow`, `windowsForTask`). Generador y validación usan esa hora.
 - **Mitad de competición**: «Actualizar desde la WCA» (barra superior) vuelve a descargar el WCIF sin tocar configuración ni propuesta y activa las rondas que ya tienen competidores. «Generar rondas nuevas» (Grupos) genera solo esas rondas con `fixedAssignments`: las horas, cargas y rachas de lo ya asignado cuentan, y los nuevos competidores evitan los grupos donde ya compiten o trabajan.
 
+### 6.12. Seguir en otro dispositivo (24/10/2026)
+
+- **Exportar** (`components/publish-panel.tsx`): el WCIF descargado lleva el borrador entero (`Draft`: configuración, PRO, propuesta con cambios a mano y `generatedWith`) en la extensión de competición `wca-easy-groups.Draft`, con `savedAt` (`withDraft` en `lib/wcif-session.ts`). El botón ya no exige propuesta: sirve también para llevarse solo la configuración.
+- **Importar** (`components/resume-from-file.tsx`, «Importar WCIF exportado»):
+  - en el paso Zona: comprueba que el archivo es de esa competición, pide confirmación, guarda el WCIF del archivo en IndexedDB y el borrador en `localStorage`, y abre Revisar si hay propuesta;
+  - en la lista de competiciones: lo mismo, y abre la competición aunque no estuviera en ese navegador.
+
+  Sin la extensión (un WCIF de CompScript o Groupifier), se cargan sus grupos como propuesta, como al abrir una competición por primera vez. La carga es la misma función que al abrir la competición (`openCompetition` en `group-workspace.tsx`).
+- **Cuidado con el PATCH**: la extensión lleva datos personales. Antes de publicar en la WCA hay que quitarla con `withoutDraft`.
+
 ### 6.11. Inicio, móvil, icono y README (24/10/2026)
 
 - **Página de inicio** (`app/page.tsx`, textos `landing` en es/en): qué hace la app en modo básico y PRO, sin adornos.

@@ -449,3 +449,8 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .wca-logo{width:42px;height:42px;flex:0 0 auto}
 .wca-logo-chip{width:26px;height:26px;display:grid;place-items:center;flex:0 0 auto;background:#fff;border-radius:50%}
 .wca-logo-chip img{display:block}
+
+/* Carry on from another device */
+.resume-file{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 14px;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.resume-file>div{display:flex;align-items:center;gap:6px;margin-right:auto}
+.resume-file small{flex:1 1 100%}

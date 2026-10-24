@@ -1,6 +1,7 @@
 "use client";
 
 import { AppMark } from "@/components/app-mark";
+import { ResumeFromFile, savedAtText, storeSession, type ReadFile } from "@/components/resume-from-file";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { AssignmentSetsPanel } from "@/components/assignment-sets-panel";
@@ -95,7 +96,7 @@ function laneChoices(schedule: ProSchedule) {
 }
 
 export function GroupWorkspace({ competitionId, userName }: { competitionId: string; userName: string }) {
-  const { t, tp } = useI18n();
+  const { t, tp, locale } = useI18n();
   const eventName = useEventName();
   const [competition, setCompetition] = useState<StoredCompetition>();
   const [loading, setLoading] = useState(true);
@@ -127,21 +128,23 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
     history.replaceState(null, "", "#review");
   }, []);
 
+  /** Opens a competition with its draft, or, without one, the WCIF's own groups if it has any. */
+  const openCompetition = useCallback((data: StoredCompetition, draft: Draft | undefined) => {
+    setCompetition(data);
+    const defaults = defaultSettings(data);
+    // First time here and the WCIF already has groups: open them for review.
+    if (!draft && hasWcifGroups(data)) return openWcifGroups(data, wcifGroupsNeedStages(data) ? { ...defaults, pro: { enabled: true, schedule: importSchedule(data, roundId => defaults.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : defaults);
+    setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
+    setProposal(draft?.assignments ?? []);
+    setGeneratedWith(draft?.generatedWith);
+  }, [openWcifGroups]);
+
   useEffect(() => {
     getCompetition(competitionId).then(data => {
-      setCompetition(data);
-      if (!data) return;
-      const draft = parseDraft(localStorage.getItem(draftStorageKey(data.id)));
-      const defaults = defaultSettings(data);
-      // First time here and the WCIF already has groups: open them for review.
-      if (!draft && hasWcifGroups(data)) return openWcifGroups(data, wcifGroupsNeedStages(data) ? { ...defaults, pro: { enabled: true, schedule: importSchedule(data, roundId => defaults.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : defaults);
-      setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
-      if (draft) {
-        setProposal(draft.assignments);
-        setGeneratedWith(draft.generatedWith);
-      }
+      if (!data) return setCompetition(undefined);
+      openCompetition(data, parseDraft(localStorage.getItem(draftStorageKey(data.id))));
     }).finally(() => setLoading(false));
-  }, [competitionId, openWcifGroups]);
+  }, [competitionId, openCompetition]);
 
   // Showing photos is a per-viewer preference, kept in this browser only.
   useEffect(() => {
@@ -285,6 +288,23 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
    * they are now), forgets every setting, volunteer and proposal of this competition, and opens
    * the WCIF's groups if it has any. PRO mode stays on if it was.
    */
+  /** Another device's work, from a WCIF this app exported: it replaces what this browser has. */
+  async function resumeFromFile(read: ReadFile) {
+    if (!window.confirm(t("resume.confirm"))) return undefined;
+    await storeSession(read);
+    setWcifNote(undefined);
+    setRefreshNote(undefined);
+    openCompetition(read.competition, read.draft);
+    // Shown above every tab, since the review may open.
+    if (!read.draft) setRefreshNote(hasWcifGroups(read.competition) ? t("resume.groupsOnly") : t("resume.nothing"));
+    else {
+      setProposalVersion(version => version + 1);
+      if (read.draft.assignments.length) changeTab("review");
+      setRefreshNote(t("resume.restored", { date: savedAtText(read.savedAt, locale) }));
+    }
+    return undefined;
+  }
+
   async function startFromScratch() {
     const [stored, current] = [competition, settings];
     if (!stored || !current || !window.confirm(t("workspace.restartConfirm"))) return;
@@ -548,6 +568,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           <section className="data-strip" id="summary">
             <div><small>{t("workspace.stats.accepted")}</small><strong>{people.length}</strong></div><div><small>{t("workspace.stats.events")}</small><strong>{competition.events?.length ?? 0}</strong></div><div><small>{t("workspace.stats.rooms")}</small><strong>{roomCount}</strong></div><div><small>{t("workspace.stats.activeRounds")}</small><strong>{activeRounds.length}</strong></div>
           </section>
+          <ResumeFromFile competitionId={competition.id} onRead={resumeFromFile} />
           <section className="setup-panel">
             <div className="setup-heading"><h2>{t("zone.title")} <Hint align="start" text={t("zone.hint")} /></h2></div>
             <div className="setup-grid">
@@ -672,7 +693,7 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
           })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : undefined} segmentFilters={segmentFilters} />}
         </>}
 
-        {tab === "publish" && <PublishPanel competition={competition} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
+        {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
       </div>
       <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {

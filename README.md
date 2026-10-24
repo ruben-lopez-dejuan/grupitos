@@ -198,6 +198,8 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - **grupos:** reutiliza los del WCIF que coinciden en sala, escenario y hora, crea los que faltan y quita los que sobran;
   - **contenido:** escribe asignaciones con estación, destacados, propiedades natshelper y escenarios;
   - **el resto:** deja todo lo demás igual. Con la exportación, la ida y vuelta da el mismo WCIF.
+  - **tu trabajo:** el archivo lleva también la configuración, los ajustes PRO y la propuesta con tus cambios a mano, en la extensión `wca-easy-groups.Draft`.
+- **Seguir en otro dispositivo:** «Importar WCIF exportado», en el paso Zona o en la lista de competiciones, recupera todo tal como lo dejaste. Funciona aunque la competición aún no esté en ese navegador. Con un WCIF de otra herramienta se cargan sus grupos.
 
 ## Datos y privacidad
 
@@ -207,6 +209,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - no hay base de datos en el servidor;
   - el token OAuth queda en la sesión cifrada del servidor.
 - **Escritura:** todavía no se escribe nada en la WCA. El WCIF con los grupos se descarga como archivo.
+- **El archivo exportado** lleva datos personales (los del WCIF privado y tu propuesta). Guárdalo como guardarías el WCIF.
 - **Google Sheets:** las hojas se leen desde el servidor solo cuando lo pides, y solo las que hayas compartido con la cuenta de servicio.
 
 ## Lo que todavía no hace
