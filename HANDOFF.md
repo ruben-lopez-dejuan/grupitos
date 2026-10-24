@@ -15,7 +15,7 @@ Orden de lectura recomendado:
 **Grupitos** crea, revisa y (más adelante) publica grupos y tareas de personal de competiciones WCA. Su objetivo es ser lo bastante sencilla para un open pequeño, de modo que basten un par de clics, y lo bastante potente para un campeonato nacional, cubriendo todo lo que hoy se hace con CompScript pero con interfaz visual.
 
 - Repositorio: <https://github.com/ruben-lopez-dejuan/grupitos>, rama `main`.
-- Producción: <https://grupitos.lopezruben.org>, desplegada en Vercel (proyecto `rulo7/grupitos`; antes `wca-easy-groups`) con cada push a `main`. El DNS del dominio está en IONOS.
+- Producción: <https://grupitos.lopezruben.com>, desplegada en Vercel (proyecto `rulo7/grupitos`; antes `wca-easy-groups`) con cada push a `main`. El DNS del dominio está en IONOS.
 - Usuario: Rubén López de Juan, organizador y delegado WCA en España. Escribe en español.
 
 Preferencias firmes del usuario:
@@ -243,7 +243,7 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 
 ### 6.14. Nuevo nombre: Grupitos (25/10/2026)
 
-- La app se llama **Grupitos** y su dominio pasa a ser <https://grupitos.lopezruben.org>. El repositorio es `ruben-lopez-dejuan/grupitos`; GitHub redirige el nombre antiguo.
+- La app se llama **Grupitos** y su dominio pasa a ser <https://grupitos.lopezruben.com>. El repositorio es `ruben-lopez-dejuan/grupitos`; GitHub redirige el nombre antiguo.
 - **Identificadores internos con el nombre antiguo, a propósito**: se mantienen las claves del navegador (`wca-easy-groups:draft:…`, `wca-easy-groups-theme`, `wca-easy-groups:show-photos`, la cookie `wca-easy-groups-locale` y la base IndexedDB `wca-easy-groups`), el formato de plantillas `wca-easy-groups/pro-template` y las extensiones `wcaEasyGroups.Settings` y `wcaEasyGroups.Draft`. Cambiarlos dejaría sin leer lo ya guardado, lo publicado en la WCA y los archivos descargados.
 - **Cambio de dominio**: el navegador guarda los borradores por dominio. Para llevarse el trabajo del dominio antiguo al nuevo hay dos caminos: publicar los ajustes en la WCA, o descargar el WCIF en el dominio antiguo e importarlo en el nuevo. Guía completa en [`docs/RENOMBRAR_A_GRUPITOS.md`](docs/RENOMBRAR_A_GRUPITOS.md).
 

@@ -4,7 +4,7 @@ Grupos y tareas de personal para competiciones de la [World Cube Association](ht
 
 Importas la competición desde la WCA, la app reparte a los competidores en grupos y asigna jueces, mezcladores, runners, delegado de turno y data entry. Después revisas y corriges el resultado en una tabla, imprimes las hojas de tiempos y descargas el WCIF con los grupos.
 
-- En producción: <https://grupitos.lopezruben.org> (se entra con la cuenta de la WCA).
+- En producción: <https://grupitos.lopezruben.com> (se entra con la cuenta de la WCA).
 - Para un open pequeño bastan un par de clics. Para un campeonato con varias salas, escenarios y equipos de voluntarios está el **modo PRO**, que cubre lo que se suele hacer con [CompScript](https://github.com/cubingusa/compscript), pero desde una interfaz visual.
 - Funciona en español y en inglés, en tema claro y oscuro, y también en el móvil.
 - Es un proyecto independiente, no oficial de la WCA.
