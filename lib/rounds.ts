@@ -160,6 +160,11 @@ export function previousRoundResults(competition: StoredCompetition, roundId: st
   return result;
 }
 
+/** The round has already been held: the WCIF has results (a time, DNF or DNS) for it. */
+export function roundHasResults(competition: StoredCompetition, roundId: string) {
+  return (findRound(competition, roundId)?.results ?? []).some(result => (result.best ?? 0) !== 0);
+}
+
 /** `roundRank` and `roundResult` of a person in a later round, from `previousRoundResults`. */
 export function roundStanding(previous: ReturnType<typeof previousRoundResults>, registrantId: number | null | undefined) {
   const own = registrantId === null || registrantId === undefined ? undefined : previous.get(registrantId);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { EventIcon } from "@/components/event-icon";
 import { useEventName, useI18n, useIssueText, useWhyText } from "@/components/i18n";
 import { PersonCard } from "@/components/person-card";
@@ -72,6 +72,7 @@ function fallbackRules(rows: GeneratedAssignment[]): RoundRules {
 const NO_UNAVAILABILITY: Unavailability[] = [];
 const NO_SEGMENTS: SegmentFilter[] = [];
 const NO_PEOPLE: WcifPerson[] = [];
+const NO_ROUNDS = new Set<string>();
 
 export type SegmentFilter = { id: string; name: string; members: Set<string> };
 
@@ -80,7 +81,7 @@ function attemptNumber(roundSlots: GroupSlot[], slot: GroupSlot) {
   return slot.attempt ?? (roundSlots.some(item => item.linkedTo === slot.group) ? 1 : undefined);
 }
 
-export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
+export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -97,6 +98,8 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
   unavailable?: Unavailability[];
   /** PRO mode: segments offered as row filters. */
   segmentFilters?: SegmentFilter[];
+  /** Rounds already held (with results): listed after the ones still to review, apart. */
+  pastRounds?: Set<string>;
   /** Everyone who can be given a task (registered people, staff and volunteers): all are listed in every round. */
   everyone?: WcifPerson[];
   onChange: (assignments: GeneratedAssignment[]) => void;
@@ -123,7 +126,11 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
   const severityCount = (severity: IssueSeverity, count: number) => severity === "error" ? tp("review.errors", count) : tp("review.warnings", count);
   const [history, dispatch] = useReducer(historyReducer, initialAssignments, initial => ({ past: [], present: normalizeAssignments(initial), future: [] }));
   const assignments = history.present;
-  const rounds = useMemo(() => Array.from(new Map(initialAssignments.map(item => [item.roundId, { id: item.roundId, eventId: item.eventId }])).values()), [initialAssignments]);
+  // Rounds still to be held first: those are the ones to review; rounds already held after them.
+  const rounds = useMemo(() => {
+    const all = Array.from(new Map(initialAssignments.map(item => [item.roundId, { id: item.roundId, eventId: item.eventId }])).values());
+    return [...all.filter(round => !pastRounds.has(round.id)), ...all.filter(round => pastRounds.has(round.id))];
+  }, [initialAssignments, pastRounds]);
   const [roundId, setRoundId] = useState(rounds[0]?.id ?? "");
   const [tool, setTool] = useState<Tool>("select");
   const [selection, setSelection] = useState<string[]>([]);
@@ -441,10 +448,11 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
 
   return <section className="review-panel matrix-review" id="review" onKeyDown={handleKeyDown}>
 
-    <div className="round-tabs" role="tablist" aria-label={t("review.roundTabs")}>{rounds.map(round => {
+    <div className="round-tabs" role="tablist" aria-label={t("review.roundTabs")}>{rounds.map((round, index) => {
       const roundIssues = issuesByRound.get(round.id) ?? [];
       const worst = worstSeverity(roundIssues);
-      return <button key={round.id} role="tab" aria-selected={roundId === round.id} className={roundId === round.id ? "active" : ""} onClick={() => changeRound(round.id)} title={`${eventName(round.eventId)} · ${round.id}`}><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><span>{eventName(round.eventId)}<small>{t("rounds.roundNumber", { number: round.id.split("-r").at(-1) ?? "" })}</small></span>{worst && <em className={`tab-issues ${worst}`} title={tp("review.problems", roundIssues.length)}>{roundIssues.length}</em>}</button>;
+      const firstPast = pastRounds.has(round.id) && (index === 0 || !pastRounds.has(rounds[index - 1].id));
+      return <Fragment key={round.id}>{firstPast && <span className="round-tabs-divider">{t("review.pastRounds")}</span>}<button role="tab" aria-selected={roundId === round.id} className={roundId === round.id ? "active" : ""} onClick={() => changeRound(round.id)} title={`${eventName(round.eventId)} · ${round.id}`}><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><span>{eventName(round.eventId)}<small>{t("rounds.roundNumber", { number: round.id.split("-r").at(-1) ?? "" })}</small></span>{worst && <em className={`tab-issues ${worst}`} title={tp("review.problems", roundIssues.length)}>{roundIssues.length}</em>}</button></Fragment>;
     })}</div>
 
     <div className="matrix-toolbar">

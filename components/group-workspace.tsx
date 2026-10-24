@@ -40,7 +40,7 @@ import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEli
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { acceptedPeople, personKey, initialRounds, shapeRound, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
@@ -106,7 +106,8 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const [generatedWith, setGeneratedWith] = useState<string>();
   /** Remounts the review (and resets its undo history) only when a new proposal is generated. */
   const [proposalVersion, setProposalVersion] = useState(0);
-  const [roundTab, setRoundTab] = useState<"first" | "later">("first");
+  /** Groups tab: rounds already held, rounds that can be generated, rounds whose competitors are not known yet. */
+  const [roundTab, setRoundTab] = useState<"past" | "ready" | "pending">("ready");
   const [tab, setTab] = useState<Tab>("zone");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
@@ -535,8 +536,14 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   /** Everyone who can be added to a round in the review: registered people, staff and, in PRO, volunteers. */
   const reviewPeople = everyone(competition, pro ? proPeople : undefined);
   const activeRounds = rounds.filter(round => round.enabled);
-  const firstRounds = rounds.filter(round => round.roundNumber === 1);
-  const laterRounds = rounds.filter(round => round.roundNumber > 1);
+  // Rounds already held keep their assignments: they are neither suggested nor regenerated.
+  const pastRoundIds = new Set(rounds.filter(round => roundHasResults(competition, round.id)).map(round => round.id));
+  const roundsByTab = {
+    past: rounds.filter(round => pastRoundIds.has(round.id)),
+    ready: rounds.filter(round => !pastRoundIds.has(round.id) && round.competitorsKnown),
+    pending: rounds.filter(round => !pastRoundIds.has(round.id) && !round.competitorsKnown),
+  };
+  const generatedRoundIds = new Set(proposal.map(item => item.roundId));
   const totalGroups = activeRounds.reduce((sum, round) => sum + round.groups, 0);
   const roomCount = competition.schedule?.venues?.reduce((sum, venue) => sum + (venue.rooms?.length ?? 0), 0) ?? 0;
   const proposalOutdated = proposal.length > 0 && generatedWith !== undefined && generatedWith !== signature;
@@ -545,7 +552,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   /** Everything the generator needs except the rounds to generate. */
   const generationInput = { competition, stations, zoneMode, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
   // Mid-competition: enabled rounds with known competitors that the proposal does not have yet.
-  const newRounds = proposal.length ? activeRounds.filter(round => round.competitorsKnown && !proposal.some(item => item.roundId === round.id)) : [];
+  const newRounds = proposal.length ? activeRounds.filter(round => round.competitorsKnown && !pastRoundIds.has(round.id) && !generatedRoundIds.has(round.id)) : [];
   const roundName = (round: { eventId: string; roundNumber: number }) => `${eventName(round.eventId)} R${round.roundNumber}`;
 
   /** Generates only the new rounds; the rest of the proposal stays as it is and counts for them. */
@@ -609,13 +616,26 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   function createProposal() {
     if (!competition || !settings) return;
     if (proposal.length && !window.confirm(t("workspace.confirmReplace"))) return;
-    setProposal(generateAssignments({ ...generationInput, rounds: activeRounds }));
+    // Rounds already held keep their assignments, and count for the rest as fixed ones.
+    const kept = proposal.filter(item => pastRoundIds.has(item.roundId));
+    const keptIds = new Set(kept.map(item => item.roundId));
+    setProposal([...kept, ...generateAssignments({ ...generationInput, rounds: activeRounds.filter(round => !keptIds.has(round.id)), fixedAssignments: kept })]);
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
   }
 
-  const shownRounds = roundTab === "first" ? firstRounds : laterRounds;
+  // With no round held yet, the "past" tab does not show: open the next one.
+  const shownTab = roundTab === "past" && !roundsByTab.past.length ? "ready" : roundTab;
+  const shownRounds = roundsByTab[shownTab];
+
+  /** Deletes a round's assignments, to generate it again (with "Generate new rounds"). */
+  function clearRound(round: RoundConfig) {
+    if (!window.confirm(t("rounds.clearConfirm", { round: roundName(round) }))) return;
+    setProposal(proposal.filter(item => item.roundId !== round.id));
+    setProposalVersion(version => version + 1);
+    setRefreshNote(t("rounds.cleared", { round: roundName(round) }));
+  }
   // Excluded rounds (known competitors, switched off) go to the bottom, greyed out.
   const isExcluded = (round: RoundConfig) => round.competitorsKnown && round.competitors > 0 && !round.enabled;
   const orderedRounds = [...shownRounds.filter(round => !isExcluded(round)), ...shownRounds.filter(isExcluded)];
@@ -717,9 +737,9 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         {tab === "rounds" && <>
           {outdatedNote}
           <section className="round-section" id="groups">
-            <div className="section-heading"><div><h2>{t("rounds.title")} {roundTab === "later" && <Hint align="start" text={t("rounds.laterHint")} />}</h2></div><div className="group-total"><small>{t("rounds.plannedTotal")}</small><strong>{tp("rounds.groups", totalGroups)}</strong></div></div>
-            <div className="round-subtabs" role="tablist"><button role="tab" aria-selected={roundTab === "first"} className={roundTab === "first" ? "active" : ""} onClick={() => setRoundTab("first")}>{t("rounds.firstRounds")} <span>{firstRounds.length}</span></button><button role="tab" aria-selected={roundTab === "later"} className={roundTab === "later" ? "active" : ""} onClick={() => setRoundTab("later")}>{t("rounds.laterRounds")} <span>{laterRounds.length}</span></button></div>
-            {shownRounds.length === 0 ? <p className="setup-note">{t("rounds.noLater")}</p> : <div className="round-table">
+            <div className="section-heading"><div><h2>{t("rounds.title")} {shownTab === "pending" && <Hint align="start" text={t("rounds.laterHint")} />}</h2></div><div className="group-total"><small>{t("rounds.plannedTotal")}</small><strong>{tp("rounds.groups", totalGroups)}</strong></div></div>
+            <div className="round-subtabs" role="tablist">{(["past", "ready", "pending"] as const).filter(id => id !== "past" || roundsByTab.past.length > 0).map(id => <button key={id} role="tab" aria-selected={shownTab === id} className={shownTab === id ? "active" : ""} onClick={() => setRoundTab(id)} title={t(keyOf("rounds.tabsHelp", id))}>{t(keyOf("rounds.tabs", id))} <span>{roundsByTab[id].length}</span></button>)}</div>
+            {shownRounds.length === 0 ? <p className="setup-note">{t(keyOf("rounds.empty", shownTab))}</p> : <div className="round-table">
               <div className="round-table-head"><span>{t("rounds.columnRound")}</span><span>{t("rounds.columnCompetitors")}</span><span>{t("rounds.columnEntry")}</span><span>{t("rounds.columnGroups")}</span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span /></div>
               {orderedRounds.map((round, index) => {
                 const fixed = usesFixedStations(round.roundNumber, round.competitors, stations, zoneMode);
@@ -732,7 +752,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
                 return <Fragment key={round.id}>
                   {firstExcluded && <div className="round-divider">{t("rounds.excluded")}</div>}
                   <div className={`round-row ${excluded ? "excluded" : ""}`}>
-                    <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })} · {round.eventId}</small></div></div>
+                    <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })} · {round.eventId}{generatedRoundIds.has(round.id) && <> · <span className="round-generated">{t("rounds.generated")}</span> <button type="button" className="round-clear" onClick={() => clearRound(round)} title={t("rounds.clearHelp")}>{t("rounds.clear")}</button></>}</small></div></div>
                     <span className="round-number" data-label={t("rounds.columnCompetitors")}>{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
                     <span data-label={t("rounds.columnEntry")}>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
                     <div className="group-cell">{pro && slots?.has(round.id)
@@ -760,7 +780,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         {tab === "review" && <>
           {wcifNote && <p className="setup-note wcif-note" role="status">{t("workspace.wcifGroups", { count: wcifNote.count })}{wcifNote.unplaced > 0 && ` ${t("workspace.wcifUnplaced", { count: wcifNote.unplaced })}`}</p>}
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} everyone={reviewPeople} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} pastRounds={pastRoundIds} everyone={reviewPeople} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
             const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
             return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];

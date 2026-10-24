@@ -507,3 +507,13 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .button.danger{color:#fff;background:#b42318}
 .button.danger:hover{background:#912018}
 .publish-body .button{padding:10px 16px;font-size:14px}
+
+/* Groups: a generated round, and deleting its assignments */
+.round-generated{color:var(--green);font-weight:650}
+.round-clear{padding:0;border:0;background:none;color:var(--muted);font:inherit;text-decoration:underline;cursor:pointer}
+.round-clear:hover{color:var(--error)}
+
+/* Review: rounds already held, after a divider */
+.round-tabs-divider{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.round-tabs-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+@media (max-width:700px){.round-tabs-divider{margin:0 4px;padding-left:8px;border-left:1px solid var(--line)}.round-tabs-divider::after{display:none}}

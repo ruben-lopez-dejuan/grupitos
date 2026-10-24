@@ -194,7 +194,13 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 ### Durante la competición
 
 - **Actualizar desde la WCA:** vuelve a descargar el WCIF (resultados e inscripciones) sin tocar la configuración ni la propuesta.
-- **Generar rondas nuevas:** genera solo las rondas que ya tienen competidores. Lo asignado antes cuenta: horas, cargas y quién compite o trabaja en cada momento.
+- **Generar rondas nuevas:** genera solo las rondas que ya tienen competidores y aún no tienen resultados. Lo asignado antes cuenta: horas, cargas y quién compite o trabaja en cada momento.
+- **Tres pestañas en Grupos:**
+  - **Ya celebradas:** rondas con resultados. Sus grupos se conservan y «Volver a generar» no los toca.
+  - **Por generar:** rondas con competidores conocidos y sin resultados.
+  - **Sin competidores todavía:** rondas cuyos competidores aún no se conocen.
+- **Borrar asignaciones** de una ronda ya generada, para generarla otra vez.
+- **En Revisar**, primero las rondas que quedan por celebrar y, tras una separación, las ya celebradas.
 
 ### WCIF de entrada y de salida
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
-import { bestAverageAndSingle, expectedCompetitorsByRound, initialRounds, seedResult, suggestGroups, usesFixedStations } from "@/lib/rounds";
+import { bestAverageAndSingle, expectedCompetitorsByRound, initialRounds, roundHasResults, seedResult, suggestGroups, usesFixedStations } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { blankScorecards, centisecondsToClockFormat, pdfName, roundScorecards } from "@/lib/scorecards/scorecards";
 import { SCORECARD_LANGUAGES, translation } from "@/lib/scorecards/translations";
@@ -33,6 +33,18 @@ describe("later rounds", () => {
     const expected = expectedCompetitorsByRound(competition);
     const first = expected.get("333-r1")!.length;
     expect(expected.get("333-r2")).toHaveLength(Math.floor(first * 0.75));
+  });
+
+  it("tells rounds already held (with a time, DNF or DNS) from rounds waiting for results", () => {
+    const held = structuredClone(competition);
+    const rounds = held.events!.find(event => event.id === "333")!.rounds!;
+    const [first, second] = held.persons!;
+    // Advanced people have empty results until the round is held.
+    rounds[1].results = [{ personId: first.registrantId!, ranking: null, best: 0, average: 0 }];
+    rounds[0].results = [{ personId: first.registrantId!, ranking: 1, best: 950, average: 1010 }, { personId: second.registrantId!, ranking: 2, best: -1, average: -1 }];
+    expect(roundHasResults(held, "333-r1")).toBe(true);
+    expect(roundHasResults(held, "333-r2")).toBe(false);
+    expect(roundHasResults(competition, "333-r1")).toBe(false);
   });
 
   it("plans later rounds without enabling them", () => {
