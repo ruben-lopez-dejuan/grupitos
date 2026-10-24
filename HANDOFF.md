@@ -240,6 +240,19 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Mezcla del multi** (actividad de Horario `multi-scramble`; se reconoce al importar por el nombre): los mezcladores de cada intento trabajan en la mezcla que acaba justo antes de ese intento, el mismo día (`GroupSlot.scrambleWindow`, `windowsForTask`). Generador y validación usan esa hora.
 - **Mitad de competición**: «Actualizar desde la WCA» (barra superior) vuelve a descargar el WCIF sin tocar configuración ni propuesta y activa las rondas que ya tienen competidores. «Generar rondas nuevas» (Grupos) genera solo esas rondas con `fixedAssignments`: las horas, cargas y rachas de lo ya asignado cuentan, y los nuevos competidores evitan los grupos donde ya compiten o trabajan.
 
+### 6.11. Inicio, móvil, icono y README (24/10/2026)
+
+- **Página de inicio** (`app/page.tsx`, textos `landing` en es/en): qué hace la app en modo básico y PRO, sin adornos.
+- **Móvil**: bloque `@media (max-width:700px)` al final de `app/pro.css`. Hace tres cosas:
+  - la barra superior se parte en dos líneas;
+  - las tablas de rondas y de personal pasan a tarjetas, con la etiqueta en `data-label` y `::before`;
+  - los controles de Revisar se ajustan al ancho.
+
+  Al tocar el área de trabajo hay que comprobar que a 375 px `document.documentElement.scrollWidth` es 375.
+- **Icono**: `app/icon.svg` y `app/apple-icon.png`. `components/app-mark.tsx` lo dibuja en la marca. Si se cambia el dibujo, hay que cambiarlo en los tres sitios.
+- **Logo de la WCA** en el botón de entrar: pendiente del permiso del usuario para descargar `WCA Logo.svg` del repositorio de la WCA.
+- **README**: describe todas las funciones. Hay que actualizarlo cuando se añada algo visible.
+
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
 Archivo local del usuario (**no commitear: tiene datos personales**). Estructura:
@@ -263,7 +276,6 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 Pendientes conocidos:
 
 - Leer `groupifier.CompetitionConfig` para rellenar las opciones de impresión.
-- La configuración PRO no se exporta todavía como plantilla JSON.
 
 ## 8. Cómo comprobar el trabajo
 
