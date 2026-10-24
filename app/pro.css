@@ -415,3 +415,28 @@ button.plain.danger{justify-self:start;color:var(--error)}
 @media (max-width:560px){.login-page .topbar .plain-link{display:none}.login-intro h1{font-size:30px}}
 .login-footer a{color:inherit}
 .login-footer a:hover{color:var(--blue)}
+
+/* Phones: one column, tables as cards, nothing wider than the screen */
+@media (max-width:700px){
+  .workspace-topbar{height:auto;flex-wrap:wrap;gap:6px 8px;padding:8px 12px}
+  .workspace-topbar>div:first-child{flex:1 1 100%;flex-wrap:wrap;white-space:normal;row-gap:4px}
+  .workspace-topbar>div:first-child strong{flex:1 1 auto;max-width:none;min-width:0}
+  .workspace-topbar .change-competition{margin-left:0;font-size:12px}
+  .workspace-topbar-actions{flex:1 1 100%;justify-content:flex-end;gap:6px}
+  .workspace-topbar .sync-state{display:none}
+  .round-table{overflow-x:visible}
+  .round-table .round-table-head{display:none}
+  .round-table .round-row,.staffing-grid .round-row{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;row-gap:24px;column-gap:10px;padding:12px;min-width:0}
+  .round-table .round-row>:first-child{grid-column:1/-1}
+  .round-table .mini-stepper,.round-table .round-row>[data-label]{position:relative;justify-self:start;overflow:visible}
+  .round-table .mini-stepper::before,.round-table .round-row>[data-label]::before{content:attr(data-label);position:absolute;bottom:100%;left:0;margin-bottom:3px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+  .round-table .group-cell{flex-wrap:wrap}
+  .staffing-grid .lane-team{grid-column:1/-1;width:100%}
+  .issue-bar .row-controls{flex-wrap:wrap;width:100%}
+  .row-controls>*{flex:1 1 140px;min-width:0}
+  .tool-chips{flex-wrap:wrap}
+  .round-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto}
+  .round-tabs>*{flex:0 0 auto}
+  .room-bar{flex-wrap:wrap;overflow-x:visible}
+  .room-bar>*{flex:1 1 100%;min-width:0}
+}

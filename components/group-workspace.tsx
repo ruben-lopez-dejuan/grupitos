@@ -637,8 +637,8 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
                   {firstExcluded && <div className="round-divider">{t("rounds.excluded")}</div>}
                   <div className={`round-row ${excluded ? "excluded" : ""}`}>
                     <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })} · {round.eventId}</small></div></div>
-                    <span className="round-number">{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
-                    <span>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
+                    <span className="round-number" data-label={t("rounds.columnCompetitors")}>{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
+                    <span data-label={t("rounds.columnEntry")}>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
                     <div className="group-cell">{pro && slots?.has(round.id)
                       // PRO: the total is set here and spread over the round's blocks in the schedule.
                       ? <><Stepper label={t("rounds.stepperGroups")} value={round.groups - (slots?.get(round.id) ?? []).filter(slot => slot.linkedTo).length} min={minScheduledGroups(pro.schedule, round.id)} big disabled={excluded} onChange={groups => setSchedule(setRoundGroups(pro.schedule, round.id, groups))} />
@@ -690,5 +690,5 @@ export function GroupWorkspace({ competitionId, userName }: { competitionId: str
 /** `auto`: the value is a suggestion nobody has set yet, shown muted. */
 function Stepper({ label, value, min, disabled = false, big = false, auto = false, variant, onChange }: { label: string; value: number; min: number; disabled?: boolean; big?: boolean; auto?: boolean; variant?: "scrambler" | "runner"; onChange: (value: number) => void }) {
   const { t } = useI18n();
-  return <div className={["mini-stepper", big && "big", auto && "auto", variant].filter(Boolean).join(" ")} title={auto ? t("staffing.auto") : undefined}><button disabled={disabled || value <= min} aria-label={t("rounds.remove", { thing: label })} onClick={() => onChange(value - 1)}>−</button><strong aria-label={`${value} ${label}`}>{value}</strong><button disabled={disabled} aria-label={t("rounds.add", { thing: label })} onClick={() => onChange(value + 1)}>+</button></div>;
+  return <div className={["mini-stepper", big && "big", auto && "auto", variant].filter(Boolean).join(" ")} title={auto ? t("staffing.auto") : undefined} data-label={label}><button disabled={disabled || value <= min} aria-label={t("rounds.remove", { thing: label })} onClick={() => onChange(value - 1)}>−</button><strong aria-label={`${value} ${label}`}>{value}</strong><button disabled={disabled} aria-label={t("rounds.add", { thing: label })} onClick={() => onChange(value + 1)}>+</button></div>;
 }
