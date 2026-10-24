@@ -767,7 +767,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : undefined} segmentFilters={segmentFilters} />}
         </>}
 
-        {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} outdated={proposalOutdated} userName={userName} offline={offline} onPublished={afterPublish} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
+        {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} outdated={proposalOutdated} userName={userName} offline={offline} lastPublished={remoteSavedAt} onPublished={afterPublish} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
         {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
       </div>
       <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {

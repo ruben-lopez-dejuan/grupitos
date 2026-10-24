@@ -477,3 +477,33 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .volunteer-list .account-search .button{padding:5px 10px;color:var(--ink);border:1px solid var(--line)}
 .volunteer-list .account-search li{display:block;padding:0;background:none;border:0;font-weight:500}
 .volunteer-list .account-search li button:hover{color:var(--blue);background:transparent}
+
+/* Publishing to the WCA: figures, warnings, confirmation and result */
+.publish-body{display:grid;gap:14px;padding:0 22px 22px}
+.publish-intro{margin:0;color:var(--muted);font-size:14px}
+.publish-last{color:var(--ink);font-weight:650}
+.publish-step{margin:4px 0 0;font-size:16px}
+.publish-stats{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));background:var(--surface);border:1px solid var(--line);border-radius:7px}
+.publish-stats div{display:grid;align-content:start;gap:6px;padding:12px 16px;border-left:1px solid var(--line)}
+.publish-stats div:first-child{border-left:0}
+@media (max-width:700px){.publish-stats{grid-template-columns:1fr}.publish-stats div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 14px;border-left:0;border-top:1px solid var(--line)}.publish-stats div:first-child{border-top:0}.publish-stats strong{font-size:22px}}
+.publish-stats small{color:var(--muted);font-size:13px}
+.publish-stats strong{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.publish-stats .warn strong{color:var(--warning)}
+.publish-alert{display:grid;gap:8px;padding:14px 16px;border:1px solid var(--line);border-left-width:4px;border-radius:6px;font-size:14px}
+.publish-alert h3{margin:0;font-size:17px}
+.publish-alert p{margin:0}
+.publish-alert ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.publish-alert.warning{background:color-mix(in srgb,var(--warning) 8%,var(--surface));border-color:color-mix(in srgb,var(--warning) 40%,var(--line));border-left-color:var(--warning)}
+.publish-alert.error{background:color-mix(in srgb,var(--error) 8%,var(--surface));border-color:color-mix(in srgb,var(--error) 40%,var(--line));border-left-color:var(--error)}
+.publish-alert.error h3{color:var(--error)}
+.publish-alert.success{background:color-mix(in srgb,var(--green) 9%,var(--surface));border-color:color-mix(in srgb,var(--green) 40%,var(--line));border-left-color:var(--green)}
+.publish-alert.success h3{color:var(--green)}
+.publish-alert .publish-stats{margin-top:4px}
+.publish-actions{display:flex;flex-wrap:wrap;gap:8px}
+.publish-confirm{display:grid;gap:10px;padding:14px 16px;border:2px solid var(--error);border-radius:6px}
+.publish-confirm p{margin:0;font-size:15px}
+/* The same dark red in both themes: white text stays readable. */
+.button.danger{color:#fff;background:#b42318}
+.button.danger:hover{background:#912018}
+.publish-body .button{padding:10px 16px;font-size:14px}
