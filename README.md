@@ -108,6 +108,13 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - columna de comprobación de mezcla;
   - portada de control por grupo para el delegado y data entry;
   - número de inscripción por detrás, para imprimir a doble cara.
+- **Selección rápida de rondas:**
+  - por celebrar (la selección inicial);
+  - generadas;
+  - ya celebradas (para reimprimir);
+  - sin competidores (hojas sin nombre);
+  - primeras rondas o rondas siguientes;
+  - un día concreto del horario (PRO).
 - Mismo orden que Groupifier: dentro de cada grupo, de peor a mejor, así que el mejor de la ronda lleva el número 1. En rondas siguientes cuenta el puesto en la ronda anterior.
 - Mismo aspecto que Groupifier, también en euskera y los demás idiomas: las etiquetas salen enteras.
 

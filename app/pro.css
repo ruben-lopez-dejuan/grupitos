@@ -520,3 +520,12 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .round-tabs-divider.toggle{margin-top:0;padding:4px 2px;border:0;background:none;font:inherit;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;text-align:left}
 .round-tabs-divider.toggle:hover{color:var(--blue)}
 .row-button{white-space:nowrap;gap:8px}
+
+/* Printing: quick selections of rounds */
+.print-presets{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.print-presets>span{margin-right:4px;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.print-presets button{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;cursor:pointer}
+.print-presets button small{color:var(--muted);font-weight:700}
+.print-presets button:hover{border-color:var(--blue)}
+.print-presets button[aria-pressed="true"]{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,var(--surface));color:var(--blue)}
+.print-round-status.held{color:var(--muted);font-style:italic}

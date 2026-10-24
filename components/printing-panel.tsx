@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { roundHasResults } from "@/lib/rounds";
 import { EventIcon } from "@/components/event-icon";
 import { Hint } from "@/components/hint";
 import { useEventName, useI18n } from "@/components/i18n";
@@ -31,13 +32,17 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   slots?: Map<string, GroupSlot[]>;
   onChange: (printing: PrintingOptions) => void;
 }) {
-  const { t, tp } = useI18n();
+  const { t, tp, locale } = useI18n();
   const eventName = useEventName();
   const withAssignments = new Set(assignments.map(item => item.roundId));
   // Rounds with a proposal, plus later rounds whose groups are planned but whose competitors are unknown.
   const printable = rounds.filter(round => withAssignments.has(round.id) || (round.roundNumber > 1 && !round.competitorsKnown && round.competitors > 0));
   const generatedIds = printable.filter(round => withAssignments.has(round.id)).map(round => round.id);
-  const [chosen, setChosen] = useState<string[]>(() => generatedIds);
+  /** Rounds already held (with results): their cards are only reprinted. */
+  const held = new Set(printable.filter(round => roundHasResults(competition, round.id)).map(round => round.id));
+  const upcomingIds = generatedIds.filter(id => !held.has(id));
+  // What usually gets printed: the generated rounds still to be held.
+  const [chosen, setChosen] = useState<string[]>(() => upcomingIds.length ? upcomingIds : generatedIds);
   /** Stages left out of the print, as "roundId|laneKey". */
   const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState<"rounds" | "blank">();
@@ -57,7 +62,25 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   // Stage buttons stay available regardless of the round selection and keep their filters for later.
   const printableIds = printable.map(round => round.id);
   const usedStages = stageLanes.filter(lane => printableIds.some(id => stagesOf(id).some(item => item.key === lane.key)));
-  const allGeneratedChosen = generatedIds.length > 0 && generatedIds.every(id => selectedIds.includes(id));
+  // PRO: the day each round starts, to print a day's cards at once.
+  const dayOf = (roundId: string) => {
+    const start = slots?.get(roundId)?.map(slot => slot.windows[0]?.start).filter(Boolean).sort()[0];
+    return start && schedule ? schedule.days.indexOf(start.slice(0, 10)) : -1;
+  };
+  const dayName = (day: string) => {
+    try { return new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric" }).format(new Date(`${day}T12:00:00`)); } catch { return day; }
+  };
+  /** Quick selections: each ticks a set of rounds that is often printed together. */
+  const presets = [
+    { id: "upcoming", label: t("printing.presets.upcoming"), help: t("printing.presets.upcomingHelp"), ids: upcomingIds },
+    { id: "generated", label: t("printing.presets.generated"), help: t("printing.presets.generatedHelp"), ids: generatedIds },
+    { id: "held", label: t("printing.presets.held"), help: t("printing.presets.heldHelp"), ids: generatedIds.filter(id => held.has(id)) },
+    { id: "planned", label: t("printing.presets.planned"), help: t("printing.presets.plannedHelp"), ids: printable.filter(round => !withAssignments.has(round.id)).map(round => round.id) },
+    { id: "first", label: t("printing.presets.first"), help: t("printing.presets.firstHelp"), ids: printable.filter(round => round.roundNumber === 1).map(round => round.id) },
+    { id: "later", label: t("printing.presets.later"), help: t("printing.presets.laterHelp"), ids: printable.filter(round => round.roundNumber > 1).map(round => round.id) },
+    ...(schedule?.days ?? []).map((day, index) => ({ id: `day-${index}`, label: dayName(day), help: t("printing.presets.dayHelp"), ids: printable.filter(round => dayOf(round.id) === index).map(round => round.id) })),
+  ].filter(preset => preset.ids.length > 0);
+  const sameSet = (ids: string[]) => ids.length === selectedIds.length && ids.every(id => selectedIds.includes(id));
   const includeGroup = (roundId: string, group: number) => {
     const slot = slots?.get(roundId)?.find(item => item.group === group);
     return !slot || !excluded.includes(stageKey(roundId, targetKey(slot.roomId, slot.stageId)));
@@ -106,7 +129,11 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
           const included = keys.filter(key => !excluded.includes(key)).length;
           return <button key={lane.key} type="button" aria-pressed={included === keys.length} className={included === 0 ? "off" : included < keys.length ? "partial" : ""} style={{ ["--stage" as string]: lane.color }} title={t("printing.stageToggle", { name: lane.name, count: included, total: keys.length })} onClick={() => toggleStages(keys, included < keys.length)}><i />{lane.name}<small>{included}/{keys.length}</small></button>;
         })}<Hint text={t("printing.stagesHelp")} /></div>}
-        <button className="plain" type="button" disabled={!generatedIds.length} onClick={() => setChosen(current => allGeneratedChosen ? current.filter(id => !generatedIds.includes(id)) : [...new Set([...current, ...generatedIds])])}>{allGeneratedChosen ? t("printing.selectNone") : t("printing.selectAll")}</button></div>
+      </div>
+      <div className="print-presets" role="group" aria-label={t("printing.presetsTitle")}><span>{t("printing.presetsTitle")}</span>
+        {presets.map(preset => <button key={preset.id} type="button" aria-pressed={sameSet(preset.ids)} title={preset.help} onClick={() => setChosen(preset.ids)}>{preset.label} <small>{preset.ids.length}</small></button>)}
+        <button type="button" aria-pressed={selectedIds.length === 0} onClick={() => setChosen([])}>{t("printing.selectNone")}</button>
+      </div>
       <table className="print-table">
         <thead><tr><th>{t("printing.columnEvent")}</th>{roundNumbers.map(number => <th key={number}>{t("printing.roundNumber", { number })}</th>)}</tr></thead>
         <tbody>{eventIds.map(eventId => <tr key={eventId}>
@@ -119,7 +146,7 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
             const roundStages = stagesOf(round.id);
             const generated = withAssignments.has(round.id);
             const scheduled = (slots?.get(round.id)?.length ?? 0) > 0;
-            return <td key={number} className={generated ? "generated-round" : "planned-round"}><label><input type="checkbox" checked={chosen.includes(round.id)} onChange={event => setChosen(current => event.target.checked ? [...current, round.id] : current.filter(id => id !== round.id))} /><span className="print-round-status">{generated ? t("printing.generated") : t("printing.notGenerated")}</span></label>
+            return <td key={number} className={generated ? "generated-round" : "planned-round"}><label><input type="checkbox" checked={chosen.includes(round.id)} onChange={event => setChosen(current => event.target.checked ? [...current, round.id] : current.filter(id => id !== round.id))} /><span className={`print-round-status ${held.has(round.id) ? "held" : ""}`}>{held.has(round.id) ? t("printing.held") : generated ? t("printing.generated") : t("printing.notGenerated")}</span></label>
               {roundStages.length > 0 ? <span className="cell-stages">{roundStages.map(lane => {
                 const key = stageKey(round.id, lane.key);
                 const on = !excluded.includes(key);
