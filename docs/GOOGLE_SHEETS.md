@@ -6,7 +6,7 @@ Mientras no esté configurado, la app lo indica y se puede importar igual pegand
 
 ## Configuración (una sola vez)
 
-1. Entra en <https://console.cloud.google.com/> con la cuenta de Google que quieras usar y crea un proyecto (por ejemplo «wca-easy-groups»).
+1. Entra en <https://console.cloud.google.com/> con la cuenta de Google que quieras usar y crea un proyecto (por ejemplo «grupitos»).
 2. En «APIs y servicios → Biblioteca», activa **Google Sheets API**.
 3. En «APIs y servicios → Credenciales → Crear credenciales → Cuenta de servicio», crea una cuenta (sin roles de proyecto). Anota su correo, del tipo `nombre@proyecto.iam.gserviceaccount.com`.
 4. En la cuenta de servicio → «Claves → Añadir clave → JSON». Se descarga un archivo con `client_email` y `private_key`. **Ese archivo es secreto: no lo subas al repositorio ni lo pegues en un chat.**

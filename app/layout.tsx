@@ -8,7 +8,7 @@ import { getI18n } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getI18n();
-  return { title: "WCA Easy Groups", description: t("meta.description") };
+  return { title: "Grupitos", description: t("meta.description") };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

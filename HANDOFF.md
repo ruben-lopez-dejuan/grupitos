@@ -1,4 +1,4 @@
-# WCA Easy Groups — relevo para el siguiente agente
+# Grupitos — relevo para el siguiente agente
 
 Fecha: 22/10/2026, actualizado el 23/10/2026. Sustituye a `CLAUDE_HANDOFF.md`, que es de cuando solo existía la primera matriz y queda como contexto histórico de producto (las reglas de dominio de su sección 3 siguen vigentes).
 
@@ -12,10 +12,10 @@ Orden de lectura recomendado:
 
 ## 1. Qué es y cómo trabajar con el usuario
 
-**WCA Easy Groups** crea, revisa y (más adelante) publica grupos y tareas de personal de competiciones WCA. Su objetivo es ser lo bastante sencilla para un open pequeño, de modo que basten un par de clics, y lo bastante potente para un campeonato nacional, cubriendo todo lo que hoy se hace con CompScript pero con interfaz visual.
+**Grupitos** crea, revisa y (más adelante) publica grupos y tareas de personal de competiciones WCA. Su objetivo es ser lo bastante sencilla para un open pequeño, de modo que basten un par de clics, y lo bastante potente para un campeonato nacional, cubriendo todo lo que hoy se hace con CompScript pero con interfaz visual.
 
-- Repositorio: <https://github.com/ruben-lopez-dejuan/wca-easy-groups>, rama `main`.
-- Producción: <https://groups.lopezruben.com>, desplegada en Vercel (proyecto `rulo7/wca-easy-groups`) con cada push a `main`. El DNS del dominio está en IONOS.
+- Repositorio: <https://github.com/ruben-lopez-dejuan/grupitos>, rama `main`.
+- Producción: <https://grupitos.lopezruben.org>, desplegada en Vercel (proyecto `rulo7/grupitos`; antes `wca-easy-groups`) con cada push a `main`. El DNS del dominio está en IONOS.
 - Usuario: Rubén López de Juan, organizador y delegado WCA en España. Escribe en español.
 
 Preferencias firmes del usuario:
@@ -240,6 +240,12 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Horas ocupadas al repartir competidores**: las indisponibilidades con hora (de una persona o de su equipo) entran en `reserved` con peso 1, así que el arreglo de solapes saca a esa persona del grupo si hay otro libre. «Mientras compite X» no cuenta aquí, porque X aún no tiene grupo.
 - **Mezcla del multi** (actividad de Horario `multi-scramble`; se reconoce al importar por el nombre): los mezcladores de cada intento trabajan en la mezcla que acaba justo antes de ese intento, el mismo día (`GroupSlot.scrambleWindow`, `windowsForTask`). Generador y validación usan esa hora.
 - **Mitad de competición**: «Actualizar desde la WCA» (barra superior) vuelve a descargar el WCIF sin tocar configuración ni propuesta y activa las rondas que ya tienen competidores. «Generar rondas nuevas» (Grupos) genera solo esas rondas con `fixedAssignments`: las horas, cargas y rachas de lo ya asignado cuentan, y los nuevos competidores evitan los grupos donde ya compiten o trabajan.
+
+### 6.14. Nuevo nombre: Grupitos (25/10/2026)
+
+- La app se llama **Grupitos** y su dominio pasa a ser <https://grupitos.lopezruben.org>. El repositorio es `ruben-lopez-dejuan/grupitos`; GitHub redirige el nombre antiguo.
+- **Identificadores internos con el nombre antiguo, a propósito**: se mantienen las claves del navegador (`wca-easy-groups:draft:…`, `wca-easy-groups-theme`, `wca-easy-groups:show-photos`, la cookie `wca-easy-groups-locale` y la base IndexedDB `wca-easy-groups`), el formato de plantillas `wca-easy-groups/pro-template` y las extensiones `wcaEasyGroups.Settings` y `wcaEasyGroups.Draft`. Cambiarlos dejaría sin leer lo ya guardado, lo publicado en la WCA y los archivos descargados.
+- **Cambio de dominio**: el navegador guarda los borradores por dominio. Para llevarse el trabajo del dominio antiguo al nuevo hay dos caminos: publicar los ajustes en la WCA, o descargar el WCIF en el dominio antiguo e importarlo en el nuevo. Guía completa en [`docs/RENOMBRAR_A_GRUPITOS.md`](docs/RENOMBRAR_A_GRUPITOS.md).
 
 ### 6.13. Publicar en la WCA y ajustes compartidos (24/10/2026)
 

@@ -1,6 +1,6 @@
 # Campeonato de España 2026 en la web
 
-Cómo recrear en WCA Easy Groups la configuración de los scripts de CompScript del Nacional
+Cómo recrear en Grupitos la configuración de los scripts de CompScript del Nacional
 ([aasalobrena/Scripts-Compscript, `SpanishChampionship2026`](https://github.com/aasalobrena/Scripts-Compscript/tree/main/SpanishChampionship2026)).
 Está escrita para el estado del repo a 23/10/2026: solo tiene la preparación (`0_precomp`) y la
 biblioteca (`lib`); los scripts de primeras rondas, de rondas siguientes, de jueces por escenario

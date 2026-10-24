@@ -14,7 +14,7 @@ import { isDraftExtension } from "@/lib/wcif-session";
 
 /** WCA extension ids are dot-separated words: no hyphens. */
 export const SETTINGS_EXTENSION_ID = "wcaEasyGroups.Settings";
-export const SETTINGS_SPEC_URL = "https://github.com/ruben-lopez-dejuan/wca-easy-groups/blob/main/docs/WCIF_EXTENSION.md";
+export const SETTINGS_SPEC_URL = "https://github.com/ruben-lopez-dejuan/grupitos/blob/main/docs/WCIF_EXTENSION.md";
 
 export type SavedSettings = { settings: WorkspaceSettings; generatedWith?: string; savedAt: string; savedBy?: string };
 type SettingsData = { version: 1; savedAt: string; savedBy?: string; encoding: "deflate-raw;base64"; payload: string };

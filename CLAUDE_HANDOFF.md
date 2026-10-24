@@ -1,14 +1,14 @@
-# WCA Easy Groups — contexto de producto y traspaso técnico
+# Grupitos — contexto de producto y traspaso técnico
 
 > **Obsoleto como estado del proyecto (22/10/2026).** El relevo actual está en [`HANDOFF.md`](HANDOFF.md). Este documento se conserva por el contexto de producto y las reglas de dominio de la sección 3.
 
 ## 1. Resumen del proyecto
 
-**WCA Easy Groups** es una aplicación web para crear, revisar y publicar grupos y asignaciones de personal de competiciones oficiales de la World Cube Association (WCA).
+**Grupitos** es una aplicación web para crear, revisar y publicar grupos y asignaciones de personal de competiciones oficiales de la World Cube Association (WCA).
 
 Repositorio principal:
 
-- <https://github.com/ruben-lopez-dejuan/wca-easy-groups>
+- <https://github.com/ruben-lopez-dejuan/grupitos>
 
 La idea central no es construir otro generador completamente automático y opaco. Queremos una herramienta que:
 
@@ -43,7 +43,7 @@ Las herramientas actuales suelen estar en uno de dos extremos:
 - muy automáticas, sencillas pero poco configurables;
 - muy potentes, pero orientadas a usuarios expertos y configuradas mediante scripts.
 
-WCA Easy Groups intenta ocupar el espacio intermedio: **presets sencillos + controles avanzados progresivos + revisión manual eficiente**.
+Grupitos intenta ocupar el espacio intermedio: **presets sencillos + controles avanzados progresivos + revisión manual eficiente**.
 
 ## 3. Reglas del dominio que no deben interpretarse mal
 

@@ -17,8 +17,8 @@ export default async function HomePage() {
   const { t } = await getI18n();
   return <main className="login-page">
     <nav className="topbar container">
-      <Link className="brand" href="/"><AppMark /> WCA Easy Groups</Link>
-      <div className="topbar-actions"><LanguageSwitcher /><ThemeToggle /><a className="plain-link" href="https://github.com/ruben-lopez-dejuan/wca-easy-groups">GitHub ↗</a></div>
+      <Link className="brand" href="/"><AppMark /> Grupitos</Link>
+      <div className="topbar-actions"><LanguageSwitcher /><ThemeToggle /><a className="plain-link" href="https://github.com/ruben-lopez-dejuan/grupitos">GitHub ↗</a></div>
     </nav>
     <section className="login-layout container">
       <div className="login-intro">
@@ -36,6 +36,6 @@ export default async function HomePage() {
         <p className="privacy">{t("landing.privacy")}</p>
       </div>
     </section>
-    <footer className="login-footer container"><span>{t("landing.footerProject")}</span><a href="https://github.com/ruben-lopez-dejuan/wca-easy-groups">{t("landing.footerData")}</a></footer>
+    <footer className="login-footer container"><span>{t("landing.footerProject")}</span><a href="https://github.com/ruben-lopez-dejuan/grupitos">{t("landing.footerData")}</a></footer>
   </main>;
 }

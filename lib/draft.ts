@@ -30,6 +30,7 @@ export type Draft = {
 };
 
 export function draftStorageKey(competitionId: string) {
+  // Storage keys keep the app's first name (WCA Easy Groups), so saved drafts stay readable.
   return `wca-easy-groups:draft:${competitionId}`;
 }
 

@@ -14,7 +14,7 @@ Fuentes analizadas:
 
 ## Qué se usa de verdad
 
-| Necesidad | En CompScript (tus scripts / NATS) | En Easy Groups PRO |
+| Necesidad | En CompScript (tus scripts / NATS) | En Grupitos PRO |
 | --- | --- | --- |
 | Salas y escenarios con colores | `CreateRoom` (sala WCIF), `CreateStage` (escenario dentro de una sala, extensión natshelper), `DeleteRooms` | Pestaña **Horario**: salas y sus escenarios con color, importados del WCIF y editables |
 | Grupos con horas reales por escenario | `CreateGroups(_444-r1, 4, …)` en cada escenario | Línea de tiempo por día; cada ronda se reparte en N grupos por escenario dentro de su franja |

@@ -1,6 +1,8 @@
-# WCIF extensions of WCA Easy Groups
+# WCIF extensions of Grupitos
 
-WCA Easy Groups keeps its settings in the competition's WCIF, as Groupifier and Delegate Dashboard keep theirs, so whoever manages the competition finds them on any device.
+Grupitos keeps its settings in the competition's WCIF, as Groupifier and Delegate Dashboard keep theirs, so whoever manages the competition finds them on any device.
+
+The app was called WCA Easy Groups: the extension ids keep that name, so settings already published and files already downloaded stay readable.
 
 ## `wcaEasyGroups.Settings` (competition)
 
@@ -9,7 +11,7 @@ Written when someone publishes from the app (Publish step) and read when the com
 ```json
 {
   "id": "wcaEasyGroups.Settings",
-  "specUrl": "https://github.com/ruben-lopez-dejuan/wca-easy-groups/blob/main/docs/WCIF_EXTENSION.md",
+  "specUrl": "https://github.com/ruben-lopez-dejuan/grupitos/blob/main/docs/WCIF_EXTENSION.md",
   "data": {
     "version": 1,
     "savedAt": "2026-10-24T18:40:00.000Z",
