@@ -75,6 +75,15 @@ describe("generator with PRO people", () => {
     expect(rows.every(item => item.tasks.every(task => item.why?.some(why => why.group === task.group && why.role === task.role && why.candidates > 0 && why.reasons.includes("volunteer"))))).toBe(true);
   });
 
+  it("places someone busy at a time in a group outside it, when one is free", () => {
+    const before = generateAssignments({ competition, rounds, stations: 8, zoneMode: "fixed", people, options: DEFAULT_OPTIONS, slots });
+    const busy = before.find(item => item.inRound)!;
+    const groupOf = (rows: typeof before) => rows.find(item => item.personId === busy.personId)!.tasks.find(task => task.role === "competitor")!.group;
+    const window = slots.get("333-r1")!.find(slot => slot.group === groupOf(before))!.windows[0];
+    const after = generateAssignments({ competition, rounds, stations: 8, zoneMode: "fixed", people, options: DEFAULT_OPTIONS, slots, unavailable: [{ id: "u", personKey: busy.personId, ...window }] });
+    expect(groupOf(after)).not.toBe(groupOf(before));
+  });
+
   it("gives no task to someone unavailable, also while the person they accompany competes", () => {
     const [parent, kid, other] = competition.persons!.map(personKey);
     const unavailable = [{ id: "u1", personKey: parent, whileCompeting: kid }, { id: "u2", personKey: other, start: day("10:00"), end: day("11:00") }];

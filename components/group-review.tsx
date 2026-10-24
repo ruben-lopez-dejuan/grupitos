@@ -73,6 +73,11 @@ const NO_SEGMENTS: SegmentFilter[] = [];
 
 export type SegmentFilter = { id: string; name: string; members: Set<string> };
 
+/** Multi-blind columns are "G1 A1", "G1 A2"…: the attempt of a column, or nothing in rounds without attempts. */
+function attemptNumber(roundSlots: GroupSlot[], slot: GroupSlot) {
+  return slot.attempt ?? (roundSlots.some(item => item.linkedTo === slot.group) ? 1 : undefined);
+}
+
 export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
@@ -104,7 +109,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
     if (!slot) return String(group);
     const lanes = new Set(slots!.get(round)!.map(item => targetKey(item.roomId, item.stageId)));
     const lane = laneByKey.get(targetKey(slot.roomId, slot.stageId));
-    const attempt = slot.attempt ? ` · ${t("review.attempt", { number: slot.attempt })}` : "";
+    const number = attemptNumber(slots!.get(round)!, slot);
+    const attempt = number ? ` ${t("review.attempt", { number })}` : "";
     return (lanes.size > 1 && lane ? `${slot.number} ${lane.name}` : String(slot.number)) + attempt;
   }, [slots, laneByKey, t]);
   const issueText = useIssueText(groupLabel);
@@ -480,7 +486,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         const roles = (["scrambler", "judge", "runner", ...extraRoles] as TaskRole[]).filter(role => groupCounts[role] > 0 || needs[role]);
         const summary = [tp("review.groupCompetitors", groupCounts.competitor), ...roles.map(role => needs[role] !== undefined ? t("review.roleCountOf", { role: taskLabel(role), count: groupCounts[role], need: needs[role]! }) : t("review.roleCount", { role: taskLabel(role), count: groupCounts[role] })), ...(groupIssues ?? []).map(issueText)].join("\n");
         return <th key={group} className={`group-head ${severity ? `issue-${severity}` : ""} ${extra ? "out-of-range" : ""} ${startsBlock(position) ? "block-start" : ""}`} title={summary}>
-          <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group: groupLabel(roundId, group) })}\n${summary}`}>G{roundSlots?.find(item => item.group === group)?.number ?? group}{roundSlots?.find(item => item.group === group)?.attempt && <span className="group-attempt">{t("review.attempt", { number: roundSlots.find(item => item.group === group)!.attempt! })}</span>}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
+          <button type="button" onClick={() => selectColumn(group)} title={`${t("review.selectColumn", { group: groupLabel(roundId, group) })}\n${summary}`}>G{roundSlots?.find(item => item.group === group)?.number ?? group}{(() => { const slot = roundSlots?.find(item => item.group === group); const number = slot && attemptNumber(roundSlots!, slot); return number ? <span className="group-attempt">{t("review.attempt", { number })}</span> : null; })()}<span className="group-size">{extra ? t("review.groupSurplus") : `· ${groupCounts.competitor}`}</span></button>
           {(() => {
             const slot = roundSlots?.find(item => item.group === group);
             const lane = slot && laneByKey.get(targetKey(slot.roomId, slot.stageId));

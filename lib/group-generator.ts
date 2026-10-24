@@ -91,7 +91,8 @@ type Placement = { plan: CompetitorPlan; planIndex: number; group: number; perso
  */
 /**
  * Times to keep a person free when placing competitors: a room team's work (weight 0.1), or tasks
- * already fixed (weight 1; `competing` ones allow the short walk from one event to the next).
+ * already fixed and times the person is unavailable (weight 1; `competing` ones allow the short walk
+ * from one event to the next).
  */
 type Reserved = Map<string, Array<{ roundId: string; window: TimeWindow; weight?: number; competing?: boolean }>>;
 
@@ -314,6 +315,12 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   // New rounds' competitors keep away from the groups they already compete or work in.
   for (const { item, task, windows } of fixedTasks) {
     for (const window of windows) reserved.set(item.personId, [...(reserved.get(item.personId) ?? []), { roundId: item.roundId, window, weight: 1, competing: task.role === "competitor" }]);
+  }
+  // Busy times (a team's or a person's, with a start and an end) count as clashes: they compete in
+  // another group when one is free. "While X competes" follows X's groups, which are not placed yet.
+  for (const item of unavailable) {
+    if (item.whileCompeting !== undefined || !item.start || !item.end || item.end <= item.start) continue;
+    reserved.set(item.personKey, [...(reserved.get(item.personKey) ?? []), { roundId: "", window: { start: item.start, end: item.end }, weight: 1 }]);
   }
   if (slots && laneTeams) for (const plan of plans) plan.groups.forEach((members, index) => {
     if (!members.length) return;
@@ -892,14 +899,16 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
 /**
  * Group sizes when some groups have a maximum (`caps`): people go to the emptiest group still below
  * its maximum, the first ones first, so uncapped groups share what capped ones cannot take. When
- * every group is full, the rest go to the emptiest groups and the review warns.
+ * every group is full, the rest go where they overflow the maximum least, in proportion (a stage of
+ * 27 takes more than one of 21), and the review warns that the round does not fit.
  */
 export function groupTargets(count: number, caps: Array<number | undefined>) {
   const sizes = caps.map(() => 0);
   for (let left = count; left > 0; left -= 1) {
     const open = sizes.map((size, index) => ({ size, index })).filter(item => caps[item.index] === undefined || item.size < caps[item.index]!);
+    const ratio = (item: { size: number; index: number }) => open.length ? item.size : (item.size + 1) / caps[item.index]!;
     const pool = open.length ? open : sizes.map((size, index) => ({ size, index }));
-    const pick = pool.reduce((best, item) => item.size < best.size ? item : best);
+    const pick = pool.reduce((best, item) => ratio(item) < ratio(best) ? item : best);
     sizes[pick.index] += 1;
   }
   return sizes;

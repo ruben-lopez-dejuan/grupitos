@@ -19,6 +19,7 @@ export type IssueCode =
   | "duplicate-station"
   | "over-capacity"
   | "over-group-limit"
+  | "round-over-limit"
   | "empty-group"
   | "missing-scramblers"
   | "missing-judges"
@@ -45,7 +46,7 @@ export type Issue = {
 };
 
 /** `task` is a task role id and `names` a list of people; the interface translates both. */
-export type IssueParams = { name?: string; group?: number; groups?: number[]; total?: number; count?: number; need?: number; station?: number; task?: string; names?: string[]; otherRound?: string; otherGroup?: number; otherTask?: string };
+export type IssueParams = { name?: string; group?: number; groups?: number[]; groupCount?: number; total?: number; count?: number; need?: number; station?: number; task?: string; names?: string[]; otherRound?: string; otherGroup?: number; otherTask?: string };
 
 export type RoundRules = {
   groups: number;
@@ -135,13 +136,21 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
     }
   }
 
+  // With a maximum in every group, a round with more competitors than seats cannot fit: one warning
+  // for the round instead of one per overfull group.
+  const caps = Array.from({ length: rules.groups }, (_, index) => groupLimits(rules, index + 1).maxPerGroup);
+  const seats = caps.every(cap => cap !== undefined) ? caps.reduce<number>((sum, cap) => sum + cap!, 0) : undefined;
+  const competitors = roundAssignments.filter(item => competingGroups(item).length > 0).length;
+  const overSeats = seats !== undefined && competitors > seats;
+  if (overSeats) add({ severity: "warning", code: "round-over-limit", params: { count: competitors, total: seats, groupCount: rules.groups } });
+
   for (const { group, counts } of groupTotals(roundAssignments, rules.groups)) {
     if (counts.competitor === 0) {
       add({ severity: "warning", code: "empty-group", group, params: { group } });
       continue;
     }
     const limits = groupLimits(rules, group);
-    if (limits.maxPerGroup !== undefined && counts.competitor > limits.maxPerGroup) {
+    if (!overSeats && limits.maxPerGroup !== undefined && counts.competitor > limits.maxPerGroup) {
       add({ severity: "warning", code: "over-group-limit", group, params: { group, count: counts.competitor, total: limits.maxPerGroup } });
     }
     if (counts.scrambler < limits.scramblers) {

@@ -91,6 +91,13 @@ describe("validateRound", () => {
     expect(codes(ok())).toEqual([]);
   });
 
+  it("warns once for the round when the stages' maximums leave no seat for everyone", () => {
+    const rows = [person("a", 1), person("b", 1), person("c", 2)];
+    expect(codes(rows, { groups: 2, byGroup: { 1: { maxPerGroup: 1 }, 2: { maxPerGroup: 1 } } })).toContain("round-over-limit");
+    expect(codes(rows, { groups: 2, byGroup: { 1: { maxPerGroup: 1 }, 2: { maxPerGroup: 1 } } })).not.toContain("over-group-limit");
+    expect(codes(rows, { groups: 2, byGroup: { 1: { maxPerGroup: 1 }, 2: { maxPerGroup: 2 } } })).toEqual(expect.arrayContaining(["over-group-limit"]));
+  });
+
   it("reports someone in the round without a group as an error", () => {
     const issues = validateRound("333-r1", [...ok(), person("c", null)], rules);
     expect(issues.map(issue => [issue.severity, issue.code])).toEqual([["error", "no-group"]]);

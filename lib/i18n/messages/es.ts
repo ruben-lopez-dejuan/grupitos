@@ -708,7 +708,7 @@ export const es = {
     "444bf": "4×4 a ciegas", "555bf": "5×5 a ciegas", clock: "Clock", minx: "Megaminx", pyram: "Pyraminx", skewb: "Skewb", sq1: "Square-1",
   },
   review: {
-    attempt: "intento {number}",
+    attempt: "A{number}",
     columnOrder: "Orden de las columnas",
     columnsByGroup: "Columnas por grupo",
     columnsByStage: "Columnas por escenario",
@@ -862,6 +862,7 @@ export const es = {
     "station-out-of-range": "{name} tiene la estación {station}, pero solo hay {total}.",
     "duplicate-station": "La estación {station} de G{group} está asignada a {names}.",
     "over-group-limit": "G{group} tiene {count} competidores y su escenario admite como mucho {total} por grupo.",
+    "round-over-limit": "{count} competidores y solo {total} plazas en {groupCount} grupos con el máximo de cada escenario: añade un grupo o sube el máximo. El resto va repartido entre los escenarios.",
     "over-capacity": "G{group} tiene {count} competidores y solo {total} estaciones.",
     "empty-group": "G{group} no tiene competidores.",
     "missing-scramblers": "G{group} tiene {count} de {need} mezcladores.",

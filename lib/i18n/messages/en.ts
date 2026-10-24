@@ -706,7 +706,7 @@ export const en: Messages = {
     "444bf": "4x4x4 Blindfolded", "555bf": "5x5x5 Blindfolded", clock: "Clock", minx: "Megaminx", pyram: "Pyraminx", skewb: "Skewb", sq1: "Square-1",
   },
   review: {
-    attempt: "attempt {number}",
+    attempt: "A{number}",
     columnOrder: "Column order",
     columnsByGroup: "Columns by group",
     columnsByStage: "Columns by stage",
@@ -860,6 +860,7 @@ export const en: Messages = {
     "station-out-of-range": "{name} has station {station}, but there are only {total}.",
     "duplicate-station": "Station {station} in G{group} is given to {names}.",
     "over-group-limit": "G{group} has {count} competitors and its stage allows at most {total} per group.",
+    "round-over-limit": "{count} competitors and only {total} seats in {groupCount} groups with each stage's maximum: add a group or raise the maximum. The rest are spread over the stages.",
     "over-capacity": "G{group} has {count} competitors and only {total} stations.",
     "empty-group": "G{group} has no competitors.",
     "missing-scramblers": "G{group} has {count} of {need} scramblers.",

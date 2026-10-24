@@ -133,8 +133,13 @@ describe("a maximum per group on some stages", () => {
   it("gives capped groups at most their maximum and the rest to the others", () => {
     expect(groupTargets(30, [undefined, 5, undefined])).toEqual([13, 5, 12]);
     expect(groupTargets(12, [undefined, undefined])).toEqual([6, 6]);
-    // Nothing fits: the emptiest groups take the rest and the review warns.
+    // Nothing fits: the rest go in proportion to each maximum, and the review warns.
     expect(groupTargets(10, [2, 2])).toEqual([5, 5]);
+    expect(groupTargets(12, [6, 3])).toEqual([8, 4]);
+    // Pyraminx at the Spanish Championship: 236 people, 225 seats; Bizkaia (21) does not take them all.
+    const nationals = groupTargets(236, [27, 21, 27, 27, 21, 27, 27, 21, 27]);
+    expect(nationals.reduce((a, b) => a + b, 0)).toBe(236);
+    expect(Math.max(...[1, 4, 7].map(index => nationals[index]))).toBe(22);
   });
 
   it("keeps the middle stage small in the proposal, with or without sets", () => {
