@@ -87,6 +87,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - un número sobre una celda C fija la estación;
   - deshacer y rehacer.
 - **Herramientas:** filtros, orden, búsqueda (siempre de la A a la Z), ficha de cada persona y total de tareas.
+- **Rondas siguientes:** en lugar de la marca personal se ve el puesto y el resultado de la ronda anterior, y el orden «por seed» sigue ese puesto.
 - **Validación en vivo** por ronda, grupo y fila. Detecta:
   - grupos sin juez, mezclador o delegado;
   - estaciones repetidas;
@@ -103,7 +104,8 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - columna de comprobación de mezcla;
   - portada de control por grupo para el delegado y data entry;
   - número de inscripción por detrás, para imprimir a doble cara.
-- Los textos largos se ajustan para no salirse de su cuarto de página.
+- Mismo orden que Groupifier: dentro de cada grupo, de peor a mejor, así que el mejor de la ronda lleva el número 1. En rondas siguientes cuenta el puesto en la ronda anterior.
+- Mismo aspecto que Groupifier, también en euskera y los demás idiomas: las etiquetas salen enteras.
 
 ## Modo PRO
 

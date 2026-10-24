@@ -773,6 +773,8 @@ export const en: Messages = {
     matrix: "Assignment matrix",
     columnPerson: "Person",
     columnAge: "Age",
+    columnPrevious: "Prev. round",
+    previousPlace: "Place {place} in the previous round",
     columnSeed: "Seed",
     columnInRound: "In round",
     columnTotals: "Total tasks",

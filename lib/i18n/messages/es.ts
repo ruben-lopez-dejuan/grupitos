@@ -775,6 +775,8 @@ export const es = {
     matrix: "Matriz de asignaciones",
     columnPerson: "Persona",
     columnAge: "Edad",
+    columnPrevious: "Ronda ant.",
+    previousPlace: "Puesto {place} en la ronda anterior",
     columnSeed: "Seed",
     columnInRound: "En la ronda",
     columnTotals: "Total tareas",

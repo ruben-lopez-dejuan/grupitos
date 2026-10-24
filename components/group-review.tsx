@@ -182,7 +182,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
       if (filter.startsWith("segment:")) return !!segmentFilters.find(segment => `segment:${segment.id}` === filter)?.members.has(item.personId);
       return true;
     };
-    const bySeed = (a: GeneratedAssignment, b: GeneratedAssignment) => (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER);
+    // Later rounds: the place in the previous round, as the groups and scorecards follow it.
+    const bySeed = (a: GeneratedAssignment, b: GeneratedAssignment) => (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER) || (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER);
     const order: Record<RowSort, (a: GeneratedAssignment, b: GeneratedAssignment) => number> = {
       seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : 0),
       name: () => 0,
@@ -217,6 +218,8 @@ export function GroupReview({ unavailable = NO_UNAVAILABILITY, segmentFilters = 
   const extraRoles = EXTRA_ROLES.filter(role => totals.some(total => total.counts[role] > 0) || (role === "delegate" && currentRules.checkDelegates) || (role === "dataentry" && currentRules.checkDataEntry));
   const selected = useMemo(() => new Set(selection), [selection]);
   const currentRound = rounds.find(round => round.id === roundId);
+  /** Later rounds show the result in the previous round instead of the official personal best. */
+  const laterRound = !/-r1$/.test(roundId);
   const issues = issuesByRound.get(roundId) ?? [];
   const counts = countBySeverity(issues);
   const issueIndex = useMemo(() => {
@@ -470,7 +473,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
     {openSeverity && issues.some(issue => issue.severity === openSeverity) && <ul className="issue-items">{issues.filter(issue => issue.severity === openSeverity).map(issue => <li key={issue.key}><button className={`issue-${issue.severity}`} onClick={() => focusIssue(issue)}><span>{issue.severity === "error" ? t("review.severityError") : t("review.severityWarning")}</span>{issueText(issue)}</button></li>)}</ul>}
 
     <div className="assignment-matrix-wrap" ref={matrixRef}><table className="assignment-matrix" aria-label={t("review.matrix")}><thead>
-      <tr><th className="rank-column">#</th><th className="name-column">{t("review.columnPerson")}</th><th>{t("review.columnAge")}</th><th>{t("review.columnSeed")}</th><th>{t("review.columnInRound")}</th><th className="groups-heading" colSpan={groupCount}>{roundSlots ? "" : roomName ?? t("review.area")}</th><th className="tasks-column">{t("review.columnTotals")}</th></tr>
+      <tr><th className="rank-column">#</th><th className="name-column">{t("review.columnPerson")}</th><th>{t("review.columnAge")}</th><th>{laterRound ? t("review.columnPrevious") : t("review.columnSeed")}</th><th>{t("review.columnInRound")}</th><th className="groups-heading" colSpan={groupCount}>{roundSlots ? "" : roomName ?? t("review.area")}</th><th className="tasks-column">{t("review.columnTotals")}</th></tr>
       <tr className="group-labels"><th /><th className="name-column" /><th /><th /><th />{columns.map((group, position) => {
         const groupCounts = totals[group - 1].counts;
         const groupIssues = issueIndex.groups.get(group);
@@ -507,7 +510,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
         <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issueText).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title={t("review.openCard")}>{item.name}</button>{item.featured && <span className="featured-star" title={t("sets.featuredHelp")} aria-label={t("sets.featured")}>★</span>}<small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
-        <td>{formatResult(item.seedResult, item.eventId)}</td>
+        <td title={item.roundRank ? t("review.previousPlace", { place: item.roundRank }) : undefined}>{laterRound && item.inRound ? (item.roundRank ? <><span className="previous-place">{item.roundRank}.</span> {formatResult(item.roundResult, item.eventId)}</> : "") : formatResult(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label={t("review.competesHere")}>✓</span> : <span className="muted-mark" aria-label={t("review.onlyWorks")}>—</span>}</td>
         {columns.map((group, position) => {
           const cell = { id: item.id, group };

@@ -5,13 +5,15 @@
  *
  * Modified: TypeScript; reads this app's assignments instead of WCIF activities; only the
  * Roboto font is bundled, so non-Latin local names fall back to the Latin name and the
- * Chinese layouts are not offered; no featured-competitor star. See THIRD_PARTY_NOTICES.md.
+ * Chinese layouts are not offered; the featured star is drawn as SVG; a few points less of
+ * spacing (and long names shrunk to one line) so four cards fit a page with pdfmake 0.3.
+ * See THIRD_PARTY_NOTICES.md.
  */
 import { competingGroup, type GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition, WcifPerson, WcifRound } from "@/lib/competition-store";
 import { groupSizes } from "@/lib/group-generator";
 import { scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
-import { personKey, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
+import { bestAverageAndSingle, personKey, previousRoundResults, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
 import type { PaperSize, PrintingOptions } from "@/lib/scorecards/options";
 import { translation, type ScorecardTexts } from "@/lib/scorecards/translations";
 
@@ -185,8 +187,9 @@ const CELL_CHROME = 9;
 
 /**
  * Keeps a text on one line inside `width` points: shrinks the font down to `min`, then cuts
- * the text. Every card must keep its height, or it pushes the next card off its quarter
- * of the page (Groupifier lets long texts wrap). Roboto averages ~0.55em per character.
+ * the text. Used for the few texts that can be long (competition and event names, footer):
+ * a wrapped line would push the card off its quarter of the page. Roboto averages ~0.55em per
+ * character.
  */
 export function fitText(text: string, width: number, size: number, { bold = false, min = 6 } = {}) {
   const factor = bold ? 0.6 : 0.55;
@@ -197,10 +200,16 @@ export function fitText(text: string, width: number, size: number, { bold = fals
 }
 
 const LABEL_SIZE = 9;
-const label = (text: string, width: number, style: Record<string, unknown> = {}) => ({ ...style, ...noBorder, ...fitText(text, width - CELL_CHROME, LABEL_SIZE, { min: 5 }) });
+/**
+ * Column labels as Groupifier prints them: whole, at 9 points. A label wider than its column
+ * ("Lehiakidea" in Basque) runs over the edge instead of breaking (Groupifier's pdfmake never
+ * broke words; ours would split it over two lines).
+ */
+const label = (text: string, style: Record<string, unknown> = {}) => ({ ...style, ...noBorder, text, fontSize: LABEL_SIZE, noWrap: true });
 
-const attemptRow = (attemptNumber: number | string, needsScrambleChecker: boolean) => [
-  { text: attemptNumber, ...noBorder, fontSize: 18, bold: true, alignment: "center" },
+/** Attempt numbers: 20 points as in Groupifier, less where the card needs the room. */
+const attemptRow = (attemptNumber: number | string, needsScrambleChecker: boolean, size = 20) => [
+  { text: attemptNumber, ...noBorder, fontSize: size, bold: true, alignment: "center" },
   {},
   ...(needsScrambleChecker ? [{}] : []),
   {},
@@ -211,14 +220,12 @@ const attemptRow = (attemptNumber: number | string, needsScrambleChecker: boolea
 const attemptsSeparator = (cutoffLine: boolean, scorecardWidth: number, printScrambleChecker: boolean) => [{
   ...noBorder,
   colSpan: 5 + Number(printScrambleChecker),
-  // Separator rows only space the attempts; a tiny font keeps them from adding a text line.
-  fontSize: 3,
-  margin: [0, 0],
+  margin: [0, 1],
   columns: !cutoffLine ? [] : [{ canvas: [{ type: "line", x1: 0, y1: 0, x2: scorecardWidth, y2: 0, dash: { length: 5 } }] }],
 }];
 
-const attemptRows = (cutoff: WcifRound["cutoff"], attemptCount: number, scorecardWidth: number, printScrambleChecker: boolean) =>
-  times(attemptCount, index => attemptRow(index + 1, printScrambleChecker)).reduce<Node[]>((rows, row, index) =>
+const attemptRows = (cutoff: WcifRound["cutoff"], attemptCount: number, scorecardWidth: number, printScrambleChecker: boolean, size: number) =>
+  times(attemptCount, index => attemptRow(index + 1, printScrambleChecker, size)).reduce<Node[]>((rows, row, index) =>
     index + 1 === attemptCount ? [...rows, row] : [...rows, row, attemptsSeparator(!!cutoff && index + 1 === cutoff.numberOfAttempts, scorecardWidth, printScrambleChecker)], []);
 
 type ScorecardInput = {
@@ -250,22 +257,22 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
   const checker = printScrambleCheckerBox;
   const smallColumns = printStations ? 3 : 2;
   const eventWidth = scorecardWidth - 25 - smallColumns * 30 - (smallColumns + 1) * CELL_CHROME;
-  const nameWidth = scorecardWidth - 25 - 30 - 2 * CELL_CHROME;
   const competitorTag = competitor.wcaId || (competitor.name && competitor.registrantId != null ? t("newCompetitor") : " ");
-  const nameLabelWidth = Math.min(nameWidth / 2, t("name").length * LABEL_SIZE * 0.55 + 4);
-  const resultWidth = scorecardWidth - (16 + 25 * (3 + Number(checker))) - (5 + Number(checker)) * CELL_CHROME;
+  // Letter pages and a stage under the group number take height: smaller attempt numbers make up for it.
+  const attemptSize = 20 - (printing.paperSize === "letter" ? 2 : 0) - (stageName ? 2 : 0);
   const footerWidth = scorecardWidth / 2 - 4;
   const limitText = timeLimit ? `${t("timeLimit")}: ${timeLimitToString(timeLimit, t("total"))}` : "";
 
   return [
     { fontSize: 10, columns: [{ text: scorecardNumber ? `${scorecardNumber}` : "", alignment: "left" }, competitor.featured ? { svg: STAR_SVG, width: 10, height: 10, alignment: "right" } : {}] },
+    // Groupifier: 15 points and 10 below; 6 below here, so four cards fit a page with our pdfmake.
     { ...fitText(competitionName, scorecardWidth, 15, { bold: true, min: 9 }), bold: true, margin: [0, 0, 0, 6], alignment: "center" },
     {
       margin: [25, 0, 0, 0],
       table: {
         widths: ["*", 30, 30, ...(printStations ? [30] : [])],
         body: [
-          [label(t("eventLabel"), eventWidth + CELL_CHROME), label(t("round"), 30 + CELL_CHROME, { alignment: "center" }), label(t("group"), 30 + CELL_CHROME, { alignment: "center" }), ...(printStations ? [label(t("station"), 30 + CELL_CHROME, { alignment: "center" })] : [])],
+          [label(t("eventLabel")), label(t("round"), { alignment: "center" }), label(t("group"), { alignment: "center" }), ...(printStations ? [label(t("station"), { alignment: "center" })] : [])],
           [
             eventId ? fitText(eventName(eventId), eventWidth, 12, { min: 7 }) : " ",
             { text: roundNumber ?? "", alignment: "center" },
@@ -283,13 +290,14 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
         widths: [30, "*"],
         body: [
           [
-            label(t("id"), 30 + CELL_CHROME),
+            label(t("id")),
             {
               ...noBorder,
+              fontSize: LABEL_SIZE,
               columns: [
-                { ...fitText(t("name"), nameLabelWidth, LABEL_SIZE, { min: 5 }), alignment: "left", width: nameLabelWidth },
+                { text: t("name"), alignment: "left", width: "auto" },
                 // registrantId null means a manually entered name, not a registered new competitor.
-                { ...fitText(competitorTag, nameWidth - nameLabelWidth, LABEL_SIZE, { min: 5 }), alignment: "right" },
+                { text: competitorTag, alignment: "right" },
               ],
             },
           ],
@@ -301,23 +309,24 @@ function scorecard({ scorecardNumber, stationNumber, competitionName, activityCo
       },
     },
     {
+      // Groupifier: 10 above; 6 here, as with the competition name.
       margin: [0, 6, 0, 0],
       table: {
         /* Note: 16 (width) + 4 + 4 (default left and right padding) + 1 (left border) = 25 */
         widths: [16, 25, ...(checker ? [25] : []), "*", 25, 25],
         body: [
           [
-            label("", 16 + CELL_CHROME),
-            label(t("scr"), 25 + CELL_CHROME, { alignment: "center" }),
-            ...(checker ? [label(t("check"), 25 + CELL_CHROME, { alignment: "center" })] : []),
-            label(t("result"), resultWidth + CELL_CHROME, { alignment: "center" }),
-            label(t("judge"), 25 + CELL_CHROME, { alignment: "center" }),
-            label(t("comp"), 25 + CELL_CHROME, { alignment: "center" }),
+            label(""),
+            label(t("scr"), { alignment: "center" }),
+            ...(checker ? [label(t("check"), { alignment: "center" })] : []),
+            label(t("result"), { alignment: "center" }),
+            label(t("judge"), { alignment: "center" }),
+            label(t("comp"), { alignment: "center" }),
           ],
-          ...attemptRows(cutoff, attemptCount, scorecardWidth, checker),
+          ...attemptRows(cutoff, attemptCount, scorecardWidth, checker, attemptSize),
           [{ ...fitText(`${t("extra")} (${t("delegateInitials")} _______)`, scorecardWidth - CELL_CHROME, 10, { min: 6 }), ...noBorder, colSpan: 5 + Number(checker), margin: [0, 1] }],
-          attemptRow("_", checker),
-          [{ text: "", ...noBorder, colSpan: 5 + Number(checker), fontSize: 3, margin: [0, 0] }],
+          attemptRow("_", checker, attemptSize),
+          [{ text: "", ...noBorder, colSpan: 5 + Number(checker), margin: [0, 1] }],
         ],
       },
     },
@@ -399,6 +408,18 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
     if (!config || !wcifRound) return [];
     const attemptCount = MAX_ATTEMPTS_BY_FORMAT[wcifRound.format ?? "a"] ?? 5;
     const rows = assignments.filter(item => item.roundId === roundId && competingGroup(item) !== undefined);
+    // As Groupifier: worst first, so the best gets number 1. First rounds by personal bests
+    // (average, then single; none first), later rounds by the place in the previous round.
+    const previous = previousRoundResults(competition, roundId);
+    const registrantOf = (item: GeneratedAssignment) => persons.get(item.personId)?.registrantId;
+    const placeOf = (item: GeneratedAssignment) => previous.get(registrantOf(item) ?? -1)?.ranking ?? Number.MAX_SAFE_INTEGER;
+    const worstFirst = (x: number, y: number) => x === y ? 0 : x > y ? -1 : 1;
+    const cardOrder = (a: GeneratedAssignment, b: GeneratedAssignment) => {
+      if (previous.size) return worstFirst(placeOf(a), placeOf(b));
+      const [a1, a2] = bestAverageAndSingle(persons.get(a.personId) ?? { name: a.name }, wcifRound.id.split("-")[0]);
+      const [b1, b2] = bestAverageAndSingle(persons.get(b.personId) ?? { name: b.name }, wcifRound.id.split("-")[0]);
+      return worstFirst(a1, b1) || worstFirst(a2, b2);
+    };
     const fixed = usesFixedStations(config.roundNumber, rows.length || config.competitors, stations, zoneMode);
 
     // Later multi-blind attempts are columns of their own with the same people: cards come from attempt 1.
@@ -408,7 +429,7 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
         group: index + 1,
         competitors: rows
           .filter(item => competingGroup(item) === index + 1)
-          .sort((a, b) => (b.seedResult ?? Number.MAX_SAFE_INTEGER) - (a.seedResult ?? Number.MAX_SAFE_INTEGER) || (a.station ?? 0) - (b.station ?? 0) || a.name.localeCompare(b.name))
+          .sort((a, b) => cardOrder(a, b) || (a.station ?? Number.MAX_SAFE_INTEGER) - (b.station ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name))
           .map(item => {
             const person = persons.get(item.personId);
             return { competitor: { name: item.name, registrantId: person?.registrantId ?? null, wcaId: item.wcaId ?? null, personalBests: person?.personalBests, featured: item.featured }, station: item.station };

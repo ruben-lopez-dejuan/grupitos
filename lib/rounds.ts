@@ -136,6 +136,36 @@ export function roundCompetitors(competition: StoredCompetition, roundId: string
   };
 }
 
+/**
+ * Later rounds: each person's place and result in the round they advanced from (by registrant id),
+ * the order Groupifier uses. The result is the average in average formats, else the single.
+ */
+export function previousRoundResults(competition: StoredCompetition, roundId: string) {
+  const result = new Map<number, { ranking: number; value?: number }>();
+  const roundNumber = parseRoundNumber(roundId);
+  const round = findRound(competition, roundId);
+  if (roundNumber <= 1 || !round) return result;
+  const eventId = roundId.split("-")[0];
+  const source = sourceOf(round, `${eventId}-r${roundNumber - 1}`);
+  const sources = source.type === "round" ? [source.roundId] : source.type === "linkedRounds" ? source.roundIds : [];
+  for (const sourceId of sources) {
+    const previous = findRound(competition, sourceId);
+    const byAverage = previous?.format === "a" || previous?.format === "m";
+    for (const item of previous?.results ?? []) {
+      if (result.has(item.personId) || !item.ranking) continue;
+      const value = byAverage && (item.average ?? 0) > 0 ? item.average : (item.best ?? 0) > 0 ? item.best : undefined;
+      result.set(item.personId, { ranking: item.ranking, ...(value !== undefined ? { value } : {}) });
+    }
+  }
+  return result;
+}
+
+/** `roundRank` and `roundResult` of a person in a later round, from `previousRoundResults`. */
+export function roundStanding(previous: ReturnType<typeof previousRoundResults>, registrantId: number | null | undefined) {
+  const own = registrantId === null || registrantId === undefined ? undefined : previous.get(registrantId);
+  return own ? { roundRank: own.ranking, ...(own.value !== undefined ? { roundResult: own.value } : {}) } : {};
+}
+
 /** Expected people per round, following Groupifier: advancement conditions applied to the seed order. */
 export function expectedCompetitorsByRound(competition: StoredCompetition) {
   const expected = new Map<string, WcifPerson[]>();

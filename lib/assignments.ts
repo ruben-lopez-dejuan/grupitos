@@ -40,6 +40,9 @@ export type GeneratedAssignment = {
   wcaId?: string | null;
   birthdate?: string;
   seedResult?: number;
+  /** Later rounds: place and result (average or single) in the round the person advanced from. */
+  roundRank?: number;
+  roundResult?: number;
   /** Scramblers of blindfolded and one-handed rounds: their result in the event scrambled (444 for 444bf…). */
   scrambleResult?: number;
   /** Whether the person takes part in this round as a competitor (registered or advanced). */

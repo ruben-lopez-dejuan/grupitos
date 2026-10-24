@@ -11,7 +11,7 @@ Derived from commit `e44cb094eb7177b65c62fd06bdcb021a416a1654` (2026-10-12):
 | File here | Origin in Groupifier | Changes |
 | --- | --- | --- |
 | `lib/scorecards/translations.ts` | `src/logic/translations.js` | TypeScript types and exports. |
-| `lib/scorecards/scorecards.ts` | `src/logic/documents/scorecards.js`, `pdf-utils.js`, `src/logic/formatters.js` | TypeScript; reads this app's assignments instead of WCIF activities; Roboto only (non-Latin local names print the Latin name, Chinese layouts not offered); no featured-competitor star. |
+| `lib/scorecards/scorecards.ts` | `src/logic/documents/scorecards.js`, `pdf-utils.js`, `src/logic/formatters.js` | TypeScript; reads this app's assignments instead of WCIF activities; Roboto only (non-Latin local names print the Latin name, Chinese layouts not offered); the featured star is drawn as SVG; 4 points less above the attempts and below the competition name, smaller attempt numbers on letter paper or with a stage name, and long competition, event and footer texts shrunk to one line, so four cards fit a page with pdfmake 0.3; column labels never break (pdfmake 0.3 would split a long word). |
 | `lib/group-generator.ts` | `src/logic/groups.js`, `src/logic/formulas.js`, `src/logic/competitors.js` | Reimplemented for a model without schedule times; the "name-optimised" rule no longer drops people; extra roles (delegate duty, data entry, staff) and a strict scrambler mode. |
 | `lib/rounds.ts` | `src/logic/formulas.js`, `src/logic/competitors.js` | Group, scrambler and runner suggestions; expected competitors in later rounds. |
 

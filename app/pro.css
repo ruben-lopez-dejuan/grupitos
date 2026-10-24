@@ -454,3 +454,6 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .resume-file{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:0 0 14px;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
 .resume-file>div{display:flex;align-items:center;gap:6px;margin-right:auto}
 .resume-file small{flex:1 1 100%}
+
+/* Later rounds: place in the previous round */
+.previous-place{color:var(--muted);font-size:12px}

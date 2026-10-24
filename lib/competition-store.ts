@@ -48,7 +48,7 @@ export type WcifRound = {
   cutoff?: { numberOfAttempts: number; attemptResult?: number; resultValue?: number } | null;
   advancementCondition?: WcifAdvancementCondition | null;
   participationRuleset?: { participationSource: WcifParticipationSource } | null;
-  results?: Array<{ personId: number; ranking?: number | null }>;
+  results?: Array<{ personId: number; ranking?: number | null; best?: number; average?: number }>;
 };
 export type WcifEvent = { id: string; rounds?: WcifRound[] };
 export type WcifExtension = { id: string; specUrl?: string; data?: unknown };

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
-import { expectedCompetitorsByRound, initialRounds, suggestGroups, usesFixedStations } from "@/lib/rounds";
+import { bestAverageAndSingle, expectedCompetitorsByRound, initialRounds, seedResult, suggestGroups, usesFixedStations } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { blankScorecards, centisecondsToClockFormat, pdfName, roundScorecards } from "@/lib/scorecards/scorecards";
 import { SCORECARD_LANGUAGES, translation } from "@/lib/scorecards/translations";
@@ -40,6 +40,8 @@ describe("later rounds", () => {
     expect(later.every(round => !round.enabled && !round.competitorsKnown && round.competitors > 0)).toBe(true);
   });
 });
+
+const seedOf = (person: Parameters<typeof seedResult>[0]) => seedResult(person, "333");
 
 describe("scorecards (Groupifier port)", () => {
   const competition = demoCompetition("small");
@@ -102,6 +104,57 @@ describe("scorecards (Groupifier port)", () => {
     expect(pdfName("Juan Pérez (Хуан)")).toEqual(["Juan Pérez", " (", "Хуан", ")"]);
     expect(pdfName("Wang Wei (王伟)")).toBe("Wang Wei");
     expect(pdfName("Juan Pérez (Хуан)", { swapLatinWithLocalNames: true, short: true })).toBe("Хуан");
+  });
+
+  /* eslint-disable @typescript-eslint/no-explicit-any -- pdfmake document nodes. */
+  const numberOf = (card: any) => Number(card[0].columns[0].text);
+  const nameOf = (card: any): string => { const name = card[3].table.body[1][1].text; return Array.isArray(name) ? name[0] : name; };
+
+  it("prints column labels whole, as Groupifier: Lehiakidea, not Lehiak...", () => {
+    const card = roundScorecards({ ...source, printing: { ...DEFAULT_PRINTING, language: "eu" } }, ["333-r1"]).find(Array.isArray) as any;
+    const labels = card[4].table.body[0];
+    expect(labels.at(-1)).toMatchObject({ text: "Lehiakidea", fontSize: 9, noWrap: true });
+  });
+
+  it("orders each group worst first, so the best of the round gets number 1", () => {
+    const cards = roundScorecards({ ...source, printing: { ...DEFAULT_PRINTING, order: "natural" } }, ["333-r1"]).filter(Array.isArray) as any[];
+    const best = assignments.filter(item => item.roundId === "333-r1" && item.inRound && item.seedResult !== undefined).sort((a, b) => a.seedResult! - b.seedResult!)[0];
+    expect(nameOf(cards.find(card => numberOf(card) === 1))).toBe(best.name);
+    // Inside each group, personal bests (average, then single) get better card by card; none first.
+    const bests = (card: any) => bestAverageAndSingle(competition.persons!.find(person => person.name === nameOf(card))!, "333");
+    const groupOf = (card: any) => card[2].table.body[1][2].text;
+    for (const group of new Set(cards.map(groupOf))) {
+      const inGroup = cards.filter(card => groupOf(card) === group).map(bests);
+      inGroup.slice(1).forEach(([average, single], index) => {
+        const [previousAverage, previousSingle] = inGroup[index];
+        expect(average < previousAverage || (average === previousAverage && single <= previousSingle)).toBe(true);
+      });
+    }
+  });
+
+  it("orders later rounds by the place in the previous round, and shows that result in the review", () => {
+    const later = structuredClone(competition);
+    const event = later.events!.find(item => item.id === "333")!;
+    const registered = later.persons!.filter(person => person.registration?.eventIds?.includes("333"));
+    // Previous round places in the reverse order of the personal bests, so the two cannot be confused.
+    const placed = [...registered].sort((a, b) => (seedOf(b) ?? 0) - (seedOf(a) ?? 0));
+    event.rounds![0].results = placed.map((person, index) => ({ personId: person.registrantId!, ranking: index + 1, average: 1000 + index, best: 900 + index }));
+    event.rounds![1].results = placed.slice(0, 8).map(person => ({ personId: person.registrantId!, ranking: null }));
+    const laterRounds = initialRounds(later, 12, "waiting").map(round => round.id === "333-r2" ? { ...round, enabled: true, groups: 2 } : round).filter(round => round.id === "333-r2");
+    const rows = generateAssignments({ competition: later, rounds: laterRounds, stations: 12, zoneMode: "waiting", people: peopleFromWcif(later), options: DEFAULT_OPTIONS }).filter(item => item.inRound);
+    expect(rows).toHaveLength(8);
+    for (const row of rows) {
+      const place = placed.findIndex(person => person.name === row.name) + 1;
+      expect([row.roundRank, row.roundResult]).toEqual([place, 1000 + place - 1]);
+    }
+    const cards = roundScorecards({ competition: later, assignments: rows, rounds: laterRounds, stations: 12, zoneMode: "waiting", printing: { ...DEFAULT_PRINTING, order: "natural" } }, ["333-r2"]).filter(Array.isArray) as any[];
+    expect(nameOf(cards.find(card => numberOf(card) === 1))).toBe(placed[0].name);
+    const places = cards.map(card => rows.find(row => row.name === nameOf(card))!.roundRank!);
+    const groupOf = (card: any) => card[2].table.body[1][2].text;
+    for (const group of new Set(cards.map(groupOf))) {
+      const inGroup = places.filter((_, index) => groupOf(cards[index]) === group);
+      expect(inGroup).toEqual([...inGroup].sort((a, b) => b - a));
+    }
   });
 
   it("ships Groupifier's languages", () => {

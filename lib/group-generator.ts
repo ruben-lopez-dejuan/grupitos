@@ -13,7 +13,7 @@ import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, windowsForTask, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, hasWcaJob, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
-import { acceptedPeople, bestAverageAndSingle, SCRAMBLE_EVENT, judgesNeeded, personKey, roundCompetitors, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, bestAverageAndSingle, SCRAMBLE_EVENT, judgesNeeded, personKey, previousRoundResults, roundCompetitors, roundStanding, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
   sortingRule: SortingRule;
@@ -752,6 +752,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     }
 
     const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));
+    const previous = previousRoundResults(competition, round.id);
     for (const row of ordered) {
       roundOutput.push({
         id: `${round.id}:${row.key}`,
@@ -762,6 +763,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         wcaId: row.person.wcaId,
         birthdate: row.person.birthdate,
         seedResult: seedResult(row.person, round.eventId),
+        ...roundStanding(previous, row.inRound ? row.person.registrantId : undefined),
         ...(scrambleEvent !== round.eventId && row.tasks.some(task => task.role === "scrambler") ? { scrambleResult: seedResult(row.person, scrambleEvent) } : {}),
         inRound: row.inRound,
         ...(row.inRound && featured?.has(row.key) ? { featured: true } : {}),

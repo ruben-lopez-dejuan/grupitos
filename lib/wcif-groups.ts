@@ -7,7 +7,7 @@
 import { sortTasks, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import type { StoredCompetition, WcifActivity } from "@/lib/competition-store";
 import { isoToLocal, type GroupSlot } from "@/lib/pro/schedule";
-import { personKey, seedResult } from "@/lib/rounds";
+import { personKey, previousRoundResults, roundStanding, seedResult } from "@/lib/rounds";
 
 const GROUP_CODE = /^([a-z0-9]+-r\d+)-g(\d+)(?:-a(\d+))?$/;
 const GROUP_EXTENSION_ID = "org.cubingusa.natshelper.v1.Group";
@@ -83,6 +83,8 @@ export function groupsFromWcif(competition: StoredCompetition, slots?: Map<strin
     return { at: slot?.group, attempt: slot?.attempt };
   };
   const eventOf = (roundId: string) => roundId.split("-")[0];
+  const standings = new Map<string, ReturnType<typeof previousRoundResults>>();
+  const standingsOf = (roundId: string) => standings.get(roundId) ?? standings.set(roundId, previousRoundResults(competition, roundId)).get(roundId)!;
   const rows = new Map<string, GeneratedAssignment>();
   const groupsByRound = new Map<string, number>();
   let unplaced = 0;
@@ -105,6 +107,7 @@ export function groupsFromWcif(competition: StoredCompetition, slots?: Map<strin
       if (!row.tasks.some(task => task.group === at && task.role === role)) row.tasks = sortTasks([...row.tasks, { group: at, role, ...(later ? { attempt } : {}) }]);
       if (role === "competitor" && !later) {
         row.inRound = true;
+        Object.assign(row, roundStanding(standingsOf(group.roundId), person.registrantId));
         if (typeof item.stationNumber === "number") row.station = item.stationNumber;
         if (person.wcaUserId !== undefined && group.featured.includes(person.wcaUserId)) row.featured = true;
       }
