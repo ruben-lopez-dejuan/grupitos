@@ -250,7 +250,7 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 
   Al tocar el área de trabajo hay que comprobar que a 375 px `document.documentElement.scrollWidth` es 375.
 - **Icono**: `app/icon.svg` y `app/apple-icon.png`. `components/app-mark.tsx` lo dibuja en la marca. Si se cambia el dibujo, hay que cambiarlo en los tres sitios.
-- **Logo de la WCA** en el botón de entrar: pendiente del permiso del usuario para descargar `WCA Logo.svg` del repositorio de la WCA.
+- **Logo de la WCA** (`public/wca-logo.svg`): es el `WCA Logo.svg` oficial del repositorio de la WCA, sin los metadatos de Inkscape. Se descargó con permiso del usuario y está anotado en `THIRD_PARTY_NOTICES.md`. Va en el panel de entrar y en el botón; en el botón va sobre un círculo blanco porque el arco azul se pierde en el azul del botón.
 - **README**: describe todas las funciones. Hay que actualizarlo cuando se añada algo visible.
 
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026

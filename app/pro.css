@@ -444,3 +444,8 @@ button.plain.danger{justify-self:start;color:var(--error)}
 /* App icon in the brand marks */
 .app-mark{width:32px;height:32px;flex:0 0 auto;display:block}
 .workspace-topbar .product-mark.compact .app-mark{width:28px;height:28px}
+
+/* Official WCA logo on sign-in */
+.wca-logo{width:42px;height:42px;flex:0 0 auto}
+.wca-logo-chip{width:26px;height:26px;display:grid;place-items:center;flex:0 0 auto;background:#fff;border-radius:50%}
+.wca-logo-chip img{display:block}

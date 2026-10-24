@@ -37,3 +37,11 @@ as it is licensed under the GPL-3.0.
 ## pdfmake
 
 Scorecards are rendered with [pdfmake](https://github.com/bpampuch/pdfmake) (MIT) and its bundled Roboto font (Apache-2.0).
+
+## WCA logo
+
+`public/wca-logo.svg` is the World Cube Association logo, taken from
+[`app/assets/images/WCA Logo.svg`](https://github.com/thewca/worldcubeassociation.org/blob/main/app/assets/images/WCA%20Logo.svg)
+in the WCA website repository, with the editor metadata removed. It is a registered trademark of the
+World Cube Association and is used only to mark signing in with a WCA account. This project is not
+an official WCA product.

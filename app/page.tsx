@@ -30,7 +30,7 @@ export default async function HomePage() {
         </div>
       </div>
       <div className="login-panel">
-        <div className="login-panel-head"><span className="wca-block">WCA</span><div><strong>{t("landing.panelTitle")}</strong><small>{t("landing.panelText")}</small></div></div>
+        <div className="login-panel-head"><img className="wca-logo" src="/wca-logo.svg" alt="WCA" width={42} height={42} /><div><strong>{t("landing.panelTitle")}</strong><small>{t("landing.panelText")}</small></div></div>
         <SignInButton />
         <div className="login-detail"><span>{t("landing.importTitle")}</span><p>{t("landing.importText")}</p></div>
         <p className="privacy">{t("landing.privacy")}</p>
