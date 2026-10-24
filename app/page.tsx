@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AppMark } from "@/components/app-mark";
 import { SignInButton } from "@/components/auth-buttons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/i18n";
@@ -16,7 +17,7 @@ export default async function HomePage() {
   const { t } = await getI18n();
   return <main className="login-page">
     <nav className="topbar container">
-      <Link className="brand" href="/"><span className="brand-symbol">E</span> WCA Easy Groups</Link>
+      <Link className="brand" href="/"><AppMark /> WCA Easy Groups</Link>
       <div className="topbar-actions"><LanguageSwitcher /><ThemeToggle /><a className="plain-link" href="https://github.com/ruben-lopez-dejuan/wca-easy-groups">GitHub ↗</a></div>
     </nav>
     <section className="login-layout container">

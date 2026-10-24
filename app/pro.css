@@ -440,3 +440,7 @@ button.plain.danger{justify-self:start;color:var(--error)}
   .room-bar{flex-wrap:wrap;overflow-x:visible}
   .room-bar>*{flex:1 1 100%;min-width:0}
 }
+
+/* App icon in the brand marks */
+.app-mark{width:32px;height:32px;flex:0 0 auto;display:block}
+.workspace-topbar .product-mark.compact .app-mark{width:28px;height:28px}
