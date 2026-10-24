@@ -910,7 +910,7 @@ export const en: Messages = {
       longStreak: { label: "Many groups in a row", help: "How far beyond 90 minutes in a row of work, this group included (ConsecutiveJobScorer)." },
       beforeCompeting: { label: "Right before competing", help: "Competes in a group starting within the next 10 minutes (FollowingGroupScorer)." },
       competesInEvent: { label: "Competes in this event", help: "Registered for the round's event and not a delegate (PersonPropertyScorer)." },
-      eliminated: { label: "Eliminated in the previous round", help: "Competed in the event's previous round and did not advance: free and at hand, so first for this round's tasks." },
+      eliminated: { label: "Eliminated in the previous round", help: "Competed in the event's previous round and did not advance. With a small negative weight (Balanced: −10) they come after the round's competitors, who help first in the groups they do not compete in, and before people outside the event." },
       reserveScramblers: { label: "Keep scramblers free", help: "For judging or running, if they could scramble this event: negative keeps them for scrambling." },
       staff: { label: "Staff and volunteers", help: "People with a staff role and non-competing volunteers." },
       wcaJob: { label: "WCA role for the job", help: "Has this job's WCA role: staff-judge, staff-scrambler or staff-runner (Groupifier's roles manager)." },

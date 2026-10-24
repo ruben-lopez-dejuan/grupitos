@@ -912,7 +912,7 @@ export const es = {
       longStreak: { label: "Muchos grupos seguidos", help: "Cuánto pasa de 90 minutos seguidos trabajando, contando este grupo (ConsecutiveJobScorer)." },
       beforeCompeting: { label: "Justo antes de competir", help: "Compite en un grupo que empieza en los 10 minutos siguientes (FollowingGroupScorer)." },
       competesInEvent: { label: "Compite en esta prueba", help: "Está inscrito en la prueba de la ronda y no es delegado (PersonPropertyScorer)." },
-      eliminated: { label: "Eliminado en la ronda anterior", help: "Compitió en la ronda anterior de la prueba y no pasó: está libre y a mano, así que va primero para las tareas de esta ronda." },
+      eliminated: { label: "Eliminado en la ronda anterior", help: "Compitió en la ronda anterior de la prueba y no pasó. Con un peso negativo pequeño (Equilibrado: −10) va después de los competidores de la ronda, que ayudan primero en los grupos donde no compiten, y antes de quien no está en la prueba." },
       reserveScramblers: { label: "Reservar a quien puede mezclar", help: "Para juez o runner, si podría mezclar esta prueba: negativo los guarda para mezclar." },
       staff: { label: "Staff y voluntarios", help: "Personas con rol de staff y voluntarios que no compiten." },
       wcaJob: { label: "Rol WCA de la tarea", help: "Tiene el rol staff-judge, staff-scrambler o staff-runner de esta tarea en la WCA (el gestor de roles de Groupifier)." },

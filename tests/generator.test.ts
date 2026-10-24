@@ -5,7 +5,7 @@ import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, splitIntoGroups, type AssignmentOptions } from "@/lib/group-generator";
 import { peopleFromWcif, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, seedResult, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
-import { PROFILE_WEIGHTS } from "@/lib/pro/scoring";
+import { normalizeScoring, PROFILE_WEIGHTS } from "@/lib/pro/scoring";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
 function setup(competition: StoredCompetition, stations: number, zoneMode: ZoneMode, options: Partial<AssignmentOptions> = {}, people = peopleFromWcif(competition)) {
@@ -251,11 +251,19 @@ describe("later rounds and the people who did not advance", () => {
   const rounds = initialRounds(competition, 12, "waiting").filter(round => round.id === "333-r2").map(round => ({ ...round, enabled: true, groups: 2, scramblers: 1, runners: 1 }));
   const out = new Set(registered.slice(8).map(personKey));
 
-  for (const scoring of [false, true]) it(`gives this round's tasks to them first${scoring ? " (weighted)" : ""}, and lists them all`, () => {
+  const inRound = new Set(registered.slice(0, 8).map(personKey));
+
+  for (const scoring of [false, true]) it(`lets the round's competitors help and scramble first, then them${scoring ? " (weighted)" : ""}, and lists them all`, () => {
     const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, ...(scoring ? { scoring: { enabled: true, weights: { ...PROFILE_WEIGHTS.balanced } } } : {}) });
+    const doing = (role: string) => rows.filter(item => duties(item).some(duty => duty.role === role));
+    // Scramblers are the round's own (faster) competitors, never someone eliminated.
+    expect(doing("scrambler").length).toBeGreaterThan(0);
+    expect(doing("scrambler").every(item => inRound.has(item.personId))).toBe(true);
+    // The round's competitors help in the groups they do not compete in...
+    expect(rows.filter(item => inRound.has(item.personId) && duties(item).length).length).toBeGreaterThan(0);
+    // ...and the eliminated fill the rest before anyone outside the event.
     const workers = rows.filter(item => duties(item).length);
-    expect(workers.length).toBeGreaterThan(0);
-    expect(workers.every(item => out.has(item.personId))).toBe(true);
+    expect(workers.every(item => inRound.has(item.personId) || out.has(item.personId))).toBe(true);
     // Every one of them has a row, with their place and result in round 1, even without a task.
     const theirs = rows.filter(item => out.has(item.personId));
     expect(theirs).toHaveLength(out.size);
@@ -263,5 +271,10 @@ describe("later rounds and the people who did not advance", () => {
       const place = registered.findIndex(person => personKey(person) === item.personId) + 1;
       expect([item.inRound, item.roundRank, item.roundResult]).toEqual([false, place, 1000 + place - 1]);
     }
+  });
+
+  it("moves drafts saved with the day-long +40 'eliminated' weight to the balanced preset's value", () => {
+    expect(normalizeScoring({ enabled: true, weights: { ...PROFILE_WEIGHTS.balanced, eliminated: 40 } })!.weights.eliminated).toBe(PROFILE_WEIGHTS.balanced.eliminated);
+    expect(normalizeScoring({ enabled: true, weights: { ...PROFILE_WEIGHTS.balanced, load: -5, eliminated: 40 } })!.weights.eliminated).toBe(40);
   });
 });

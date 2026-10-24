@@ -81,7 +81,7 @@ export type ScoringProfile = typeof SCORING_PROFILES[number];
 
 /** Presets. "amore" mirrors the VolunteerScorers of the Amore Open 2026 scripts. */
 export const PROFILE_WEIGHTS: Record<ScoringProfile, Weights> = {
-  balanced: { load: -10, hoursToday: -4, keepSameJob: 10, longStreak: -20, beforeCompeting: -50, competesInEvent: 20, eliminated: 40, reserveScramblers: -20, staff: 30, wcaJob: 40, trusted: 30, speed: 10, preferences: 10, young: -40 },
+  balanced: { load: -10, hoursToday: -4, keepSameJob: 10, longStreak: -20, beforeCompeting: -50, competesInEvent: 20, eliminated: -10, reserveScramblers: -20, staff: 30, wcaJob: 40, trusted: 30, speed: 10, preferences: 10, young: -40 },
   amore: { load: -10, hoursToday: -5, keepSameJob: 4, longStreak: -3, beforeCompeting: -50, competesInEvent: 50, eliminated: 0, reserveScramblers: -50, staff: 0, wcaJob: 0, trusted: 0, speed: 0, preferences: 0, young: 0 },
 };
 
@@ -103,5 +103,8 @@ export function normalizeScoring(value: unknown): ScoringConfig | undefined {
     const weight = raw.weights?.[criterion];
     if (typeof weight === "number" && Number.isFinite(weight)) weights[criterion] = weight;
   }
+  // "Eliminated" weighed +40 in "Balanced" for a day, which put them before the round's own
+  // competitors (and as scramblers): drafts saved with that preset take its new value.
+  if (weights.eliminated === 40 && CRITERIA.every(criterion => criterion === "eliminated" || weights[criterion] === PROFILE_WEIGHTS.balanced[criterion])) weights.eliminated = PROFILE_WEIGHTS.balanced.eliminated;
   return { enabled: !!raw.enabled, weights };
 }
