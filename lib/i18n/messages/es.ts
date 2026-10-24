@@ -859,6 +859,7 @@ export const es = {
     columnPrevious: "Ronda ant.",
     previousPlace: "Puesto {place} en la ronda anterior",
     pastRounds: "Ya celebradas",
+    upcomingRounds: "Por celebrar",
     columnSeed: "Seed",
     columnInRound: "En la ronda",
     columnTotals: "Total tareas",

@@ -126,12 +126,15 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
   const severityCount = (severity: IssueSeverity, count: number) => severity === "error" ? tp("review.errors", count) : tp("review.warnings", count);
   const [history, dispatch] = useReducer(historyReducer, initialAssignments, initial => ({ past: [], present: normalizeAssignments(initial), future: [] }));
   const assignments = history.present;
-  // Rounds still to be held first: those are the ones to review; rounds already held after them.
+  // Rounds already held first (hidden until asked for), then the ones still to be held.
   const rounds = useMemo(() => {
     const all = Array.from(new Map(initialAssignments.map(item => [item.roundId, { id: item.roundId, eventId: item.eventId }])).values());
-    return [...all.filter(round => !pastRounds.has(round.id)), ...all.filter(round => pastRounds.has(round.id))];
+    return [...all.filter(round => pastRounds.has(round.id)), ...all.filter(round => !pastRounds.has(round.id))];
   }, [initialAssignments, pastRounds]);
-  const [roundId, setRoundId] = useState(rounds[0]?.id ?? "");
+  const pastCount = rounds.filter(round => pastRounds.has(round.id)).length;
+  const [showPast, setShowPast] = useState(false);
+  // Open on the first round still to be held: that is what needs reviewing.
+  const [roundId, setRoundId] = useState((rounds.find(round => !pastRounds.has(round.id)) ?? rounds[0])?.id ?? "");
   const [tool, setTool] = useState<Tool>("select");
   const [selection, setSelection] = useState<string[]>([]);
   const [anchor, setAnchor] = useState<CellRef>();
@@ -448,11 +451,17 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
 
   return <section className="review-panel matrix-review" id="review" onKeyDown={handleKeyDown}>
 
-    <div className="round-tabs" role="tablist" aria-label={t("review.roundTabs")}>{rounds.map((round, index) => {
+    <div className="round-tabs" role="tablist" aria-label={t("review.roundTabs")}>
+      {pastCount > 0 && <button type="button" className="round-tabs-divider toggle" aria-expanded={showPast} onClick={() => {
+        // Hiding the round on screen moves to the first one still to be held.
+        if (showPast && pastRounds.has(roundId)) { const next = rounds.find(round => !pastRounds.has(round.id)); if (next) changeRound(next.id); }
+        setShowPast(!showPast);
+      }}>{showPast ? "▾" : "▸"} {t("review.pastRounds")} ({pastCount})</button>}
+      {rounds.filter(round => showPast || !pastRounds.has(round.id) || round.id === roundId).map((round, index, shown) => {
       const roundIssues = issuesByRound.get(round.id) ?? [];
       const worst = worstSeverity(roundIssues);
-      const firstPast = pastRounds.has(round.id) && (index === 0 || !pastRounds.has(rounds[index - 1].id));
-      return <Fragment key={round.id}>{firstPast && <span className="round-tabs-divider">{t("review.pastRounds")}</span>}<button role="tab" aria-selected={roundId === round.id} className={roundId === round.id ? "active" : ""} onClick={() => changeRound(round.id)} title={`${eventName(round.eventId)} · ${round.id}`}><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><span>{eventName(round.eventId)}<small>{t("rounds.roundNumber", { number: round.id.split("-r").at(-1) ?? "" })}</small></span>{worst && <em className={`tab-issues ${worst}`} title={tp("review.problems", roundIssues.length)}>{roundIssues.length}</em>}</button></Fragment>;
+      const firstUpcoming = pastCount > 0 && !pastRounds.has(round.id) && (index === 0 || pastRounds.has(shown[index - 1].id));
+      return <Fragment key={round.id}>{firstUpcoming && showPast && <span className="round-tabs-divider">{t("review.upcomingRounds")}</span>}<button role="tab" aria-selected={roundId === round.id} className={roundId === round.id ? "active" : ""} onClick={() => changeRound(round.id)} title={`${eventName(round.eventId)} · ${round.id}`}><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><span>{eventName(round.eventId)}<small>{t("rounds.roundNumber", { number: round.id.split("-r").at(-1) ?? "" })}</small></span>{worst && <em className={`tab-issues ${worst}`} title={tp("review.problems", roundIssues.length)}>{roundIssues.length}</em>}</button></Fragment>;
     })}</div>
 
     <div className="matrix-toolbar">

@@ -200,7 +200,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - **Por generar:** rondas con competidores conocidos y sin resultados.
   - **Sin competidores todavía:** rondas cuyos competidores aún no se conocen.
 - **Borrar asignaciones** de una ronda ya generada, para generarla otra vez.
-- **En Revisar**, primero las rondas que quedan por celebrar y, tras una separación, las ya celebradas.
+- **En Revisar**, las rondas ya celebradas van arriba, ocultas tras «▸ Ya celebradas (N)», que las muestra u oculta. Debajo van las que quedan por celebrar, y se abre en la primera de ellas.
 
 ### WCIF de entrada y de salida
 

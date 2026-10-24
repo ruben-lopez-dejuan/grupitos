@@ -857,6 +857,7 @@ export const en: Messages = {
     columnPrevious: "Prev. round",
     previousPlace: "Place {place} in the previous round",
     pastRounds: "Already held",
+    upcomingRounds: "Still to be held",
     columnSeed: "Seed",
     columnInRound: "In round",
     columnTotals: "Total tasks",

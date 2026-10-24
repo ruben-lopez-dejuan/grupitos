@@ -517,3 +517,5 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .round-tabs-divider{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .round-tabs-divider::after{content:"";flex:1;height:1px;background:var(--line)}
 @media (max-width:700px){.round-tabs-divider{margin:0 4px;padding-left:8px;border-left:1px solid var(--line)}.round-tabs-divider::after{display:none}}
+.round-tabs-divider.toggle{margin-top:0;padding:4px 2px;border:0;background:none;font:inherit;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;text-align:left}
+.round-tabs-divider.toggle:hover{color:var(--blue)}
