@@ -5,6 +5,7 @@ import { buildDemoCompetition, demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, splitIntoGroups, type AssignmentOptions } from "@/lib/group-generator";
 import { peopleFromWcif, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, seedResult, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
+import { PROFILE_WEIGHTS } from "@/lib/pro/scoring";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
 function setup(competition: StoredCompetition, stations: number, zoneMode: ZoneMode, options: Partial<AssignmentOptions> = {}, people = peopleFromWcif(competition)) {
@@ -236,6 +237,31 @@ describe("generateAssignments — reparto justo en un campeonato grande", () => 
       const competitors = rows.filter(row => row.roundId === round.id && row.inRound).sort((a, b) => (a.seedResult ?? 1e12) - (b.seedResult ?? 1e12));
       const scramblers = competitors.filter(row => duties(row).some(duty => duty.role === "scrambler"));
       for (const row of scramblers) expect(competitors.indexOf(row)).toBeLessThan(Math.max(Math.ceil(competitors.length / 2), round.scramblers * round.groups));
+    }
+  });
+});
+
+describe("later rounds and the people who did not advance", () => {
+  // 333: everyone registered competed in round 1; the best 8 advance to round 2.
+  const competition = structuredClone(demoCompetition("small"));
+  const event = competition.events!.find(item => item.id === "333")!;
+  const registered = acceptedPeople(competition).filter(person => person.registration?.eventIds?.includes("333")).sort(compareBySeed("333"));
+  event.rounds![0].results = registered.map((person, index) => ({ personId: person.registrantId!, ranking: index + 1, average: 1000 + index, best: 900 + index }));
+  event.rounds![1].results = registered.slice(0, 8).map(person => ({ personId: person.registrantId!, ranking: null }));
+  const rounds = initialRounds(competition, 12, "waiting").filter(round => round.id === "333-r2").map(round => ({ ...round, enabled: true, groups: 2, scramblers: 1, runners: 1 }));
+  const out = new Set(registered.slice(8).map(personKey));
+
+  for (const scoring of [false, true]) it(`gives this round's tasks to them first${scoring ? " (weighted)" : ""}, and lists them all`, () => {
+    const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, ...(scoring ? { scoring: { enabled: true, weights: { ...PROFILE_WEIGHTS.balanced } } } : {}) });
+    const workers = rows.filter(item => duties(item).length);
+    expect(workers.length).toBeGreaterThan(0);
+    expect(workers.every(item => out.has(item.personId))).toBe(true);
+    // Every one of them has a row, with their place and result in round 1, even without a task.
+    const theirs = rows.filter(item => out.has(item.personId));
+    expect(theirs).toHaveLength(out.size);
+    for (const item of theirs) {
+      const place = registered.findIndex(person => personKey(person) === item.personId) + 1;
+      expect([item.inRound, item.roundRank, item.roundResult]).toEqual([false, place, 1000 + place - 1]);
     }
   });
 });

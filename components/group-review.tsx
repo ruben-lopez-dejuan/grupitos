@@ -193,7 +193,8 @@ export function GroupReview({ everyone = NO_PEOPLE, unavailable = NO_UNAVAILABIL
     // Later rounds: the place in the previous round, as the groups and scorecards follow it.
     const bySeed = (a: GeneratedAssignment, b: GeneratedAssignment) => (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER) || (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER);
     const order: Record<RowSort, (a: GeneratedAssignment, b: GeneratedAssignment) => number> = {
-      seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : 0),
+      // After the round's competitors: those eliminated in the previous round by place, then the rest.
+      seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER)),
       name: () => 0,
       group: (a, b) => (competingGroup(a) ?? Number.MAX_SAFE_INTEGER) - (competingGroup(b) ?? Number.MAX_SAFE_INTEGER) || bySeed(a, b),
       load: (a, b) => (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
@@ -546,7 +547,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         <td className="rank-column">{item.inRound ? index + 1 : ""}</td>
         <td className="name-column">{rowSeverity && <i className={`issue-dot ${rowSeverity}`} title={rowIssues?.map(issueText).join("\n")} />}<div className="person-cell">{showPhotos && <PersonAvatar name={item.name} url={photos[item.personId]} />}<div><button type="button" className="person-link" onClick={() => setCardPersonId(item.personId)} title={t("review.openCard")}>{item.name}</button>{item.featured && <span className="featured-star" title={t("sets.featuredHelp")} aria-label={t("sets.featured")}>★</span>}<small>{item.wcaId ?? <NewcomerBadge withLabel />}</small></div></div></td>
         <td>{ageFromBirthdate(item.birthdate)}</td>
-        <td title={item.roundRank ? t("review.previousPlace", { place: item.roundRank }) : undefined}>{laterRound && item.inRound ? (item.roundRank ? <><span className="previous-place">{item.roundRank}.</span> {formatResult(item.roundResult, item.eventId)}</> : "") : formatResult(item.seedResult, item.eventId)}</td>
+        <td title={item.roundRank ? t("review.previousPlace", { place: item.roundRank }) : undefined}>{laterRound && (item.inRound || item.roundRank) ? (item.roundRank ? <><span className="previous-place">{item.roundRank}.</span> {formatResult(item.roundResult, item.eventId)}</> : "") : formatResult(item.seedResult, item.eventId)}</td>
         <td>{item.inRound ? <span className="registered-check" aria-label={t("review.competesHere")}>✓</span> : <span className="muted-mark" aria-label={t("review.onlyWorks")}>—</span>}</td>
         {columns.map((group, position) => {
           const cell = { id: item.id, group };

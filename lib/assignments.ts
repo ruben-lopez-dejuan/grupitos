@@ -16,7 +16,7 @@ export function wcifAssignmentCode(role: TaskRole) {
 }
 
 /** What made the generator pick someone for a task, shown as "why this person?". */
-export const PICK_REASONS = ["staff", "volunteer", "trusted", "segment", "fastHalf", "reserve", "laneTeam", "delegateDuty", "dataEntry", "notInRound", "beforeOwn", "wcaJob", "avoided"] as const;
+export const PICK_REASONS = ["staff", "volunteer", "trusted", "segment", "fastHalf", "reserve", "laneTeam", "delegateDuty", "dataEntry", "eliminated", "notInRound", "beforeOwn", "wcaJob", "avoided"] as const;
 export type PickReason = typeof PICK_REASONS[number];
 export type Why = {
   group: number;

@@ -76,6 +76,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - sin runners extranjeros;
   - delegados y organizadores con o sin tareas normales.
 - **Orden de las tareas:** se puede elegir qué se cubre antes cuando falta gente (delegado, mezcladores, data entry, runners y jueces).
+- **Rondas siguientes:** quienes compitieron en la ronda anterior y no pasaron van primero para las tareas (la mitad más rápida de ellos también puede mezclar). Aparecen al final de la revisión aunque no tengan tarea, con su puesto en la ronda anterior.
 - **Carga repartida:** quien está en muchas pruebas no carga con la mayor parte del trabajo. Además, cada tarea guarda un «¿por qué esta persona?», con las personas libres que había y los motivos de la elección.
 
 ### Revisión

@@ -528,12 +528,21 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       else if (role === "scrambler" && strictScramblers && !trusted.has(key)) reasons.push("fastHalf");
       if (role === "scrambler" && reserveKeys.has(key)) reasons.push("reserve");
       if (teamHere(round.id, group, key)) reasons.push("laneTeam");
-      if (!inRoundKeys.has(key)) reasons.push("notInRound");
+      if (eliminated.has(key)) reasons.push("eliminated");
+      else if (!inRoundKeys.has(key)) reasons.push("notInRound");
       if (beforeOwn(key, group)) reasons.push("beforeOwn");
       return reasons;
     };
     const strictScramblers = options.sortingRule === "scrambler-safe";
     const inRoundKeys = new Set(competitors.map(personKey));
+    // Later rounds: people who competed in the previous round and did not advance. They are free
+    // and at hand, so they come first for this round's tasks, and show in the review without one.
+    const previous = previousRoundResults(competition, round.id);
+    const placeOf = (person: WcifPerson) => person.registrantId === null || person.registrantId === undefined ? undefined : previous.get(person.registrantId)?.ranking;
+    const eliminatedPeople = accepted.filter(person => placeOf(person) !== undefined && !inRoundKeys.has(personKey(person))).sort((a, b) => placeOf(a)! - placeOf(b)!);
+    const eliminated = new Set(eliminatedPeople.map(personKey));
+    // The faster half of them can scramble, as the faster half of the round can.
+    const fastEliminated = new Set(eliminatedPeople.slice(0, Math.ceil(eliminatedPeople.length / 2)).map(personKey));
     // Strict: trusted people, or people with a result in the faster half of the round
     // (never fewer than the slots to fill), so scrambling is spread among good people.
     // Blindfolded and one-handed rounds rank by the event scrambled (4x4 for 4BLD).
@@ -549,8 +558,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       if (!normalTasksAllowed(key)) return false;
       // A scrambler segment (PRO) replaces the built-in speed rule.
       if (allowed("scrambler")) return allowed("scrambler")!.has(key);
-      if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key) && !hasWcaJob(person, "scrambler")) return false;
-      return !strictScramblers || trusted.has(key) || (canScrambleHere(person) && (scrambleRank.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
+      if (!inRoundKeys.has(key) && !eliminated.has(key) && !staff.has(key) && !trusted.has(key) && !hasWcaJob(person, "scrambler")) return false;
+      return !strictScramblers || trusted.has(key) || fastEliminated.has(key) || (canScrambleHere(person) && (scrambleRank.get(key) ?? Number.MAX_SAFE_INTEGER) < fastEnough);
     });
     // Reserve: people outside the pool with a result in the event scrambled for this one (4BLD
     // scrambles are 4x4…), for groups the pool cannot cover (single-group side-room rounds).
@@ -568,13 +577,14 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
       // People with the WCA role staff-scrambler are tried first, as in Groupifier.
       const wcaJob = hasWcaJob(person, "scrambler") && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2 ? 0 : 1;
-      if (strictScramblers) return [wcaJob, roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
+      if (strictScramblers) return [wcaJob, eliminated.has(key) ? 0 : 1, roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
       // Groupifier's criteria. Staff are generic here (not scrambling specialists), so they only
       // win among equally suitable people, like trusted people do.
       return [
         wcaJob,
         options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
         youngerThan10(person),
+        eliminated.has(key) ? 0 : 1,
         -suitability(person),
         trusted.has(key) ? 0 : 1,
         staff.has(key) ? 0 : 1,
@@ -665,6 +675,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
           staffStreak: streak(key, start) + (end - start),
           competesRightAfter: (competingStarts.get(key) ?? []).some(other => other >= end && other - end <= 10),
           competesInEvent: registeredForEvent(person) && !delegates.has(key),
+          eliminated: eliminated.has(key),
           canScramble: scramblerKeys.has(key),
           isStaff: staff.has(key),
           wcaJob: hasWcaJob(person, job),
@@ -725,6 +736,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
         options.tasksForOwnEventsOnly && !registeredForEvent(person) ? 1 : 0,
         youngerThan10(person),
+        eliminated.has(key) ? 0 : 1,
         busyRoles(key),
         loadInEvent(key) >= 2 ? 1 : 0,
         // Coarse load first, so people in many events do not end up with most of the work.
@@ -751,8 +763,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       else if (options.assignJudges) (item === "runner" ? runnerStep : judgeStep)();
     }
 
+    // The eliminated show in the review even without a task, ready to be given one by hand.
+    for (const person of eliminatedPeople) rowFor(person);
     const ordered = [...rows.values()].sort((a, b) => a.seedIndex - b.seedIndex || a.person.name.localeCompare(b.person.name));
-    const previous = previousRoundResults(competition, round.id);
     for (const row of ordered) {
       roundOutput.push({
         id: `${round.id}:${row.key}`,
@@ -763,7 +776,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         wcaId: row.person.wcaId,
         birthdate: row.person.birthdate,
         seedResult: seedResult(row.person, round.eventId),
-        ...roundStanding(previous, row.inRound ? row.person.registrantId : undefined),
+        ...roundStanding(previous, row.person.registrantId),
         ...(scrambleEvent !== round.eventId && row.tasks.some(task => task.role === "scrambler") ? { scrambleResult: seedResult(row.person, scrambleEvent) } : {}),
         inRound: row.inRound,
         ...(row.inRound && featured?.has(row.key) ? { featured: true } : {}),
