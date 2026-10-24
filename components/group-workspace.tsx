@@ -30,7 +30,7 @@ import { draftStorageKey, generationSignature, parseDraft, type Draft, type Work
 import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { fetchWcaNames } from "@/lib/wca-persons";
-import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
+import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, linkedVolunteers, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { previewSets } from "@/lib/pro/sets-preview";
@@ -83,7 +83,7 @@ function defaultSettings(competition: StoredCompetition): WorkspaceSettings {
  */
 function withWcifGroups(competition: StoredCompetition, settings: WorkspaceSettings) {
   const slots = settings.pro?.enabled ? groupSlots(settings.pro.schedule) : undefined;
-  const imported = groupsFromWcif(competition, slots);
+  const imported = groupsFromWcif(competition, slots, linkedVolunteers(settings.pro?.people));
   const rounds = settings.rounds.map(round => {
     const groups = imported.groupsByRound.get(round.id);
     return groups === undefined ? round : { ...round, enabled: true, ...(slots ? {} : { groups }) };

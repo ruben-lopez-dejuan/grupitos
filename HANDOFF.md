@@ -259,6 +259,10 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 
   «Actualizar desde la WCA» hace la misma comprobación.
 - **Demo**: `offline`, sin publicar ni descarga en segundo plano.
+- **Voluntarios con cuenta WCA** (`ProVolunteer.wcaUserId`, `components/wca-account-link.tsx`, ruta `GET /api/wca/users?q=` sobre `/api/v0/search/users`, que también devuelve cuentas sin WCA ID):
+  - **Exportar:** si el WCIF ya tiene a esa cuenta, se usa esa persona. Si no, y tiene tareas, se añade una persona nueva que no compite.
+  - **Publicar:** solo a las personas nuevas se les manda `registration: { isCompeting: false }`, y la WCA crea la inscripción de staff (`update_persons_wcif!`).
+  - **Volver a cargar:** `groupsFromWcif(…, aliases)` devuelve sus tareas al voluntario (`linkedVolunteers`). Esas inscripciones no llevan rol, así que `nonCompetingStaff` no las cuenta dos veces.
 - **Comprobado** en la demo con una WCA simulada en el navegador: publicar, comprobar, y cargar ajustes más nuevos de «otra persona». **Falta probarlo contra la WCA de verdad**: lo hará el usuario con una competición suya.
 
 ### 6.12. Seguir en otro dispositivo (24/10/2026)

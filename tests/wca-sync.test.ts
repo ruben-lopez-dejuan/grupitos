@@ -7,6 +7,7 @@ import { peopleFromWcif } from "@/lib/people";
 import { groupSlots, importSchedule, withScheduledGroups } from "@/lib/pro/schedule";
 import { initialRounds } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
+import { groupsFromWcif } from "@/lib/wcif-groups";
 import { buildPatch, changedRounds, checkPublished, readSettings, settingsExtension, SETTINGS_EXTENSION_ID } from "@/lib/wca-sync";
 
 describe("publishing to the WCA", () => {
@@ -69,6 +70,29 @@ describe("publishing to the WCA", () => {
     const lost = { ...reread, persons: reread.persons.map((person, index) => index === 0 ? { ...person, assignments: [] } : person), extensions: [] };
     expect(checkPublished(patch, lost).missing).toBe(patch.persons![0].assignments!.length);
     expect(checkPublished(patch, lost).settingsSaved).toBe(false);
+  });
+
+  it("publishes a volunteer linked to a WCA account as non-competing staff, and reads their tasks back", async () => {
+    const volunteer = { key: "vol-1", name: "Ana Sin Marca", wcaUserId: 987654 };
+    const people = { propertyKeys: ["team"], properties: { "vol-1": { team: "Voluntario normal" } }, volunteers: [volunteer], unavailable: [] };
+    const round = rounds[0];
+    const row = { id: `${round.id}:vol-1`, roundId: round.id, eventId: round.eventId, personId: "vol-1", name: volunteer.name, inRound: false, tasks: [{ group: 1, role: "judge" as const }] };
+    const { patch, summary } = buildPatch({ fresh: competition, assignments: [...assignments, row], rounds, slots, schedule, people, settings: await settingsExtension(saved) });
+    expect(summary.newStaff).toBe(1);
+    expect(summary.skipped).toEqual([]);
+    const sent = patch.persons!.find(person => person.wcaUserId === 987654)!;
+    expect(sent.registration).toEqual({ isCompeting: false });
+    expect(sent.assignments).toHaveLength(1);
+    expect(sent.extensions.find(item => item.id === "org.cubingusa.natshelper.v1.Person")?.data).toEqual({ properties: { team: "Voluntario normal" } });
+    // Only new people carry a registration: the WCA would otherwise touch existing ones.
+    expect(patch.persons!.filter(person => person.registration)).toHaveLength(1);
+    // Once the WCA has them, their tasks come back to the volunteer, not to a new person.
+    const reread = { ...competition, schedule: patch.schedule, persons: [...competition.persons!, { name: volunteer.name, wcaUserId: 987654, registrantId: 999, registration: { status: "accepted", isCompeting: false, eventIds: [] }, roles: [], assignments: sent.assignments }] };
+    const imported = groupsFromWcif(reread, slots, new Map([[987654, "vol-1"]]));
+    expect(imported.assignments.find(item => item.personId === "vol-1")?.tasks).toEqual([{ group: 1, role: "judge" }]);
+    const again = buildPatch({ fresh: reread, assignments: [...assignments, row], rounds, slots, schedule, people, settings: await settingsExtension(saved) });
+    expect(again.summary.newStaff).toBe(0);
+    expect(again.patch.persons!.some(person => person.registration)).toBe(false);
   });
 
   it("notices round times changed at the WCA since the import", () => {

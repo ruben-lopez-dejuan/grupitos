@@ -464,3 +464,19 @@ button.plain.danger{justify-self:start;color:var(--error)}
 
 /* Review: add someone with no task in the round */
 .row-controls .add-person{min-width:170px}
+
+/* Volunteers linked to their WCA account */
+.volunteer-list .account-link{border:1px solid var(--line);background:transparent;color:var(--muted);font:inherit;font-size:12px;border-radius:4px;padding:1px 6px;cursor:pointer}
+.volunteer-list .account-link.linked{color:var(--green);border-color:currentColor}
+.volunteer-list .account-search{flex:1 1 100%;display:grid;gap:4px}
+.volunteer-list .account-search form{display:flex;gap:6px;align-items:center}
+.volunteer-list .account-search ul{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.volunteer-list .account-search li button{background:transparent;border:0;color:var(--ink);font:inherit;text-align:left;cursor:pointer;padding:2px 0}
+.volunteer-list .account-search li button:hover{color:var(--blue)}
+.volunteer-list .account-link,.volunteer-list .account-search button{width:auto;height:auto}
+.volunteer-list .account-link:hover{color:var(--blue);background:transparent}
+.volunteer-list li:has(.account-search){flex:1 1 100%;flex-wrap:wrap}
+.volunteer-list .account-search form input{flex:1 1 auto;min-width:0}
+.volunteer-list .account-search .button{padding:5px 10px;color:var(--ink);border:1px solid var(--line)}
+.volunteer-list .account-search li{display:block;padding:0;background:none;border:0;font-weight:500}
+.volunteer-list .account-search li button:hover{color:var(--blue);background:transparent}

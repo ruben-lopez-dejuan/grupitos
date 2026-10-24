@@ -11,7 +11,8 @@ import { migrateTeamRoles, normalizeTeams, type TeamsConfig } from "@/lib/pro/te
 
 export const PERSON_EXTENSION_ID = "org.cubingusa.natshelper.v1.Person";
 
-export type ProVolunteer = { key: string; name: string; wcaId?: string; countryIso2?: string };
+/** `wcaUserId`: their WCA account (it may have no WCA ID), to publish them as non-competing staff. */
+export type ProVolunteer = { key: string; name: string; wcaId?: string; countryIso2?: string; wcaUserId?: number };
 
 /** A time range, or the times another person competes. */
 export type Unavailability = { id: string; personKey: string; note?: string } & ({ start: string; end: string; whileCompeting?: undefined } | { whileCompeting: string; start?: undefined; end?: undefined });
@@ -66,7 +67,12 @@ export function normalizeProPeople(value: unknown): ProPeople {
 
 /** A volunteer as a WCIF-like person who is accepted but does not compete. */
 export function volunteerPerson(volunteer: ProVolunteer): WcifPerson {
-  return { appKey: volunteer.key, name: volunteer.name, wcaId: volunteer.wcaId ?? null, countryIso2: volunteer.countryIso2, registrantId: null, registration: { status: "accepted", isCompeting: false, eventIds: [] } };
+  return { appKey: volunteer.key, name: volunteer.name, wcaId: volunteer.wcaId ?? null, countryIso2: volunteer.countryIso2, registrantId: null, ...(volunteer.wcaUserId !== undefined ? { wcaUserId: volunteer.wcaUserId } : {}), registration: { status: "accepted", isCompeting: false, eventIds: [] } };
+}
+
+/** WCA account → volunteer key, for volunteers linked to their account. */
+export function linkedVolunteers(people?: Pick<ProPeople, "volunteers">) {
+  return new Map((people?.volunteers ?? []).flatMap(volunteer => volunteer.wcaUserId !== undefined ? [[volunteer.wcaUserId, volunteer.key] as const] : []));
 }
 
 /**

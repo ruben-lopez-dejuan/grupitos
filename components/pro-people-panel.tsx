@@ -8,7 +8,8 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { TeamSetupPanel } from "@/components/team-setup-panel";
 import { byName } from "@/lib/people";
 import { newVolunteerKey, type ProPeople, type Unavailability } from "@/lib/pro/people";
-import { fetchWcaNames } from "@/lib/wca-persons";
+import { fetchWcaNames, type WcaAccount } from "@/lib/wca-persons";
+import { WcaAccountLink } from "@/components/wca-account-link";
 import { personKey } from "@/lib/rounds";
 
 /** Rows shown before "show all", so typing stays fast in a 400-person table. */
@@ -75,6 +76,10 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
   const volunteerError = wcaId && registeredWcaIds.has(wcaId) ? t("proPeople.alreadyRegistered") : wcaId && !/^\d{4}[A-Z]{4}\d{2}$/.test(wcaId) ? t("proPeople.badWcaId") : "";
 
   const [lookup, setLookup] = useState("");
+  /** Links a volunteer to their WCA account: they are published as non-competing staff. The account's name wins. */
+  function linkVolunteer(key: string, account: WcaAccount) {
+    onChange({ ...value, volunteers: value.volunteers.map(item => item.key !== key ? item : { ...item, wcaUserId: account.id, name: account.name, ...(account.wcaId ? { wcaId: account.wcaId } : {}), ...(account.countryIso2 ? { countryIso2: account.countryIso2 } : {}) }) });
+  }
   /** With a WCA ID, the name (and country) come from the WCA; the typed name is only a fallback. */
   async function addVolunteer() {
     if ((!volunteer.name.trim() && !wcaId) || volunteerError) return;
@@ -119,7 +124,7 @@ export function ProPeoplePanel({ people, days, value, onChange, onReimport, lane
 
     <h3 className="panel-subheading">{t("proPeople.volunteers")} <span className="count-chip">{value.volunteers.length}</span> <Hint align="start" text={t("proPeople.volunteersHint")} /></h3>
     <div className="volunteer-area">
-      {value.volunteers.length > 0 && <ul className="volunteer-list">{[...value.volunteers].sort(byName).map(item => <li key={item.key}><span>{item.name}</span>{item.wcaId && <small>{item.wcaId}</small>}<button type="button" onClick={() => removeVolunteer(item.key)} aria-label={t("people.remove", { name: item.name })}>×</button></li>)}</ul>}
+      {value.volunteers.length > 0 && <ul className="volunteer-list">{[...value.volunteers].sort(byName).map(item => <li key={item.key}><span>{item.name}</span>{item.wcaId && <small>{item.wcaId}</small>}<WcaAccountLink name={item.name} wcaId={item.wcaId} linked={item.wcaUserId} onLink={account => linkVolunteer(item.key, account)} /><button type="button" onClick={() => removeVolunteer(item.key)} aria-label={t("people.remove", { name: item.name })}>×</button></li>)}</ul>}
       <form className="volunteer-form" onSubmit={event => { event.preventDefault(); addVolunteer(); }}>
         <input value={volunteer.name} onChange={event => setVolunteer(current => ({ ...current, name: event.target.value }))} placeholder={t("proPeople.volunteerName")} aria-label={t("proPeople.volunteerName")} />
         <input value={volunteer.wcaId} onChange={event => setVolunteer(current => ({ ...current, wcaId: event.target.value }))} placeholder={t("proPeople.volunteerWcaId")} aria-label={t("proPeople.volunteerWcaId")} aria-invalid={!!volunteerError} />

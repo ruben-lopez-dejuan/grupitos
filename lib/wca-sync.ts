@@ -95,7 +95,8 @@ export type WcifPatch = {
   formatVersion: string;
   id: string;
   schedule?: StoredCompetition["schedule"];
-  persons?: Array<{ wcaUserId: number; assignments: NonNullable<StoredCompetition["persons"]>[number]["assignments"]; extensions: WcifExtension[] }>;
+  /** `registration` only for people new to the WCIF: the WCA then registers them as non-competing staff. */
+  persons?: Array<{ wcaUserId: number; assignments: NonNullable<StoredCompetition["persons"]>[number]["assignments"]; extensions: WcifExtension[]; registration?: { isCompeting: false } }>;
   extensions: WcifExtension[];
 };
 
@@ -127,7 +128,7 @@ export function buildPatch({ fresh, assignments, rounds, slots, schedule, people
 }): { patch: WcifPatch; summary: PatchSummary } {
   const extensions = [...(fresh.extensions ?? []).filter(item => item.id !== SETTINGS_EXTENSION_ID && !isDraftExtension(item.id)), settings];
   const patch: WcifPatch = { formatVersion: fresh.formatVersion ?? "2.2", id: fresh.id, extensions };
-  const empty: PatchSummary = { people: 0, assignments: 0, groupsReused: 0, groupsCreated: 0, groupsRemoved: 0, skipped: [], changedPeople: 0, added: 0, removed: 0, withGroups: false };
+  const empty: PatchSummary = { people: 0, assignments: 0, groupsReused: 0, groupsCreated: 0, groupsRemoved: 0, newStaff: 0, skipped: [], changedPeople: 0, added: 0, removed: 0, withGroups: false };
   if (!assignments.length) return { patch, summary: empty };
 
   const { wcif, report } = exportWcif({ competition: fresh, assignments, rounds, slots, schedule, people });
@@ -142,7 +143,7 @@ export function buildPatch({ fresh, assignments, rounds, slots, schedule, people
     summary.added += added;
     summary.removed += removed;
     if (added || removed) summary.changedPeople += 1;
-    return { wcaUserId: person.wcaUserId!, assignments: person.assignments ?? [], extensions: person.extensions ?? [] };
+    return { wcaUserId: person.wcaUserId!, assignments: person.assignments ?? [], extensions: person.extensions ?? [], ...(before.has(person.wcaUserId) ? {} : { registration: { isCompeting: false as const } }) };
   });
   withSpecUrls(patch);
   return { patch, summary };

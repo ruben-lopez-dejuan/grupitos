@@ -69,7 +69,8 @@ export type ImportedGroups = {
 };
 
 /** The WCIF's group assignments as a proposal. `slots`: PRO schedule columns (imported from this WCIF). */
-export function groupsFromWcif(competition: StoredCompetition, slots?: Map<string, GroupSlot[]>): ImportedGroups {
+/** `aliases`: WCA account → app key, so a linked volunteer's tasks come back to that volunteer. */
+export function groupsFromWcif(competition: StoredCompetition, slots?: Map<string, GroupSlot[]>, aliases?: Map<number, string>): ImportedGroups {
   const groups = groupActivities(competition);
   const column = (group: GroupActivity): { at?: number; attempt?: number } => {
     if (!slots) return { at: group.number };
@@ -97,7 +98,7 @@ export function groupsFromWcif(competition: StoredCompetition, slots?: Map<strin
       if (at === undefined) { unplaced += 1; continue; }
       const later = !!attempt && attempt > 1 && role === "competitor";
       groupsByRound.set(group.roundId, Math.max(groupsByRound.get(group.roundId) ?? 0, at));
-      const key = personKey(person);
+      const key = (person.wcaUserId !== undefined ? aliases?.get(person.wcaUserId) : undefined) ?? personKey(person);
       const id = `${group.roundId}:${key}`;
       const row = rows.get(id) ?? {
         id, roundId: group.roundId, eventId: eventOf(group.roundId), personId: key, name: person.name, wcaId: person.wcaId, birthdate: person.birthdate,

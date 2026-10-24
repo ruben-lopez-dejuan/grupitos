@@ -12,3 +12,16 @@ export async function fetchWcaNames(ids: string[]): Promise<{ people: Record<str
     return undefined;
   }
 }
+
+export type WcaAccount = { id: number; name: string; wcaId?: string; countryIso2?: string; thumb?: string };
+
+/** WCA accounts by name or WCA ID, also without a WCA ID (server route with the user's session). */
+export async function searchWcaAccounts(query: string): Promise<WcaAccount[] | undefined> {
+  try {
+    const response = await fetch(`/api/wca/users?${new URLSearchParams({ q: query })}`);
+    if (!response.ok) return undefined;
+    return (await response.json() as { accounts: WcaAccount[] }).accounts;
+  } catch {
+    return undefined;
+  }
+}

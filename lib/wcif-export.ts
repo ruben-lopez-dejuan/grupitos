@@ -18,7 +18,8 @@ const PERSON_EXTENSION_ID = "org.cubingusa.natshelper.v1.Person";
 const FEATURED_EXTENSION_ID = "groupifier.ActivityConfig";
 const GROUP_CODE = /-g\d+(?:-a\d+)?$/;
 
-export type WcifExportReport = { people: number; assignments: number; groupsReused: number; groupsCreated: number; groupsRemoved: number; skipped: string[] };
+/** `newStaff`: volunteers linked to a WCA account who join the WCIF as non-competing staff. */
+export type WcifExportReport = { people: number; assignments: number; groupsReused: number; groupsCreated: number; groupsRemoved: number; newStaff: number; skipped: string[] };
 
 /** The WCA refuses an extension without a spec URL: these are the ones CompScript and Groupifier use. */
 export function specUrlOf(id: string) {
@@ -61,7 +62,7 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
     (room.activities ?? []).forEach(visit);
     return ids;
   }));
-  const report: WcifExportReport = { people: 0, assignments: 0, groupsReused: 0, groupsCreated: 0, groupsRemoved: 0, skipped: [] };
+  const report: WcifExportReport = { people: 0, assignments: 0, groupsReused: 0, groupsCreated: 0, groupsRemoved: 0, newStaff: 0, skipped: [] };
   const exported = new Set(assignments.map(item => item.roundId));
   /** Group activity of each column, per round. */
   const columns = new Map<string, Map<number, WcifActivity>>();
@@ -143,6 +144,21 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
   const groupIds = new Set([...used, ...removed]);
   const byKey = new Map((wcif.persons ?? []).map(person => [personKey(person), person]));
   for (const person of wcif.persons ?? []) person.assignments = (person.assignments ?? []).filter(item => !groupIds.has(item.activityId));
+  // Volunteers linked to their WCA account: the WCIF person with that account, or a new
+  // non-competing one when they have tasks (the WCA registers them as staff when published).
+  const keyOfPerson = new Map<object, string>();
+  for (const volunteer of people?.volunteers ?? []) {
+    if (volunteer.wcaUserId === undefined) continue;
+    let person = (wcif.persons ?? []).find(item => item.wcaUserId === volunteer.wcaUserId);
+    if (!person && !assignments.some(item => item.personId === volunteer.key && item.tasks.length && columns.has(item.roundId))) continue;
+    if (!person) {
+      person = { name: volunteer.name, wcaUserId: volunteer.wcaUserId, wcaId: volunteer.wcaId ?? null, registrantId: null, ...(volunteer.countryIso2 ? { countryIso2: volunteer.countryIso2 } : {}), roles: [], registration: { status: "accepted", isCompeting: false, eventIds: [] }, assignments: [], extensions: [] };
+      wcif.persons = [...(wcif.persons ?? []), person];
+      report.newStaff += 1;
+    }
+    byKey.set(volunteer.key, person);
+    keyOfPerson.set(person, volunteer.key);
+  }
   const featured = new Map<number, number[]>();
   const withTasks = new Set<string>();
   for (const item of assignments) {
@@ -167,7 +183,7 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
 
   // natshelper: person properties and the stages of each room.
   if (people) for (const person of wcif.persons ?? []) {
-    const own = people.properties[personKey(person)];
+    const own = people.properties[keyOfPerson.get(person) ?? personKey(person)];
     if (!own || !Object.keys(own).length) continue;
     person.extensions = setExtension(person.extensions, PERSON_EXTENSION_ID, data => ({ ...data, properties: Object.fromEntries(Object.entries(own).map(([key, value]) => [key, propertyValue(value)])) }));
   }

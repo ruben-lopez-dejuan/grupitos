@@ -124,6 +124,7 @@ export function PublishPanel({ competition, draft, assignments, rounds, slots, s
           {summary.withGroups ? <>
             <p>{t("publish.groups", { reused: summary.groupsReused, created: summary.groupsCreated, removed: summary.groupsRemoved })}</p>
             <p>{t("sync.people", { people: summary.changedPeople, added: summary.added, removed: summary.removed })}</p>
+            {summary.newStaff > 0 && <p>{tp("sync.newStaff", summary.newStaff)}</p>}
           </> : <p>{t("sync.noProposal")}</p>}
           <p>{t("sync.settingsLine")}</p>
           {outdated && <p className="warning-note">{t("sync.outdated")}</p>}
