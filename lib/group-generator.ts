@@ -13,7 +13,7 @@ import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, windowsForTask, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, hasWcaJob, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
-import { acceptedPeople, bestAverageAndSingle, SCRAMBLE_EVENT, judgesNeeded, personKey, previousRoundResults, roundCompetitors, roundStanding, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, bestAverageAndSingle, normalizeSortingRule, SCRAMBLE_EVENT, judgesNeeded, personKey, previousRoundResults, roundCompetitors, roundStanding, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
   sortingRule: SortingRule;
@@ -32,12 +32,13 @@ export type AssignmentOptions = {
    * weighs more than a 10-minute one (20 minutes count as one task).
    */
   balanceMinutes: boolean;
+  /** After splitting, people who share a first name go to different groups (swapping with close seeds). */
+  separateNames: boolean;
   /**
-   * First rounds of `topTogetherEvents` split by ranking, as later rounds are: the fastest together
-   * in the last group, instead of spread over the groups by the sorting rule.
+   * First rounds, per event: a sorting rule other than the general one, and/or the `top` best of
+   * the event together in group 1 (the rest split by the rule).
    */
-  topTogether: boolean;
-  topTogetherEvents: string[];
+  eventRules: Record<string, EventRule>;
   noRunningForForeigners: boolean;
   spreadDelegates: boolean;
   /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
@@ -47,6 +48,19 @@ export type AssignmentOptions = {
   /** Which task chooses first among the free people (rules), or is filled first when people run short (scoring). */
   taskOrder: TaskOrderItem[];
 };
+
+export type EventRule = { rule?: SortingRule; top?: number };
+
+/** Options from a draft or template of any age: old sorting rules mapped, missing ones filled in. */
+export function normalizeOptions(value: Partial<AssignmentOptions> & { sortingRule?: unknown } | undefined): AssignmentOptions {
+  const { rule, separateNames } = normalizeSortingRule(value?.sortingRule);
+  const eventRules = Object.fromEntries(Object.entries(value?.eventRules ?? {}).flatMap(([eventId, own]) => {
+    const ruleHere = own?.rule === undefined ? undefined : normalizeSortingRule(own.rule).rule;
+    const top = typeof own?.top === "number" && own.top > 0 ? Math.round(own.top) : undefined;
+    return ruleHere || top ? [[eventId, { ...(ruleHere ? { rule: ruleHere } : {}), ...(top ? { top } : {}) }]] : [];
+  }));
+  return { ...DEFAULT_OPTIONS, ...value, sortingRule: rule, separateNames: !!(value?.separateNames || separateNames), eventRules, taskOrder: normalizeTaskOrder(value?.taskOrder) } as AssignmentOptions;
+}
 
 export const TASK_ORDER_ITEMS = ["delegate", "scrambler", "dataentry", "runner", "judge"] as const;
 export type TaskOrderItem = typeof TASK_ORDER_ITEMS[number];
@@ -65,9 +79,8 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   tasksForOwnEventsOnly: false,
   tasksOnCompetingDaysOnly: true,
   balanceMinutes: false,
-  topTogether: false,
-  // The sprint events, where the best usually compete together.
-  topTogetherEvents: ["222", "333", "skewb", "pyram"],
+  separateNames: false,
+  eventRules: {},
   noRunningForForeigners: false,
   spreadDelegates: true,
   normalTasksForDelegatesAndOrganizers: false,
@@ -76,11 +89,8 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   taskOrder: [...TASK_ORDER_ITEMS],
 };
 
-/** Events where Groupifier's "balanced" rule keeps the plain ranking order. */
 /** Balancing by minutes: a typical group's length counts as one task. */
 const MINUTES_PER_TASK = 20;
-
-const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "skewb", "clock", "sq1"];
 
 type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number; why: Why[] };
 type CompetitorPlan = {
@@ -320,16 +330,20 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     if (!known || competitors.length === 0) return [];
     const firstRound = round.roundNumber === 1;
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
-    const topTogether = options.topTogether && options.topTogetherEvents.includes(round.eventId);
-    const rule = firstRound && !topTogether ? options.sortingRule : "ranks";
+    const own = firstRound ? options.eventRules[round.eventId] : undefined;
+    const rule = firstRound ? own?.rule ?? options.sortingRule : "ranks";
     const primary = Math.max(1, round.groups - linkedColumns(round.id).length);
     // Stages with a maximum per group keep to it; the other groups take the rest.
     const caps = Array.from({ length: primary }, (_, index) => staffing?.(round.id, index + 1)?.maxPerGroup);
     const targets = caps.some(cap => cap !== undefined) ? groupTargets(competitors.length, caps) : undefined;
-    const sets = assignmentSets?.({ ...round, groups: primary }) ?? [];
+    // "The N best together in group 1": a set placed before any other, on every group numbered 1.
+    const firstGroups = (slots?.get(round.id) ?? []).filter(slot => !slot.linkedTo && slot.number === 1).map(slot => slot.group);
+    const topSet = own?.top ? [{ id: `top-${round.eventId}`, name: "top", top: own.top, groups: firstGroups.length ? firstGroups : [1], featured: false }] : [];
+    const sets = [...topSet, ...(assignmentSets?.({ ...round, groups: primary }) ?? [])];
     const { groups, allowed, featured, setOf } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
       : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined, setOf: undefined };
     if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group), (a, b) => sameSet({ setOf }, a, b));
+    if (options.separateNames) separateFirstNames(groups, (person, group) => allowedIn({ allowed }, person, group), (a, b) => sameSet({ setOf }, a, b));
     const seedIndex = new Map(competitors.map((person, index) => [personKey(person), index]));
     const preferredGroup = new Map<string, number>();
     groups.forEach((members, groupIndex) => members.forEach(person => preferredGroup.set(personKey(person), groupIndex + 1)));
@@ -879,14 +893,11 @@ export function splitIntoGroups(bestFirst: WcifPerson[], groupCount: number, rul
   const worstFirst = [...bestFirst].reverse();
   const count = worstFirst.length;
   let ordered = worstFirst;
-  const symmetric = rule === "symmetric" || rule === "scrambler-safe" || (rule === "balanced" && !BALANCED_BY_RANKS.includes(eventId));
-  if (symmetric) {
+  if (rule !== "ranks") {
     ordered = worstFirst
       .map((person, index) => ({ person, index, key: groupCount - ((count - index - 1) % groupCount) }))
       .sort((a, b) => a.key - b.key || a.index - b.index)
       .map(item => item.person);
-  } else if (rule === "name-optimised") {
-    ordered = separateSameFirstNames(worstFirst);
   }
   const sizes = groupSizes(count, groupCount);
   const groups: WcifPerson[][] = [];
@@ -977,8 +988,7 @@ export function groupTargets(count: number, caps: Array<number | undefined>) {
 /** Splits people (best first) into groups of the given sizes, as `splitIntoGroups` would. */
 export function fillByRule(bestFirst: WcifPerson[], capacities: number[], rule: SortingRule, eventId: string) {
   const groups: WcifPerson[][] = capacities.map(() => []);
-  const symmetric = rule === "symmetric" || rule === "scrambler-safe" || (rule === "balanced" && !BALANCED_BY_RANKS.includes(eventId));
-  if (symmetric) {
+  if (rule !== "ranks") {
     // One per group from the last group down, as the symmetric split does.
     let group = capacities.length - 1;
     for (const person of bestFirst) {
@@ -988,8 +998,7 @@ export function fillByRule(bestFirst: WcifPerson[], capacities: number[], rule: 
     }
     return groups;
   }
-  const worstFirst = [...bestFirst].reverse();
-  const ordered = rule === "name-optimised" ? separateSameFirstNames(worstFirst) : worstFirst;
+  const ordered = [...bestFirst].reverse();
   let start = 0;
   capacities.forEach((capacity, index) => {
     groups[index] = ordered.slice(start, start + capacity);
@@ -998,24 +1007,40 @@ export function fillByRule(bestFirst: WcifPerson[], capacities: number[], rule: 
   return groups;
 }
 
-/** Spreads people sharing a first name as far apart as possible in the list, keeping everyone. */
-function separateSameFirstNames(people: WcifPerson[]) {
-  const byName = new Map<string, WcifPerson[]>();
-  for (const person of people) {
-    const name = person.name.split(" ")[0];
-    byName.set(name, [...(byName.get(name) ?? []), person]);
+const firstName = (person: WcifPerson) => person.name.trim().split(/\s+/)[0].toLowerCase();
+
+/**
+ * People sharing a first name go to different groups when possible, so nobody is confused when a
+ * group is called: each repeated name swaps with someone of close position in another group whose
+ * name is not repeated there. Group sizes do not change.
+ */
+export function separateFirstNames(groups: WcifPerson[][], canMove: (person: WcifPerson, group: number) => boolean = () => true, canSwap: (a: WcifPerson, b: WcifPerson) => boolean = () => true) {
+  const names = (group: number) => groups[group].map(firstName);
+  for (let guard = 0; guard < groups.flat().length; guard += 1) {
+    let swapped = false;
+    for (let from = 0; from < groups.length && !swapped; from += 1) {
+      const here = names(from);
+      const position = here.findIndex((name, index) => here.indexOf(name) !== index);
+      if (position < 0) continue;
+      const mover = groups[from][position];
+      const name = firstName(mover);
+      // The closest swap first: groups nearby, then people near the same position.
+      const order = groups.map((_, index) => index).filter(index => index !== from).sort((a, b) => Math.abs(a - from) - Math.abs(b - from));
+      for (const to of order) {
+        if (names(to).includes(name) || !canMove(mover, to + 1)) continue;
+        const candidates = groups[to].map((person, index) => ({ person, index }))
+          .filter(({ person }) => !here.includes(firstName(person)) && canMove(person, from + 1) && canSwap(mover, person))
+          .sort((a, b) => Math.abs(a.index - position) - Math.abs(b.index - position));
+        const swap = candidates[0];
+        if (!swap) continue;
+        groups[from][position] = swap.person;
+        groups[to][swap.index] = mover;
+        swapped = true;
+        break;
+      }
+    }
+    if (!swapped) return;
   }
-  const sets = [...byName.values()].sort((a, b) => a.length - b.length);
-  let result: WcifPerson[] = [];
-  for (const same of sets) {
-    if (!result.length) { result = [...same]; continue; }
-    const spaced = [...result];
-    const length = result.length;
-    // Insert from the back so earlier positions stay valid.
-    for (let index = same.length - 1; index >= 0; index -= 1) spaced.splice(Math.floor(((index + 1) * length) / same.length), 0, same[index]);
-    result = spaced;
-  }
-  return result;
 }
 
 /** Moves people matching `hasRole` into groups that have none of them, swapping with someone of close seed. */

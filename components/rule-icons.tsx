@@ -20,14 +20,9 @@ export function SortingRuleIcon({ rule }: { rule: SortingRule }) {
   return <svg className="rule-icon" viewBox="0 0 44 36" width="44" height="36" aria-hidden="true" focusable="false">
     {rule === "ranks" && <Dots columns={[["worst", "worst", "worst"], ["mid", "mid", "mid"], ["best", "best", "best"]]} />}
     {rule === "symmetric" && <Dots columns={SYMMETRIC} />}
-    {rule === "balanced" && <>
-      <Dots columns={[["worst", "worst", "worst"], ["best", "mid", "worst"], ["best", "best", "best"]]} />
-      <line x1="15" y1="2" x2="15" y2="34" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
-    </>}
     {rule === "scrambler-safe" && <>
       <Dots columns={SYMMETRIC} />
       {COLUMNS.map(x => <circle key={x} cx={x} cy={ROWS[0]} r={6} fill="none" stroke="currentColor" strokeWidth="1.3" />)}
     </>}
-    {rule === "name-optimised" && COLUMNS.map((x, index) => <text key={x} x={x} y="24" textAnchor="middle" fontSize="15" fontWeight="800" fill="currentColor" opacity={index === 1 ? 0.35 : 1}>{index === 1 ? "B" : "A"}</text>)}
   </svg>;
 }

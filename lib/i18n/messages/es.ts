@@ -324,9 +324,17 @@ export const es = {
     sortingTitle: "Reparto de competidores",
     sortingHint: "Basado en Groupifier. Solo afecta a primeras rondas; las siguientes se ordenan por el resultado de la ronda anterior.",
     recommended: "Recomendado",
-    topTogether: {
-      label: "Los mejores juntos en las primeras rondas de:",
-      help: "En estas pruebas, la primera ronda se reparte por ranking, como las siguientes: los más rápidos van juntos en el último grupo en lugar de repartirse entre los grupos. Por defecto, las pruebas rápidas: 2x2, 3x3, Skewb y Pyraminx.",
+    separateNames: { label: "Separar nombres repetidos", help: "Después de repartir, quien comparte nombre de pila va a grupos distintos (se intercambia con alguien de posición parecida), para evitar confusiones al llamar a los grupos." },
+    eventRules: {
+      toggle: "Personalizar por prueba",
+      toggleCount: "Personalizar por prueba ({count})",
+      hint: "En primeras rondas, cada prueba puede usar otra regla y juntar a sus mejores en el grupo 1. Las rondas siguientes siempre se reparten por la clasificación de la anterior.",
+      event: "Prueba",
+      rule: "Regla",
+      general: "General ({rule})",
+      top: "Mejores juntos en el grupo 1",
+      topHelp: "Los N mejores de la prueba compiten juntos en el grupo 1 (en PRO, en todos los grupos con número 1). El resto se reparte con la regla. Vacío: todos con la regla.",
+      all: "todos",
     },
     tasksTitle: "Tareas",
     noDelegateDuties: "Ningún delegado marcado para tareas de delegado (ver Personas y roles).",
@@ -335,9 +343,7 @@ export const es = {
     sorting: {
       "scrambler-safe": { label: "Mezcladores garantizados", short: "Simétrico, con mezcladores expertos", help: "Simétrico y además estricto: solo mezclan personas de confianza o de la mitad rápida de la ronda, y todas mezclan una vez antes de que alguien repita." },
       symmetric: { label: "Simétrico", short: "Los mejores, repartidos", help: "Pone a los mejores en grupos distintos, para que haya buenos mezcladores en cada grupo." },
-      balanced: { label: "Equilibrado", short: "Ranking o simétrico según prueba", help: "Por ranking en 3×3, 2×2, OH, a ciegas, con los pies, Pyraminx, Skewb, Clock y Square-1; simétrico en el resto." },
       ranks: { label: "Por ranking", short: "Los mejores, al final", help: "Del peor al mejor: los mejores compiten en el último grupo." },
-      "name-optimised": { label: "Separar nombres", short: "Nombres repetidos, separados", help: "Separa a quienes comparten nombre de pila, para evitar confusiones al llamar a los grupos." },
     },
     options: {
       assignJudges: { label: "Jueces y runners", help: "Un juez por estación ocupada y los runners indicados en cada ronda. Si se desactiva, solo se asignan mezcladores." },

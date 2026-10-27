@@ -27,7 +27,7 @@ import { keyOf } from "@/lib/i18n";
 import { getCompetition, saveCompetition, type StoredCompetition } from "@/lib/competition-store";
 import { groupsFromWcif, hasWcifGroups, wcifGroupsNeedStages } from "@/lib/wcif-groups";
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
-import { DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
+import { normalizeOptions, DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { fetchWcaNames } from "@/lib/wca-persons";
 import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, linkedVolunteers, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
@@ -40,7 +40,7 @@ import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEli
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
@@ -53,9 +53,9 @@ const PRO_TABS: Tab[] = ["schedule", "segments"];
 const PHOTOS_KEY = "wca-easy-groups:show-photos";
 
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
-const SORTING_RULES: SortingRule[] = ["scrambler-safe", "symmetric", "balanced", "ranks", "name-optimised"];
 
-type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "topTogetherEvents">;
+
+type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "eventRules">;
 const MAIN_OPTIONS: Array<{ key: OptionKey; codes?: TaskRole[] }> = [
   { key: "assignJudges", codes: ["judge", "runner"] },
   { key: "avoidBeforeOwnGroup" },
@@ -110,6 +110,8 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const [roundTab, setRoundTab] = useState<"past" | "ready" | "pending">("ready");
   const [tab, setTab] = useState<Tab>("zone");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  /** Rules tab: the per-event table of sorting rules and "N best together in group 1". */
+  const [showEventRules, setShowEventRules] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
   /** Shown in the review after groups were read from the WCIF. */
   const [wcifNote, setWcifNote] = useState<{ count: number; unplaced: number }>();
@@ -140,7 +142,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     const defaults = defaultSettings(data);
     // First time here and the WCIF already has groups: open them for review.
     if (!draft && hasWcifGroups(data)) return openWcifGroups(data, wcifGroupsNeedStages(data) ? { ...defaults, pro: { enabled: true, schedule: importSchedule(data, roundId => defaults.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : defaults);
-    setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: { ...defaults.options, ...draft.settings.options }, printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
+    setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: normalizeOptions(draft.settings.options), printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
     setProposal(draft?.assignments ?? []);
     setGeneratedWith(draft?.generatedWith);
     setRemoteSavedAt(draft?.remoteSavedAt);
@@ -154,7 +156,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     await saveCompetition(data);
     setCompetition(data);
     const defaults = defaultSettings(data);
-    const base = { ...defaults, ...saved.settings, people: migrateWcaStaffRoles(saved.settings.people, data), options: { ...defaults.options, ...saved.settings.options }, printing: { ...defaults.printing, ...saved.settings.printing } };
+    const base = { ...defaults, ...saved.settings, people: migrateWcaStaffRoles(saved.settings.people, data), options: normalizeOptions(saved.settings.options), printing: { ...defaults.printing, ...saved.settings.printing } };
     const result = hasWcifGroups(data) ? withWcifGroups(data, base) : { settings: base, proposal: [] };
     setSettings(result.settings);
     setProposal(result.proposal);
@@ -703,13 +705,31 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           <div className="setup-heading"><h2>{t("rules.title")}</h2></div>
           <h3 className="panel-subheading">{t("rules.sortingTitle")} <Hint align="start" text={t("rules.sortingHint")} /></h3>
           <div className="sorting-rules" role="radiogroup" aria-label={t("rules.sortingTitle")}>{SORTING_RULES.map(rule => <button key={rule} role="radio" aria-checked={options.sortingRule === rule} title={t(keyOf("rules.sorting", `${rule}.help`))} className={options.sortingRule === rule ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule } })}><span className="rule-title"><span className="preset-radio" /><SortingRuleIcon rule={rule} /></span><strong>{t(keyOf("rules.sorting", `${rule}.label`))}</strong><small>{t(keyOf("rules.sorting", `${rule}.short`))}</small>{rule === "scrambler-safe" && <em className="recommended">{t("rules.recommended")}</em>}</button>)}</div>
-          <div className="top-together">
-            <label><input type="checkbox" checked={options.topTogether} onChange={event => setOption("topTogether", event.target.checked)} /><strong>{t("rules.topTogether.label")}</strong><Hint text={t("rules.topTogether.help")} /></label>
-            {options.topTogether && <div className="top-together-events" role="group" aria-label={t("rules.topTogether.label")}>{(competition.events ?? []).map(event => event.id).map(eventId => {
-              const on = options.topTogetherEvents.includes(eventId);
-              return <button key={eventId} type="button" aria-pressed={on} className={on ? "on" : ""} title={eventName(eventId)} onClick={() => update({ options: { ...options, topTogetherEvents: on ? options.topTogetherEvents.filter(id => id !== eventId) : [...options.topTogetherEvents, eventId] } })}><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></button>;
-            })}</div>}
+          <div className="split-extras">
+            <label><input type="checkbox" checked={options.separateNames} onChange={event => setOption("separateNames", event.target.checked)} /><strong>{t("rules.separateNames.label")}</strong><Hint text={t("rules.separateNames.help")} /></label>
+            <button type="button" className="plain" aria-expanded={showEventRules} onClick={() => setShowEventRules(open => !open)}>{showEventRules ? "▾" : "▸"} {Object.keys(options.eventRules).length ? t("rules.eventRules.toggleCount", { count: Object.keys(options.eventRules).length }) : t("rules.eventRules.toggle")}</button>
+            <Hint text={t("rules.eventRules.hint")} />
           </div>
+          {showEventRules && <table className="event-rules">
+            <thead><tr><th>{t("rules.eventRules.event")}</th><th>{t("rules.eventRules.rule")}</th><th>{t("rules.eventRules.top")} <Hint text={t("rules.eventRules.topHelp")} /></th></tr></thead>
+            <tbody>{(competition.events ?? []).map(event => event.id).map(eventId => {
+              const own = options.eventRules[eventId] ?? {};
+              const setOwn = (change: { rule?: SortingRule; top?: number }) => {
+                const next = { ...own, ...change };
+                const { [eventId]: _old, ...rest } = options.eventRules;
+                const keep = next.rule !== undefined || !!next.top;
+                update({ options: { ...options, eventRules: keep ? { ...rest, [eventId]: { ...(next.rule ? { rule: next.rule } : {}), ...(next.top ? { top: next.top } : {}) } } : rest } });
+              };
+              return <tr key={eventId} className={own.rule || own.top ? "custom" : ""}>
+                <th scope="row"><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></th>
+                <td><select value={own.rule ?? ""} onChange={event => setOwn({ rule: (event.target.value || undefined) as SortingRule | undefined })} aria-label={`${eventName(eventId)} · ${t("rules.eventRules.rule")}`}>
+                  <option value="">{t("rules.eventRules.general", { rule: t(keyOf("rules.sorting", `${options.sortingRule}.label`)) })}</option>
+                  {SORTING_RULES.map(rule => <option key={rule} value={rule}>{t(keyOf("rules.sorting", `${rule}.label`))}</option>)}
+                </select></td>
+                <td><input type="number" min={0} max={999} placeholder={t("rules.eventRules.all")} value={own.top ?? ""} onChange={event => setOwn({ top: Math.max(0, Math.round(Number(event.target.value) || 0)) || undefined })} aria-label={`${eventName(eventId)} · ${t("rules.eventRules.top")}`} /></td>
+              </tr>;
+            })}</tbody>
+          </table>}
           <h3 className="panel-subheading">{t("rules.tasksTitle")}</h3>
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
           {pro && <>

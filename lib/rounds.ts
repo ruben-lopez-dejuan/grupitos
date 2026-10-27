@@ -8,7 +8,18 @@ export type ZoneMode = "fixed" | "waiting" | "mixed";
  * How competitors are split into groups in first rounds (later rounds always follow the previous ranking).
  * The first four mirror Groupifier; scrambler-safe is symmetric plus strict scrambler selection.
  */
-export type SortingRule = "ranks" | "balanced" | "symmetric" | "scrambler-safe" | "name-optimised";
+export type SortingRule = "scrambler-safe" | "symmetric" | "ranks";
+export const SORTING_RULES: SortingRule[] = ["scrambler-safe", "symmetric", "ranks"];
+
+/**
+ * Rules of older drafts: "balanced" spread like symmetric in most events and "name-optimised" was
+ * ranking with repeated first names apart (now the "separate names" option).
+ */
+export function normalizeSortingRule(value: unknown): { rule: SortingRule; separateNames?: true } {
+  if (value === "balanced") return { rule: "symmetric" };
+  if (value === "name-optimised") return { rule: "ranks", separateNames: true };
+  return { rule: SORTING_RULES.includes(value as SortingRule) ? value as SortingRule : "scrambler-safe" };
+}
 
 export type GenerationRound = {
   id: string;

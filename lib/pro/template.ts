@@ -5,7 +5,7 @@
  * or unavailabilities, and no schedule (it comes from each competition's WCIF).
  */
 import type { WorkspaceSettings } from "@/lib/draft";
-import type { AssignmentOptions } from "@/lib/group-generator";
+import { normalizeOptions, type AssignmentOptions } from "@/lib/group-generator";
 import type { AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { EMPTY_PRO_PEOPLE } from "@/lib/pro/people";
 import { normalizeScoring, type ScoringConfig } from "@/lib/pro/scoring";
@@ -151,7 +151,7 @@ export function applyTemplate(settings: WorkspaceSettings, schedule: ProSchedule
     settings: {
       ...settings,
       rounds,
-      options: { ...settings.options, ...template.options },
+      options: normalizeOptions({ ...settings.options, ...template.options }),
       printing: { ...settings.printing, ...template.printing },
       pro: next,
     },

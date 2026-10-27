@@ -322,9 +322,17 @@ export const en: Messages = {
     sortingTitle: "Competitor split",
     sortingHint: "Based on Groupifier. Only first rounds; later rounds follow the previous round's results.",
     recommended: "Recommended",
-    topTogether: {
-      label: "The best together in the first rounds of:",
-      help: "In these events, the first round is split by ranking, as later rounds are: the fastest go together in the last group instead of spread over the groups. By default, the sprint events: 2x2, 3x3, Skewb and Pyraminx.",
+    separateNames: { label: "Separate repeated names", help: "After splitting, people who share a first name go to different groups (swapped with someone of close position), so nobody is confused when a group is called." },
+    eventRules: {
+      toggle: "Customise per event",
+      toggleCount: "Customise per event ({count})",
+      hint: "In first rounds, each event can use another rule and put its best together in group 1. Later rounds are always split by the previous round's ranking.",
+      event: "Event",
+      rule: "Rule",
+      general: "General ({rule})",
+      top: "Best together in group 1",
+      topHelp: "The N best of the event compete together in group 1 (in PRO, every group numbered 1). The rest are split by the rule. Empty: everyone by the rule.",
+      all: "everyone",
     },
     tasksTitle: "Tasks",
     noDelegateDuties: "No delegate is marked for delegate duty (see People and roles).",
@@ -333,9 +341,7 @@ export const en: Messages = {
     sorting: {
       "scrambler-safe": { label: "Guaranteed scramblers", short: "Symmetric, with expert scramblers", help: "Symmetric and strict: only trusted people or the faster half of the round scramble, and everyone scrambles once before anyone repeats." },
       symmetric: { label: "Symmetric", short: "Best people spread out", help: "Puts the best competitors in different groups, so every group has good scramblers." },
-      balanced: { label: "Balanced", short: "Ranks or symmetric by event", help: "By ranking in 3x3, 2x2, OH, blindfolded, feet, Pyraminx, Skewb, Clock and Square-1; symmetric in the rest." },
       ranks: { label: "By ranking", short: "Best people last", help: "Worst to best: the best competitors are in the last group." },
-      "name-optimised": { label: "Separate names", short: "Repeated names apart", help: "Separates people who share a first name, to avoid confusion when calling groups." },
     },
     options: {
       assignJudges: { label: "Judges and runners", help: "One judge per used station and the runners set for each round. When off, only scramblers are assigned." },
