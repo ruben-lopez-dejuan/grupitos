@@ -55,7 +55,7 @@ const PHOTOS_KEY = "wca-easy-groups:show-photos";
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
 const SORTING_RULES: SortingRule[] = ["scrambler-safe", "symmetric", "balanced", "ranks", "name-optimised"];
 
-type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder">;
+type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "topTogetherEvents">;
 const MAIN_OPTIONS: Array<{ key: OptionKey; codes?: TaskRole[] }> = [
   { key: "assignJudges", codes: ["judge", "runner"] },
   { key: "avoidBeforeOwnGroup" },
@@ -703,6 +703,13 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           <div className="setup-heading"><h2>{t("rules.title")}</h2></div>
           <h3 className="panel-subheading">{t("rules.sortingTitle")} <Hint align="start" text={t("rules.sortingHint")} /></h3>
           <div className="sorting-rules" role="radiogroup" aria-label={t("rules.sortingTitle")}>{SORTING_RULES.map(rule => <button key={rule} role="radio" aria-checked={options.sortingRule === rule} title={t(keyOf("rules.sorting", `${rule}.help`))} className={options.sortingRule === rule ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule } })}><span className="rule-title"><span className="preset-radio" /><SortingRuleIcon rule={rule} /></span><strong>{t(keyOf("rules.sorting", `${rule}.label`))}</strong><small>{t(keyOf("rules.sorting", `${rule}.short`))}</small>{rule === "scrambler-safe" && <em className="recommended">{t("rules.recommended")}</em>}</button>)}</div>
+          <div className="top-together">
+            <label><input type="checkbox" checked={options.topTogether} onChange={event => setOption("topTogether", event.target.checked)} /><strong>{t("rules.topTogether.label")}</strong><Hint text={t("rules.topTogether.help")} /></label>
+            {options.topTogether && <div className="top-together-events" role="group" aria-label={t("rules.topTogether.label")}>{(competition.events ?? []).map(event => event.id).map(eventId => {
+              const on = options.topTogetherEvents.includes(eventId);
+              return <button key={eventId} type="button" aria-pressed={on} className={on ? "on" : ""} title={eventName(eventId)} onClick={() => update({ options: { ...options, topTogetherEvents: on ? options.topTogetherEvents.filter(id => id !== eventId) : [...options.topTogetherEvents, eventId] } })}><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></button>;
+            })}</div>}
+          </div>
           <h3 className="panel-subheading">{t("rules.tasksTitle")}</h3>
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
           {pro && <>

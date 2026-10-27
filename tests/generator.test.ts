@@ -328,3 +328,20 @@ describe("PRO: balancing by minutes", () => {
     expect(byMinutes.total).toBeCloseTo(byTasks.total, -2);
   });
 });
+
+describe("the best together in first rounds", () => {
+  it("splits chosen events' first rounds by ranking, the fastest in the last group", () => {
+    const competition = demoCompetition("small");
+    const rounds = initialRounds(competition, 12, "waiting").filter(round => round.id === "333-r1" || round.id === "222-r1").map(round => ({ ...round, enabled: true, groups: 3 }));
+    const people = peopleFromWcif(competition);
+    const seeds = (rows: GeneratedAssignment[], roundId: string) => [1, 2, 3].map(group => rows.filter(row => row.roundId === roundId && competingGroup(row) === group).map(row => row.seedResult ?? Infinity));
+    const isRanked = (groups: number[][]) => groups.every((group, index) => index === 0 || Math.max(...group) <= Math.min(...groups[index - 1]));
+    const on = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people, options: { ...DEFAULT_OPTIONS, spreadDelegates: false, topTogether: true, topTogetherEvents: ["333"] } });
+    const off = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people, options: { ...DEFAULT_OPTIONS, spreadDelegates: false } });
+    // 3x3 is chosen: each group is a slice of the ranking, the best in group 3.
+    expect(isRanked(seeds(on, "333-r1"))).toBe(true);
+    // 2x2 is not, and without the option the fastest are spread.
+    expect(isRanked(seeds(on, "222-r1"))).toBe(false);
+    expect(isRanked(seeds(off, "333-r1"))).toBe(false);
+  });
+});

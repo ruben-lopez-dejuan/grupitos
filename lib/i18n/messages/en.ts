@@ -322,6 +322,10 @@ export const en: Messages = {
     sortingTitle: "Competitor split",
     sortingHint: "Based on Groupifier. Only first rounds; later rounds follow the previous round's results.",
     recommended: "Recommended",
+    topTogether: {
+      label: "The best together in the first rounds of:",
+      help: "In these events, the first round is split by ranking, as later rounds are: the fastest go together in the last group instead of spread over the groups. By default, the sprint events: 2x2, 3x3, Skewb and Pyraminx.",
+    },
     tasksTitle: "Tasks",
     noDelegateDuties: "No delegate is marked for delegate duty (see People and roles).",
     moreOptions: "More options",

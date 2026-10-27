@@ -324,6 +324,10 @@ export const es = {
     sortingTitle: "Reparto de competidores",
     sortingHint: "Basado en Groupifier. Solo afecta a primeras rondas; las siguientes se ordenan por el resultado de la ronda anterior.",
     recommended: "Recomendado",
+    topTogether: {
+      label: "Los mejores juntos en las primeras rondas de:",
+      help: "En estas pruebas, la primera ronda se reparte por ranking, como las siguientes: los más rápidos van juntos en el último grupo en lugar de repartirse entre los grupos. Por defecto, las pruebas rápidas: 2x2, 3x3, Skewb y Pyraminx.",
+    },
     tasksTitle: "Tareas",
     noDelegateDuties: "Ningún delegado marcado para tareas de delegado (ver Personas y roles).",
     moreOptions: "Más opciones",

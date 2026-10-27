@@ -55,6 +55,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - **Por ranking.**
   - **Por nombre.**
 - Los delegados se reparten entre los grupos.
+- **Los mejores juntos**, opcional: en las pruebas que elijas (por defecto 2x2, 3x3, Skewb y Pyraminx), la primera ronda se reparte por ranking y los más rápidos van juntos en el último grupo.
 - Primeras rondas y rondas siguientes por separado. En las siguientes se calcula cuánta gente pasa. Cualquier ronda se puede excluir o reactivar.
 
 ### Personal
@@ -79,6 +80,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
 - **Rondas siguientes:**
   - **Ayudan y mezclan** primero los competidores de la ronda, en los grupos en los que no compiten. Mezclan solo los de la mitad rápida de la ronda.
   - **Los eliminados** en la ronda anterior juzgan y hacen de runner después de ellos y antes que nadie de fuera de la prueba. Salen en la revisión justo después de los competidores, con su puesto en la ronda anterior.
+- **Minutos:** en Revisar, el botón «Minutos» enseña los minutos que trabaja cada persona junto a su total de tareas. Con la opción «Repartir también por minutos», el reparto cuenta tareas y minutos.
 - **Carga repartida:** quien está en muchas pruebas no carga con la mayor parte del trabajo. Además, cada tarea guarda un «¿por qué esta persona?», con las personas libres que había y los motivos de la elección.
 
 ### Revisión

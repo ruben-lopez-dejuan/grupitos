@@ -32,6 +32,12 @@ export type AssignmentOptions = {
    * weighs more than a 10-minute one (20 minutes count as one task).
    */
   balanceMinutes: boolean;
+  /**
+   * First rounds of `topTogetherEvents` split by ranking, as later rounds are: the fastest together
+   * in the last group, instead of spread over the groups by the sorting rule.
+   */
+  topTogether: boolean;
+  topTogetherEvents: string[];
   noRunningForForeigners: boolean;
   spreadDelegates: boolean;
   /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
@@ -59,6 +65,9 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   tasksForOwnEventsOnly: false,
   tasksOnCompetingDaysOnly: true,
   balanceMinutes: false,
+  topTogether: false,
+  // The sprint events, where the best usually compete together.
+  topTogetherEvents: ["222", "333", "skewb", "pyram"],
   noRunningForForeigners: false,
   spreadDelegates: true,
   normalTasksForDelegatesAndOrganizers: false,
@@ -311,7 +320,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     if (!known || competitors.length === 0) return [];
     const firstRound = round.roundNumber === 1;
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
-    const rule = firstRound ? options.sortingRule : "ranks";
+    const topTogether = options.topTogether && options.topTogetherEvents.includes(round.eventId);
+    const rule = firstRound && !topTogether ? options.sortingRule : "ranks";
     const primary = Math.max(1, round.groups - linkedColumns(round.id).length);
     // Stages with a maximum per group keep to it; the other groups take the rest.
     const caps = Array.from({ length: primary }, (_, index) => staffing?.(round.id, index + 1)?.maxPerGroup);
