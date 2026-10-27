@@ -22,6 +22,11 @@ export type AssignmentOptions = {
   assignJudges: boolean;
   noTasksForNewcomers: boolean;
   tasksForOwnEventsOnly: boolean;
+  /**
+   * PRO (with a schedule): people who compete get tasks only on the days they compete, when they
+   * are at the venue. Staff, volunteers, delegates, organizers and data entry are there every day.
+   */
+  tasksOnCompetingDaysOnly: boolean;
   noRunningForForeigners: boolean;
   spreadDelegates: boolean;
   /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
@@ -47,6 +52,7 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   assignJudges: true,
   noTasksForNewcomers: false,
   tasksForOwnEventsOnly: false,
+  tasksOnCompetingDaysOnly: true,
   noRunningForForeigners: false,
   spreadDelegates: true,
   normalTasksForDelegatesAndOrganizers: false,
@@ -270,6 +276,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   /** PRO mode: when each person is already competing or working, across rounds. */
   const busyTimes = new Map<string, TimeWindow[]>();
   const weighted = !!(scoring?.enabled && slots);
+  /** Days (YYYY-MM-DD) each person competes on, from the schedule. */
+  const competingDays = new Map<string, Set<string>>();
   /** Weighted engine: staff tasks given so far, in minutes since 1970 (for streaks and hours per day). */
   const staffLog = new Map<string, Array<{ start: number; end: number; role: TaskRole }>>();
   /** Start minutes of the groups each person competes in. */
@@ -352,11 +360,20 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const windows = slots.get(plan.round.id)?.find(slot => slot.group === groupIndex + 1)?.windows ?? [];
       for (const person of members) competing.set(personKey(person), [...(competing.get(personKey(person)) ?? []), ...windows]);
     });
-    for (const [key, windows] of competing) competingStarts.set(key, windows.map(window => toMinutes(window.start)));
+    for (const [key, windows] of competing) {
+      competingStarts.set(key, windows.map(window => toMinutes(window.start)));
+      competingDays.set(key, new Set(windows.map(window => window.start.slice(0, 10))));
+    }
     for (const [key, windows] of unavailableWindows(unavailable, other => competing.get(other) ?? [])) busyTimes.set(key, [...(busyTimes.get(key) ?? []), ...windows]);
   }
 
   const teamHere = (roundId: string, group: number, key: string) => !!laneTeams?.forGroup(roundId, group)?.has(key);
+  /** People who compete, on a day they do not: probably not at the venue (staff and the like always are). */
+  const awayThatDay = (key: string, day: string | undefined) => {
+    if (!options.tasksOnCompetingDaysOnly || !day || staff.has(key) || delegates.has(key) || organizers.has(key) || dataEntry.has(key) || delegateDuty.has(key) || laneTeams?.members.has(key)) return false;
+    const days = competingDays.get(key);
+    return !!days && !days.has(day);
+  };
   /** Members of a room's team work only in that room. */
   const blockedHere = (roundId: string, group: number, key: string) => !!laneTeams?.members.has(key) && !teamHere(roundId, group, key);
 
@@ -409,7 +426,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   // The weighted engine counts hours and streaks, so it staffs rounds in time order; the output
   // keeps the rounds' order.
   const firstStart = (plan: CompetitorPlan) => Math.min(...(slots?.get(plan.round.id) ?? []).flatMap(slot => slot.windows.map(window => toMinutes(window.start))), Number.MAX_SAFE_INTEGER);
-  const staffingOrder = weighted ? [...plans].sort((a, b) => firstStart(a) - firstStart(b)) : plans;
+  // With a schedule, rounds are staffed in time order in both engines: who worked just before,
+  // streaks and loads then follow the day as it happens.
+  const staffingOrder = slots ? [...plans].sort((a, b) => firstStart(a) - firstStart(b)) : plans;
   const outputByRound = new Map<string, GeneratedAssignment[]>();
   /** Times already covered by a data entry person, across rounds and rooms. */
   const dataEntryTimes: TimeWindow[] = [];
@@ -463,7 +482,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     // While their room is running, a room team works there (the side room is staffed first, as in
     // the Spanish Championship scripts), not on the other stages.
     const neededInOwnRoom = (key: string, group: number) => !teamHere(round.id, group, key) && windowsOf(group).some(window => reserved.get(key)?.some(item => overlaps(item.window, window)));
-    const freeIn = (key: string, group: number, role?: TaskRole) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group, role) && !blockedHere(round.id, group, key) && !neededInOwnRoom(key, group);
+    const freeIn = (key: string, group: number, role?: TaskRole) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group, role) && !blockedHere(round.id, group, key) && !neededInOwnRoom(key, group) && !awayThatDay(key, windowsOf(group)[0]?.start.slice(0, 10));
     const roundLoad = (key: string) => rows.get(key)?.tasks.filter(task => task.role !== "competitor").length ?? 0;
     const load = (key: string) => globalLoad.get(key) ?? 0;
     const loadInEvent = (key: string) => eventLoad.get(`${key}|${round.eventId}`) ?? 0;

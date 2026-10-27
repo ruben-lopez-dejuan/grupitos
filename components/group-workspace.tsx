@@ -64,7 +64,7 @@ const MAIN_OPTIONS: Array<{ key: OptionKey; codes?: TaskRole[] }> = [
   { key: "assignDelegateDuties", codes: ["delegate"] },
   { key: "assignDataEntry", codes: ["dataentry"] },
 ];
-const MORE_OPTIONS: OptionKey[] = ["noTasksForNewcomers", "tasksForOwnEventsOnly", "noRunningForForeigners"];
+const MORE_OPTIONS: OptionKey[] = ["noTasksForNewcomers", "tasksForOwnEventsOnly", "tasksOnCompetingDaysOnly", "noRunningForForeigners"];
 
 function defaultSettings(competition: StoredCompetition): WorkspaceSettings {
   return {

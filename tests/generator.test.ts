@@ -6,6 +6,7 @@ import { DEFAULT_OPTIONS, generateAssignments, groupSizes, splitIntoGroups, type
 import { peopleFromWcif, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, seedResult, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
 import { normalizeScoring, PROFILE_WEIGHTS } from "@/lib/pro/scoring";
+import { groupSlots, importSchedule, withScheduledGroups } from "@/lib/pro/schedule";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
 function setup(competition: StoredCompetition, stations: number, zoneMode: ZoneMode, options: Partial<AssignmentOptions> = {}, people = peopleFromWcif(competition)) {
@@ -276,5 +277,27 @@ describe("later rounds and the people who did not advance", () => {
   it("moves drafts saved with the day-long +40 'eliminated' weight to the balanced preset's value", () => {
     expect(normalizeScoring({ enabled: true, weights: { ...PROFILE_WEIGHTS.balanced, eliminated: 40 } })!.weights.eliminated).toBe(PROFILE_WEIGHTS.balanced.eliminated);
     expect(normalizeScoring({ enabled: true, weights: { ...PROFILE_WEIGHTS.balanced, load: -5, eliminated: 40 } })!.weights.eliminated).toBe(40);
+  });
+});
+
+describe("PRO: tasks only on the days people compete", () => {
+  it("gives competitors tasks only on their competing days, unless switched off", () => {
+    const competition = demoCompetition("large");
+    const base = initialRounds(competition, 12, "fixed");
+    const schedule = importSchedule(competition, id => base.find(round => round.id === id)?.groups ?? 1);
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(base, slots).filter(round => round.enabled);
+    const people = peopleFromWcif(competition);
+    const exempt = new Set([...(people.roles.staff ?? []), ...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? []), ...(people.roles.organizer ?? []), ...(people.roles.dataentry ?? []), ...people.delegateDutyIds]);
+    const offDays = (option: boolean) => {
+      const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people, options: { ...DEFAULT_OPTIONS, tasksOnCompetingDaysOnly: option }, slots });
+      const dayOf = (roundId: string, group: number) => slots.get(roundId)!.find(slot => slot.group === group)!.windows[0].start.slice(0, 10);
+      const competing = new Map<string, Set<string>>();
+      for (const row of rows) for (const task of row.tasks) if (task.role === "competitor") competing.set(row.personId, new Set([...(competing.get(row.personId) ?? []), dayOf(row.roundId, task.group)]));
+      return rows.flatMap(row => exempt.has(row.personId) || !competing.has(row.personId) ? [] : duties(row).filter(duty => !competing.get(row.personId)!.has(dayOf(row.roundId, duty.group))));
+    };
+    expect(new Set(schedule.days).size).toBeGreaterThan(1);
+    expect(offDays(true)).toEqual([]);
+    expect(offDays(false).length).toBeGreaterThan(0);
   });
 });

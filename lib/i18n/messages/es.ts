@@ -344,6 +344,7 @@ export const es = {
       assignDataEntry: { label: "Data entry por grupo", help: "Una persona de data entry por grupo, entre quienes tienen ese rol." },
       noTasksForNewcomers: { label: "Evitar tareas a newcomers", help: "Solo se asignan tareas a quien no tiene WCA ID si no queda nadie más." },
       tasksForOwnEventsOnly: { label: "Tareas solo en sus pruebas", help: "Jueces y runners: solo otras pruebas si no queda nadie más." },
+      tasksOnCompetingDaysOnly: { label: "Tareas solo los días que compite", help: "Con horario (PRO): quien compite solo recibe tareas los días que compite, cuando está en el recinto. Staff, voluntarios, delegados, organizadores y data entry trabajan cualquier día." },
       noRunningForForeigners: { label: "Evitar runners extranjeros", help: "Solo si no queda nadie más. Se compara el país de la persona con el del recinto." },
     },
   },
