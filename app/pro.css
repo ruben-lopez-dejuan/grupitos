@@ -529,3 +529,6 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .print-presets button:hover{border-color:var(--blue)}
 .print-presets button[aria-pressed="true"]{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,var(--surface));color:var(--blue)}
 .print-round-status.held{color:var(--muted);font-style:italic}
+
+/* Review: a task for the whole room (data entry with stages), not for the column's stage */
+.matrix-cell button.whole-room{outline:1px dashed currentColor;outline-offset:-4px}

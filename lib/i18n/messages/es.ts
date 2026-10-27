@@ -860,6 +860,7 @@ export const es = {
     previousPlace: "Puesto {place} en la ronda anterior",
     pastRounds: "Ya celebradas",
     upcomingRounds: "Por celebrar",
+    wholeRoom: "toda la sala {room} a esa hora, no solo este escenario",
     columnSeed: "Seed",
     columnInRound: "En la ronda",
     columnTotals: "Total tareas",

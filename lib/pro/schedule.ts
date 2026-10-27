@@ -25,6 +25,14 @@ export type ProRoundBlock = TimeWindow & {
   groupWindows?: TimeWindow[];
 };
 
+/**
+ * Tasks for a whole room with stages at that time, not for one stage: data entry (one person types
+ * every stage's results), or any task read from a WCIF's whole-room group.
+ */
+export function isWholeRoomTask(task: { role: string; room?: true }, slot: Pick<GroupSlot, "stageId"> | undefined) {
+  return slot?.stageId !== undefined && (!!task.room || task.role === "dataentry");
+}
+
 /** `multi-scramble`: when the multi-blind scramblers scramble, between cube submission and the attempt. */
 export const OTHER_KINDS = ["checkin", "registration", "tutorial", "lunch", "awards", "multi", "multi-scramble", "setup", "misc"] as const;
 export type OtherKind = typeof OTHER_KINDS[number];
@@ -232,6 +240,9 @@ export function importSchedule(competition: StoredCompetition, suggestedGroups: 
             byStage.set(stageId, [...(byStage.get(stageId) ?? []), child]);
           }
           for (const [stageId, ownChildren] of byStage) {
+            // CompScript adds, next to each stage's groups, a group for the whole room at the same
+            // times ("Pabellón 1"), for tasks of no single stage (data entry). Not a column of its own.
+            if (stageId === undefined && room.stages.length > 0 && byStage.size > 1) continue;
             const exact = ownChildren.map(child => childWindow(child, timeZone));
             const groupWindows = exact.every(Boolean) ? sortByTime(exact as TimeWindow[]) : undefined;
             const window = groupWindows?.length ? { start: groupWindows[0].start, end: groupWindows.at(-1)!.end } : parentWindow;

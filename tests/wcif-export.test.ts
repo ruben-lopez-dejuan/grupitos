@@ -47,6 +47,39 @@ describe("WCIF export", () => {
     expect([again.report.groupsCreated, again.report.groupsRemoved]).toEqual([0, 0]);
   });
 
+  it("puts data entry in the whole room's group, as CompScript does, and reads it back there", () => {
+    const competition = demoCompetition("large");
+    const base = initialRounds(competition, 12, "fixed");
+    const schedule = importSchedule(competition, id => base.find(round => round.id === id)?.groups ?? 1);
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(base, slots).filter(round => round.enabled);
+    // A round run on stages, and someone typing its results for the whole room in its first group.
+    const roundId = [...slots].find(([, list]) => list.some(slot => slot.stageId !== undefined))![0];
+    const column = slots.get(roundId)!.find(slot => slot.stageId !== undefined)!;
+    const typist = competition.persons![0];
+    const assignments = [{ id: `${roundId}:${personKey(typist)}`, roundId, eventId: roundId.split("-")[0], personId: personKey(typist), name: typist.name, inRound: false, tasks: [{ group: column.group, role: "dataentry" as const }] }];
+    const stageLanes = (schedule: ReturnType<typeof importSchedule>) => new Set(schedule.blocks.map(block => `${block.roomId}:${block.stageId ?? "room"}`));
+
+    const { wcif } = exportWcif({ competition, assignments, rounds, slots, schedule });
+    const room = wcif.schedule!.venues!.flatMap(venue => venue.rooms ?? []).find(item => item.id === column.roomId)!;
+    const groups = (room.activities ?? []).filter(activity => activity.activityCode === roundId).flatMap(activity => activity.childActivities ?? []);
+    const wholeRoom = groups.filter(group => !group.extensions?.some(item => item.id === "org.cubingusa.natshelper.v1.Group"));
+    expect(wholeRoom).toHaveLength(1);
+    const assignment = wcif.persons!.find(person => person.registrantId === typist.registrantId)!.assignments!.find(item => item.assignmentCode === "staff-dataentry")!;
+    expect(assignment.activityId).toBe(wholeRoom[0].id);
+
+    // Read back: no extra "whole room" column, and the task returns to a column at that time, marked.
+    const again = importSchedule(wcif, id => base.find(round => round.id === id)?.groups ?? 1);
+    expect(stageLanes(again)).toEqual(stageLanes(schedule));
+    const read = groupsFromWcif(wcif, groupSlots(again)).assignments.find(item => item.personId === personKey(typist) && item.roundId === roundId)!;
+    expect(read.tasks).toEqual([{ group: column.group, role: "dataentry", room: true }]);
+    // Exported again, it reuses that group instead of making another.
+    const twice = exportWcif({ competition: wcif, assignments: [read], rounds, slots: groupSlots(again), schedule: again }).wcif;
+    const twiceRoom = twice.schedule!.venues!.flatMap(venue => venue.rooms ?? []).find(item => item.id === column.roomId)!;
+    const twiceGroups = (twiceRoom.activities ?? []).filter(activity => activity.activityCode === roundId).flatMap(activity => activity.childActivities ?? []).filter(group => !group.extensions?.some(item => item.id === "org.cubingusa.natshelper.v1.Group"));
+    expect(twiceGroups.map(group => group.id)).toEqual([wholeRoom[0].id]);
+  });
+
   it("splits each round evenly in normal mode", () => {
     const competition = demoCompetition("small");
     const rounds = initialRounds(competition, 8, "fixed").filter(round => round.enabled);

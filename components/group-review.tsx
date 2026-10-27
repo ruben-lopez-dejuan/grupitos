@@ -10,7 +10,7 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded, personKey, seedResult } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
-import { clockOf, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
+import { clockOf, isWholeRoomTask, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
 import { byName } from "@/lib/people";
 import { formatResult } from "@/lib/results";
 import { countBySeverity, groupLimits, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
@@ -557,9 +557,13 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
           const cellIssues = issueIndex.cells.get(key);
           const severity = worstSeverity(cellIssues);
           const isCursor = cursor?.id === item.id && cursor.group === group;
-          const classes = [value || "empty", isCursor && "cursor", selected.has(key) && "in-selection", severity && `issue-${severity}`].filter(Boolean).join(" ");
+          // Data entry in a room with stages is for the whole room at that time, not this stage.
+          const task = item.tasks.find(own => own.group === group);
+          const columnSlot = roundSlots?.find(slot => slot.group === group);
+          const wholeRoom = !!task && isWholeRoomTask(task, columnSlot);
+          const classes = [value || "empty", wholeRoom && "whole-room", isCursor && "cursor", selected.has(key) && "in-selection", severity && `issue-${severity}`].filter(Boolean).join(" ");
           const why = whyOf(item, group);
-          const description = `${taskLabel(value)} · G${groupLabel(roundId, group)}${why ? `\n${whyText(why)}` : ""}${cellIssues ? `\n${cellIssues.map(issueText).join("\n")}` : ""}`;
+          const description = `${taskLabel(value)}${wholeRoom ? ` · ${t("review.wholeRoom", { room: rooms?.find(room => room.id === columnSlot?.roomId)?.name ?? "" })}` : ""} · G${groupLabel(roundId, group)}${why ? `\n${whyText(why)}` : ""}${cellIssues ? `\n${cellIssues.map(issueText).join("\n")}` : ""}`;
           if (stationEdit?.id === item.id && stationEdit.group === group) {
             return <td key={group} className={`matrix-cell ${startsBlock(position) ? "block-start" : ""}`}><input
               className="station-input"

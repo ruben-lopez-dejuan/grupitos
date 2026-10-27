@@ -4,7 +4,8 @@ export type DutyRole = typeof DUTY_ROLES[number];
 export type TaskRole = "competitor" | DutyRole;
 export type CellValue = TaskRole | "";
 /** `attempt` (2, 3…): competing in a later attempt's column of an attempt-based round (multi-blind). */
-export type Task = { group: number; role: TaskRole; attempt?: number };
+/** `room`: the task is for the whole room at that time, not the column's stage (read from a WCIF's whole-room group). */
+export type Task = { group: number; role: TaskRole; attempt?: number; room?: true };
 export type CellRef = { id: string; group: number };
 
 export const TASK_CODES: Record<CellValue, string> = {

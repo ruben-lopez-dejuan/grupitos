@@ -10,7 +10,7 @@
 import { wcifAssignmentCode, type GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
 import type { ProPeople } from "@/lib/pro/people";
-import { GROUP_EXTENSION_ID, isoToLocal, localToIso, ROOM_EXTENSION_ID, roundIdOf, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
+import { GROUP_EXTENSION_ID, isoToLocal, isWholeRoomTask, localToIso, ROOM_EXTENSION_ID, roundIdOf, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
 import { personKey } from "@/lib/rounds";
 import { EVENT_NAMES_EN } from "@/lib/scorecards/scorecards";
 
@@ -66,6 +66,8 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
   const exported = new Set(assignments.map(item => item.roundId));
   /** Group activity of each column, per round. */
   const columns = new Map<string, Map<number, WcifActivity>>();
+  /** Stage columns: their round activity, room and slot, to find the whole-room group at the same time. */
+  const stageColumns = new Map<string, { parent: WcifActivity; room: WcifRoom; slot: GroupSlot; suffix: string }>();
   const used = new Set<number>();
   const local = (iso: string) => isoToLocal(iso, timeZone);
   const stageOf = (activity: WcifActivity) => (activity.extensions?.find(item => item.id === GROUP_EXTENSION_ID)?.data as { stageId?: number } | undefined)?.stageId;
@@ -103,6 +105,7 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
         }
         used.add(child.id);
         byColumn.set(slot.group, child);
+        if (slot.stageId !== undefined) stageColumns.set(`${round.id}|${slot.group}`, { parent, room, slot, suffix });
       }
     } else {
       // Normal mode: the round's first activity, split evenly like Groupifier.
@@ -127,21 +130,43 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
     }
   }
 
-  // Old groups of exported rounds that no column uses go away, with their assignments.
+  // Old groups of exported rounds that no column uses go away, with their assignments. Whole-room
+  // groups (no stage, in a room with stages, as CompScript makes them) stay: their tasks are redone.
   const removed = new Set<number>();
+  const wholeRoomGroups = new Set<number>();
+  const hasStages = (room: WcifRoom) => !!(room.extensions?.find(item => item.id === ROOM_EXTENSION_ID)?.data as { stages?: unknown[] } | undefined)?.stages?.length || !!schedule?.rooms.find(item => item.id === room.id)?.stages.length;
   for (const room of rooms) for (const activity of room.activities ?? []) {
     const roundId = roundIdOf(activity.activityCode);
     if (!roundId || !columns.has(roundId)) continue;
     activity.childActivities = (activity.childActivities ?? []).filter(child => {
-      const stale = GROUP_CODE.test(child.activityCode) && !used.has(child.id);
-      if (stale) removed.add(child.id);
-      return !stale;
+      if (!GROUP_CODE.test(child.activityCode) || used.has(child.id)) return true;
+      if (stageOf(child) === undefined && hasStages(room)) { wholeRoomGroups.add(child.id); return true; }
+      removed.add(child.id);
+      return false;
     });
   }
   report.groupsRemoved = removed.size;
 
+  /** The whole-room group at a stage column's time: the WCIF's own, or a new one without a stage. */
+  const roomGroupAt = new Map<string, WcifActivity>();
+  const wholeRoomGroup = (roundId: string, group: number) => {
+    const info = stageColumns.get(`${roundId}|${group}`);
+    const window = info?.slot.windows[0];
+    if (!info || !window) return undefined;
+    const key = `${info.parent.id}|${window.start}`;
+    let child = roomGroupAt.get(key) ?? (info.parent.childActivities ?? []).find(item => GROUP_CODE.test(item.activityCode) && stageOf(item) === undefined && local(item.startTime) === window.start);
+    if (!child) {
+      const round = rounds.find(item => item.id === roundId)!;
+      child = { id: nextId++, name: `${eventName(round)}, ${info.room.name} ${info.slot.number}`, activityCode: `${roundId}-g${info.slot.number}${info.suffix}`, startTime: localToIso(window.start, timeZone), endTime: localToIso(window.end, timeZone), childActivities: [], extensions: [] };
+      info.parent.childActivities = [...(info.parent.childActivities ?? []), child];
+      report.groupsCreated += 1;
+    }
+    roomGroupAt.set(key, child);
+    return child;
+  };
+
   // Assignments: the proposal replaces whatever the exported rounds' groups had.
-  const groupIds = new Set([...used, ...removed]);
+  const groupIds = new Set([...used, ...removed, ...wholeRoomGroups]);
   const byKey = new Map((wcif.persons ?? []).map(person => [personKey(person), person]));
   for (const person of wcif.persons ?? []) person.assignments = (person.assignments ?? []).filter(item => !groupIds.has(item.activityId));
   // Volunteers linked to their WCA account: the WCIF person with that account, or a new
@@ -167,7 +192,9 @@ export function exportWcif({ competition, assignments, rounds, slots, schedule, 
     if (!byColumn || !item.tasks.length) continue;
     if (!person) { if (!report.skipped.includes(item.name)) report.skipped.push(item.name); continue; }
     for (const task of item.tasks) {
-      const activity = byColumn.get(task.group);
+      const slot = slots?.get(item.roundId)?.find(candidate => candidate.group === task.group);
+      // Data entry (and tasks read from a whole-room group) go to the whole room's group at that time.
+      const activity = (isWholeRoomTask(task, slot) ? wholeRoomGroup(item.roundId, task.group) : undefined) ?? byColumn.get(task.group);
       if (!activity) continue;
       const first = task.role === "competitor" && !(task.attempt && task.attempt > 1);
       person.assignments = [...(person.assignments ?? []), { activityId: activity.id, assignmentCode: wcifAssignmentCode(task.role), stationNumber: first && item.station !== undefined ? item.station : null }];

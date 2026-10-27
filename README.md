@@ -126,6 +126,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
 - **Horario:** se importa del WCIF y se edita arrastrando y redimensionando bloques.
 - **Escenarios:** se leen y escriben en la extensión natshelper de CompScript (`org.cubingusa.natshelper.v1`).
+- **Tareas de toda la sala:** en una sala con escenarios, el data entry es de toda la sala a esa hora, no de un escenario. Se guarda en el grupo de sala sin escenario («Pabellón 1»), como lo hace CompScript, y en la revisión se marca con un borde discontinuo.
 - **Numeración de grupos:** los grupos que empiezan a la vez en escenarios distintos comparten número («G1 Araba», «G1 Bizkaia»).
 - **Total de grupos por ronda:** se reparte entre sus bloques de horario.
 - **Choques:** nadie compite en dos sitios a la vez. Si el horario no lo permite, la persona va al grupo que menos se solapa y la revisión lo avisa.
