@@ -53,7 +53,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - **Simétrico:** los mejores, repartidos uno por grupo.
   - **Ranking:** grupos seguidos por ranking, los mejores en el último.
 - **Separar nombres repetidos**, opcional con cualquier regla: quien comparte nombre de pila va a grupos distintos.
-- **Por prueba**, en primeras rondas: otra regla, y/o los N mejores de esa prueba juntos en el grupo 1 (el resto, con la regla).
+- **Los mejores juntos**: en las primeras rondas de las pruebas que elijas (por defecto 2x2, 3x3, Skewb y Pyraminx), los N mejores compiten juntos en el último grupo; el resto se reparte con la regla.
 - Los delegados se reparten entre los grupos.
 - Primeras rondas y rondas siguientes por separado. En las siguientes se calcula cuánta gente pasa. Cualquier ronda se puede excluir o reactivar.
 

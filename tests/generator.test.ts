@@ -105,7 +105,7 @@ describe("splitIntoGroups (Groupifier rules)", () => {
   it("reads the retired rules of older drafts as the three left", () => {
     expect(normalizeOptions({ sortingRule: "balanced" } as never)).toMatchObject({ sortingRule: "symmetric", separateNames: false });
     expect(normalizeOptions({ sortingRule: "name-optimised" } as never)).toMatchObject({ sortingRule: "ranks", separateNames: true });
-    expect(normalizeOptions({ eventRules: { "333": { rule: "balanced", top: 4 }, "222": {} } } as never).eventRules).toEqual({ "333": { rule: "symmetric", top: 4 } });
+    expect(normalizeOptions({ topTogetherCount: 0 } as never).topTogetherCount).toBe(DEFAULT_OPTIONS.topTogetherCount);
   });
 
   it("separates repeated first names, keeping everyone and the group sizes", () => {
@@ -334,18 +334,16 @@ describe("PRO: balancing by minutes", () => {
   });
 });
 
-describe("per-event rules in first rounds", () => {
-  it("puts an event's N best together in group 1 and splits the rest by the rule", () => {
+describe("the best together in the last group", () => {
+  it("puts the N best of the chosen events' first rounds together in the last group", () => {
     const competition = demoCompetition("small");
     const rounds = initialRounds(competition, 12, "waiting").filter(round => round.id === "333-r1" || round.id === "222-r1").map(round => ({ ...round, enabled: true, groups: 3 }));
     const people = peopleFromWcif(competition);
-    const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people, options: { ...DEFAULT_OPTIONS, spreadDelegates: false, eventRules: { "333": { top: 4 }, "222": { rule: "ranks" } } } });
-    const inRound = (roundId: string) => rows.filter(row => row.roundId === roundId && competingGroup(row) !== undefined);
-    // 3x3: the four best (by personal best) all in group 1.
-    const best = [...inRound("333-r1")].sort((a, b) => (a.seedResult ?? Infinity) - (b.seedResult ?? Infinity)).slice(0, 4);
-    expect(best.map(row => competingGroup(row))).toEqual([1, 1, 1, 1]);
-    // 2x2 uses ranking: each group a slice of the ranking, the best in group 3.
-    const seeds = [1, 2, 3].map(group => inRound("222-r1").filter(row => competingGroup(row) === group).map(row => row.seedResult ?? Infinity));
-    expect(seeds.every((group, index) => index === 0 || Math.max(...group) <= Math.min(...seeds[index - 1]))).toBe(true);
+    const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people, options: { ...DEFAULT_OPTIONS, spreadDelegates: false, topTogether: true, topTogetherCount: 4, topTogetherEvents: ["333"] } });
+    const best = (roundId: string) => rows.filter(row => row.roundId === roundId && competingGroup(row) !== undefined).sort((a, b) => (a.seedResult ?? Infinity) - (b.seedResult ?? Infinity)).slice(0, 4);
+    // 3x3 is chosen: its four best all in group 3, the last one.
+    expect(best("333-r1").map(row => competingGroup(row))).toEqual([3, 3, 3, 3]);
+    // 2x2 is not: the scrambler-safe rule spreads its best over the groups.
+    expect(new Set(best("222-r1").map(row => competingGroup(row))).size).toBeGreaterThan(1);
   });
 });

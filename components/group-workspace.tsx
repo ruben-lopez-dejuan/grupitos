@@ -55,7 +55,7 @@ const PHOTOS_KEY = "wca-easy-groups:show-photos";
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
 
 
-type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "eventRules">;
+type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "topTogetherCount" | "topTogetherEvents">;
 const MAIN_OPTIONS: Array<{ key: OptionKey; codes?: TaskRole[] }> = [
   { key: "assignJudges", codes: ["judge", "runner"] },
   { key: "avoidBeforeOwnGroup" },
@@ -110,8 +110,6 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const [roundTab, setRoundTab] = useState<"past" | "ready" | "pending">("ready");
   const [tab, setTab] = useState<Tab>("zone");
   const [showMoreOptions, setShowMoreOptions] = useState(false);
-  /** Rules tab: the per-event table of sorting rules and "N best together in group 1". */
-  const [showEventRules, setShowEventRules] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
   /** Shown in the review after groups were read from the WCIF. */
   const [wcifNote, setWcifNote] = useState<{ count: number; unplaced: number }>();
@@ -707,29 +705,16 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           <div className="sorting-rules" role="radiogroup" aria-label={t("rules.sortingTitle")}>{SORTING_RULES.map(rule => <button key={rule} role="radio" aria-checked={options.sortingRule === rule} title={t(keyOf("rules.sorting", `${rule}.help`))} className={options.sortingRule === rule ? "selected" : ""} onClick={() => update({ options: { ...options, sortingRule: rule } })}><span className="rule-title"><span className="preset-radio" /><SortingRuleIcon rule={rule} /></span><strong>{t(keyOf("rules.sorting", `${rule}.label`))}</strong><small>{t(keyOf("rules.sorting", `${rule}.short`))}</small>{rule === "scrambler-safe" && <em className="recommended">{t("rules.recommended")}</em>}</button>)}</div>
           <div className="split-extras">
             <label><input type="checkbox" checked={options.separateNames} onChange={event => setOption("separateNames", event.target.checked)} /><strong>{t("rules.separateNames.label")}</strong><Hint text={t("rules.separateNames.help")} /></label>
-            <button type="button" className="plain" aria-expanded={showEventRules} onClick={() => setShowEventRules(open => !open)}>{showEventRules ? "▾" : "▸"} {Object.keys(options.eventRules).length ? t("rules.eventRules.toggleCount", { count: Object.keys(options.eventRules).length }) : t("rules.eventRules.toggle")}</button>
-            <Hint text={t("rules.eventRules.hint")} />
           </div>
-          {showEventRules && <table className="event-rules">
-            <thead><tr><th>{t("rules.eventRules.event")}</th><th>{t("rules.eventRules.rule")}</th><th>{t("rules.eventRules.top")} <Hint text={t("rules.eventRules.topHelp")} /></th></tr></thead>
-            <tbody>{(competition.events ?? []).map(event => event.id).map(eventId => {
-              const own = options.eventRules[eventId] ?? {};
-              const setOwn = (change: { rule?: SortingRule; top?: number }) => {
-                const next = { ...own, ...change };
-                const { [eventId]: _old, ...rest } = options.eventRules;
-                const keep = next.rule !== undefined || !!next.top;
-                update({ options: { ...options, eventRules: keep ? { ...rest, [eventId]: { ...(next.rule ? { rule: next.rule } : {}), ...(next.top ? { top: next.top } : {}) } } : rest } });
-              };
-              return <tr key={eventId} className={own.rule || own.top ? "custom" : ""}>
-                <th scope="row"><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></th>
-                <td><select value={own.rule ?? ""} onChange={event => setOwn({ rule: (event.target.value || undefined) as SortingRule | undefined })} aria-label={`${eventName(eventId)} · ${t("rules.eventRules.rule")}`}>
-                  <option value="">{t("rules.eventRules.general", { rule: t(keyOf("rules.sorting", `${options.sortingRule}.label`)) })}</option>
-                  {SORTING_RULES.map(rule => <option key={rule} value={rule}>{t(keyOf("rules.sorting", `${rule}.label`))}</option>)}
-                </select></td>
-                <td><input type="number" min={0} max={999} placeholder={t("rules.eventRules.all")} value={own.top ?? ""} onChange={event => setOwn({ top: Math.max(0, Math.round(Number(event.target.value) || 0)) || undefined })} aria-label={`${eventName(eventId)} · ${t("rules.eventRules.top")}`} /></td>
-              </tr>;
-            })}</tbody>
-          </table>}
+          <div className="top-together">
+            <label><input type="checkbox" checked={options.topTogether} onChange={event => setOption("topTogether", event.target.checked)} /><strong>{t("rules.topTogether.before")}</strong>
+              <input type="number" className="top-together-count" min={1} max={999} value={options.topTogetherCount} disabled={!options.topTogether} onChange={event => update({ options: { ...options, topTogetherCount: Math.max(1, Math.round(Number(event.target.value) || 1)) } })} aria-label={t("rules.topTogether.count")} />
+              <strong>{t("rules.topTogether.after")}</strong><Hint text={t("rules.topTogether.help")} /></label>
+            {options.topTogether && <div className="top-together-events" role="group" aria-label={t("rules.topTogether.events")}>{(competition.events ?? []).map(event => event.id).map(eventId => {
+              const on = options.topTogetherEvents.includes(eventId);
+              return <button key={eventId} type="button" aria-pressed={on} className={on ? "on" : ""} title={eventName(eventId)} onClick={() => update({ options: { ...options, topTogetherEvents: on ? options.topTogetherEvents.filter(id => id !== eventId) : [...options.topTogetherEvents, eventId] } })}><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></button>;
+            })}</div>}
+          </div>
           <h3 className="panel-subheading">{t("rules.tasksTitle")}</h3>
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
           {pro && <>

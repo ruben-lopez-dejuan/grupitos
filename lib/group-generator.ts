@@ -35,10 +35,12 @@ export type AssignmentOptions = {
   /** After splitting, people who share a first name go to different groups (swapping with close seeds). */
   separateNames: boolean;
   /**
-   * First rounds, per event: a sorting rule other than the general one, and/or the `top` best of
-   * the event together in group 1 (the rest split by the rule).
+   * First rounds of `topTogetherEvents`: the `topTogetherCount` best together in the round's last
+   * group (the rest split by the sorting rule).
    */
-  eventRules: Record<string, EventRule>;
+  topTogether: boolean;
+  topTogetherCount: number;
+  topTogetherEvents: string[];
   noRunningForForeigners: boolean;
   spreadDelegates: boolean;
   /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
@@ -49,17 +51,17 @@ export type AssignmentOptions = {
   taskOrder: TaskOrderItem[];
 };
 
-export type EventRule = { rule?: SortingRule; top?: number };
-
 /** Options from a draft or template of any age: old sorting rules mapped, missing ones filled in. */
 export function normalizeOptions(value: Partial<AssignmentOptions> & { sortingRule?: unknown } | undefined): AssignmentOptions {
   const { rule, separateNames } = normalizeSortingRule(value?.sortingRule);
-  const eventRules = Object.fromEntries(Object.entries(value?.eventRules ?? {}).flatMap(([eventId, own]) => {
-    const ruleHere = own?.rule === undefined ? undefined : normalizeSortingRule(own.rule).rule;
-    const top = typeof own?.top === "number" && own.top > 0 ? Math.round(own.top) : undefined;
-    return ruleHere || top ? [[eventId, { ...(ruleHere ? { rule: ruleHere } : {}), ...(top ? { top } : {}) }]] : [];
-  }));
-  return { ...DEFAULT_OPTIONS, ...value, sortingRule: rule, separateNames: !!(value?.separateNames || separateNames), eventRules, taskOrder: normalizeTaskOrder(value?.taskOrder) } as AssignmentOptions;
+  const { eventRules: _retired, ...rest } = (value ?? {}) as Partial<AssignmentOptions> & { eventRules?: unknown };
+  const count = Number(rest.topTogetherCount);
+  return {
+    ...DEFAULT_OPTIONS, ...rest, sortingRule: rule, separateNames: !!(rest.separateNames || separateNames),
+    topTogetherCount: Number.isFinite(count) && count >= 1 ? Math.round(count) : DEFAULT_OPTIONS.topTogetherCount,
+    topTogetherEvents: Array.isArray(rest.topTogetherEvents) ? rest.topTogetherEvents.filter((id): id is string => typeof id === "string") : DEFAULT_OPTIONS.topTogetherEvents,
+    taskOrder: normalizeTaskOrder(rest.taskOrder),
+  } as AssignmentOptions;
 }
 
 export const TASK_ORDER_ITEMS = ["delegate", "scrambler", "dataentry", "runner", "judge"] as const;
@@ -80,7 +82,10 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   tasksOnCompetingDaysOnly: true,
   balanceMinutes: false,
   separateNames: false,
-  eventRules: {},
+  topTogether: false,
+  topTogetherCount: 4,
+  // The sprint events, where the best usually compete together.
+  topTogetherEvents: ["222", "333", "skewb", "pyram"],
   noRunningForForeigners: false,
   spreadDelegates: true,
   normalTasksForDelegatesAndOrganizers: false,
@@ -330,15 +335,18 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     if (!known || competitors.length === 0) return [];
     const firstRound = round.roundNumber === 1;
     const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
-    const own = firstRound ? options.eventRules[round.eventId] : undefined;
-    const rule = firstRound ? own?.rule ?? options.sortingRule : "ranks";
+    const rule = firstRound ? options.sortingRule : "ranks";
     const primary = Math.max(1, round.groups - linkedColumns(round.id).length);
     // Stages with a maximum per group keep to it; the other groups take the rest.
     const caps = Array.from({ length: primary }, (_, index) => staffing?.(round.id, index + 1)?.maxPerGroup);
     const targets = caps.some(cap => cap !== undefined) ? groupTargets(competitors.length, caps) : undefined;
-    // "The N best together in group 1": a set placed before any other, on every group numbered 1.
-    const firstGroups = (slots?.get(round.id) ?? []).filter(slot => !slot.linkedTo && slot.number === 1).map(slot => slot.group);
-    const topSet = own?.top ? [{ id: `top-${round.eventId}`, name: "top", top: own.top, groups: firstGroups.length ? firstGroups : [1], featured: false }] : [];
+    // "The N best together in the last group": a set placed before any other, on every column with
+    // the round's last group number (one per stage when stages run in parallel).
+    const roundColumns = (slots?.get(round.id) ?? []).filter(slot => !slot.linkedTo);
+    const lastNumber = Math.max(0, ...roundColumns.map(slot => slot.number));
+    const lastGroups = roundColumns.filter(slot => slot.number === lastNumber).map(slot => slot.group);
+    const topTogether = firstRound && options.topTogether && options.topTogetherEvents.includes(round.eventId);
+    const topSet = topTogether ? [{ id: `top-${round.eventId}`, name: "top", top: options.topTogetherCount, groups: lastGroups.length ? lastGroups : [primary], featured: false }] : [];
     const sets = [...topSet, ...(assignmentSets?.({ ...round, groups: primary }) ?? [])];
     const { groups, allowed, featured, setOf } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
       : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined, setOf: undefined };
