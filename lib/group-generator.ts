@@ -27,6 +27,11 @@ export type AssignmentOptions = {
    * are at the venue. Staff, volunteers, delegates, organizers and data entry are there every day.
    */
   tasksOnCompetingDaysOnly: boolean;
+  /**
+   * PRO (with a schedule): balance the work by minutes as well as by tasks, so a 35-minute group
+   * weighs more than a 10-minute one (20 minutes count as one task).
+   */
+  balanceMinutes: boolean;
   noRunningForForeigners: boolean;
   spreadDelegates: boolean;
   /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
@@ -53,6 +58,7 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   noTasksForNewcomers: false,
   tasksForOwnEventsOnly: false,
   tasksOnCompetingDaysOnly: true,
+  balanceMinutes: false,
   noRunningForForeigners: false,
   spreadDelegates: true,
   normalTasksForDelegatesAndOrganizers: false,
@@ -62,6 +68,9 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
 };
 
 /** Events where Groupifier's "balanced" rule keeps the plain ranking order. */
+/** Balancing by minutes: a typical group's length counts as one task. */
+const MINUTES_PER_TASK = 20;
+
 const BALANCED_BY_RANKS = ["333", "222", "333bf", "333oh", "333ft", "pyram", "skewb", "clock", "sq1"];
 
 type Row = { person: WcifPerson; key: string; tasks: Task[]; inRound: boolean; station?: number; seedIndex: number; why: Why[] };
@@ -267,6 +276,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   const trusted = set(people.trustedIds);
   const delegateDuty = set(people.delegateDutyIds);
   const globalLoad = new Map<string, number>();
+  /** Minutes of staff tasks so far, per person (with a schedule). */
+  const globalMinutes = new Map<string, number>();
+  const windowMinutes = (windows: TimeWindow[]) => windows.reduce((sum, window) => sum + Math.max(0, toMinutes(window.end) - toMinutes(window.start)), 0);
   // Staff do more than everyone else, but not everything: they keep priority while below
   // twice the average load of the other people who can take normal tasks.
   const STAFF_LOAD_FACTOR = 2;
@@ -435,6 +447,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
   for (const { item, task, windows } of fixedTasks) {
     if (task.role === "competitor") continue;
     globalLoad.set(item.personId, (globalLoad.get(item.personId) ?? 0) + 1);
+    globalMinutes.set(item.personId, (globalMinutes.get(item.personId) ?? 0) + windowMinutes(windows));
     eventLoad.set(`${item.personId}|${item.eventId}`, (eventLoad.get(`${item.personId}|${item.eventId}`) ?? 0) + 1);
     if (!staff.has(item.personId) && (task.role === "judge" || task.role === "scrambler" || task.role === "runner")) othersTotalLoad += 1;
     const window = windows[0];
@@ -485,6 +498,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const freeIn = (key: string, group: number, role?: TaskRole) => !rows.get(key)?.tasks.some(task => task.group === group) && !busyDuring(key, group, role) && !blockedHere(round.id, group, key) && !neededInOwnRoom(key, group) && !awayThatDay(key, windowsOf(group)[0]?.start.slice(0, 10));
     const roundLoad = (key: string) => rows.get(key)?.tasks.filter(task => task.role !== "competitor").length ?? 0;
     const load = (key: string) => globalLoad.get(key) ?? 0;
+    /** Work to balance: tasks, plus minutes when asked (20 minutes = one task). */
+    const balance = (key: string) => load(key) + (options.balanceMinutes && slots ? (globalMinutes.get(key) ?? 0) / MINUTES_PER_TASK : 0);
     const loadInEvent = (key: string) => eventLoad.get(`${key}|${round.eventId}`) ?? 0;
     // With times, "right before" means the own group starts within ten minutes of this one ending.
     const rightBefore = (own: number, group: number) => {
@@ -508,6 +523,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const window = taskWindows(group, role)[0];
       if (window) staffLog.set(row.key, [...(staffLog.get(row.key) ?? []), { start: toMinutes(window.start), end: toMinutes(window.end), role }]);
       globalLoad.set(row.key, load(row.key) + 1);
+      globalMinutes.set(row.key, (globalMinutes.get(row.key) ?? 0) + windowMinutes(taskWindows(group, role)));
       if (!staff.has(row.key) && (role === "judge" || role === "scrambler" || role === "runner")) othersTotalLoad += 1;
       eventLoad.set(`${row.key}|${round.eventId}`, loadInEvent(row.key) + 1);
     };
@@ -598,7 +614,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       // Strict: everyone in the pool scrambles once before anyone repeats; then lighter loads, then speed.
       // People with the WCA role staff-scrambler are tried first, as in Groupifier.
       const wcaJob = hasWcaJob(person, "scrambler") && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2 ? 0 : 1;
-      if (strictScramblers) return [wcaJob, roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(load(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
+      if (strictScramblers) return [wcaJob, roundLoad(key), loadInEvent(key) >= 3 ? 1 : 0, Math.floor(balance(key) / 4), trusted.has(key) ? 0 : 1, beforeOwn(key, group), ...bestAverageAndSingle(person, round.eventId)];
       // Groupifier's criteria. Staff are generic here (not scrambling specialists), so they only
       // win among equally suitable people, like trusted people do.
       return [
@@ -611,7 +627,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         busyRoles(key),
         loadInEvent(key) >= 2 ? 1 : 0,
         inRoundKeys.has(key) ? 0 : 1,
-        Math.floor(load(key) / 6),
+        Math.floor(balance(key) / 6),
         beforeOwn(key, group),
         ...bestAverageAndSingle(person, round.eventId)];
     });
@@ -620,7 +636,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
       const scramblingIn = (group: number) => [...rows.values()].filter(row => row.tasks.some(task => task.group === group && task.role === "scrambler")).length;
       fill("scrambler", group => Math.max(0, scramblersNeeded(group) - scramblingIn(group)), reserve, (person, group) => {
         const key = personKey(person);
-        return [roundLoad(key), Math.floor(load(key) / 4), load(key), beforeOwn(key, group), ...bestAverageAndSingle(person, scrambleEvent)];
+        return [roundLoad(key), Math.floor(balance(key) / 4), balance(key), beforeOwn(key, group), ...bestAverageAndSingle(person, scrambleEvent)];
       });
     }
     };
@@ -689,7 +705,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         const day = Math.floor(start / 1440);
         const preference = Number(personProperties[key]?.[`weight-${job}`]);
         return {
-          load: load(key),
+          load: balance(key),
           hoursToday: (staffLog.get(key) ?? []).filter(entry => Math.floor(entry.start / 1440) === day && entry.end <= start).reduce((sum, entry) => sum + (entry.end - entry.start) / 60, 0),
           sameJobStreak: streak(key, start, job),
           staffStreak: streak(key, start) + (end - start),
@@ -759,9 +775,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
         busyRoles(key),
         loadInEvent(key) >= 2 ? 1 : 0,
         // Coarse load first, so people in many events do not end up with most of the work.
-        Math.floor(load(key) / 4),
+        Math.floor(balance(key) / 4),
         nearness(key),
-        load(key),
+        balance(key),
         beforeOwn(key, group),
         role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
     };

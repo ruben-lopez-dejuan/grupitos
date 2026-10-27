@@ -6,7 +6,7 @@ import { DEFAULT_OPTIONS, generateAssignments, groupSizes, splitIntoGroups, type
 import { peopleFromWcif, type PeopleSettings } from "@/lib/people";
 import { acceptedPeople, compareBySeed, initialRounds, judgesNeeded, personKey, seedResult, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
 import { normalizeScoring, PROFILE_WEIGHTS } from "@/lib/pro/scoring";
-import { groupSlots, importSchedule, withScheduledGroups } from "@/lib/pro/schedule";
+import { groupSlots, importSchedule, windowsForTask, withScheduledGroups } from "@/lib/pro/schedule";
 import { validateRound, type RoundRules } from "@/lib/validation";
 
 function setup(competition: StoredCompetition, stations: number, zoneMode: ZoneMode, options: Partial<AssignmentOptions> = {}, people = peopleFromWcif(competition)) {
@@ -299,5 +299,32 @@ describe("PRO: tasks only on the days people compete", () => {
     expect(new Set(schedule.days).size).toBeGreaterThan(1);
     expect(offDays(true)).toEqual([]);
     expect(offDays(false).length).toBeGreaterThan(0);
+  });
+});
+
+describe("PRO: balancing by minutes", () => {
+  it("spreads the minutes worked more evenly when asked, with the same work in total", () => {
+    const competition = demoCompetition("large");
+    const base = initialRounds(competition, 12, "fixed");
+    const schedule = importSchedule(competition, id => base.find(round => round.id === id)?.groups ?? 1);
+    const slots = groupSlots(schedule);
+    const rounds = withScheduledGroups(base, slots).filter(round => round.enabled);
+    const people = peopleFromWcif(competition);
+    const staff = new Set(people.roles.staff ?? []);
+    const spread = (balanceMinutes: boolean) => {
+      const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people, options: { ...DEFAULT_OPTIONS, balanceMinutes }, slots });
+      const minutes = new Map<string, number>();
+      for (const row of rows) for (const duty of duties(row)) {
+        const slot = slots.get(row.roundId)!.find(item => item.group === duty.group)!;
+        const length = windowsForTask(slot, duty.role).reduce((sum, window) => sum + (Date.parse(`${window.end}:00Z`) - Date.parse(`${window.start}:00Z`)) / 60000, 0);
+        minutes.set(row.personId, (minutes.get(row.personId) ?? 0) + length);
+      }
+      const values = [...minutes].filter(([key]) => !staff.has(key)).map(([, value]) => value);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      return { total: values.reduce((a, b) => a + b, 0), deviation: Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length) };
+    };
+    const [byTasks, byMinutes] = [spread(false), spread(true)];
+    expect(byMinutes.deviation).toBeLessThan(byTasks.deviation);
+    expect(byMinutes.total).toBeCloseTo(byTasks.total, -2);
   });
 });

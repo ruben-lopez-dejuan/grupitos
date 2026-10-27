@@ -557,3 +557,6 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .set-chevron{flex:0 0 auto;color:var(--muted)}
 .set-body{padding:4px 12px 12px;border-top:1px solid var(--line)}
 @media (max-width:700px){.set-summary small{white-space:normal}.set-people{display:none}}
+
+/* Review: minutes worked next to the total of tasks */
+.task-totals .task-minutes{margin-left:6px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}

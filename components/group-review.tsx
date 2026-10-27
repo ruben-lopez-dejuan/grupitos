@@ -10,7 +10,7 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded, personKey, seedResult } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
-import { clockOf, isWholeRoomTask, targetKey, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
+import { clockOf, isWholeRoomTask, targetKey, windowsForTask, type GroupSlot, type ProRoom } from "@/lib/pro/schedule";
 import { byName } from "@/lib/people";
 import { formatResult } from "@/lib/results";
 import { countBySeverity, groupLimits, SEVERITY_ORDER, validateAvailability, validateRound, validateTimes, type Issue, type IssueSeverity, type RoundRules } from "@/lib/validation";
@@ -73,6 +73,14 @@ const NO_UNAVAILABILITY: Unavailability[] = [];
 const NO_SEGMENTS: SegmentFilter[] = [];
 const NO_PEOPLE: WcifPerson[] = [];
 const NO_ROUNDS = new Set<string>();
+const MINUTES_KEY = "wca-easy-groups:show-minutes";
+/** "45 min", "2 h", "2 h 10 min". */
+const minutesText = (total: number) => {
+  const rounded = Math.round(total);
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return hours ? `${hours} h${rest ? ` ${rest} min` : ""}` : `${rest} min`;
+};
 
 export type SegmentFilter = { id: string; name: string; members: Set<string> };
 
@@ -172,6 +180,25 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
 
   // People in the round first, by seed; staff who only work in this round after them, by name.
   const loads = useMemo(() => dutyLoads(assignments), [assignments]);
+  /** PRO: minutes of staff tasks per person, over every round (shown when "Minutes" is on). */
+  const minutes = useMemo(() => {
+    const result = new Map<string, number>();
+    if (!slots) return result;
+    for (const item of assignments) for (const duty of duties(item)) {
+      const slot = slots.get(item.roundId)?.find(candidate => candidate.group === duty.group);
+      if (!slot) continue;
+      const length = windowsForTask(slot, duty.role).reduce((sum, window) => sum + Math.max(0, (Date.parse(`${window.end}:00Z`) - Date.parse(`${window.start}:00Z`)) / 60000), 0);
+      result.set(item.personId, (result.get(item.personId) ?? 0) + length);
+    }
+    return result;
+  }, [assignments, slots]);
+  const [showMinutes, setShowMinutes] = useState(false);
+  useEffect(() => { try { setShowMinutes(localStorage.getItem(MINUTES_KEY) === "1"); } catch { /* storage blocked: minutes stay hidden */ } }, []);
+  const changeShowMinutes = (show: boolean) => {
+    setShowMinutes(show);
+    try { localStorage.setItem(MINUTES_KEY, show ? "1" : "0"); } catch { /* storage blocked: the choice lasts this visit */ }
+  };
+  const withMinutes = showMinutes && !!slots;
   /** Duties per person and role across every round, for the totals column. */
   const roleTotals = useMemo(() => {
     const totals = new Map<string, Partial<Record<DutyRole, number>>>();
@@ -218,11 +245,12 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
       seed: (a, b) => Number(b.inRound) - Number(a.inRound) || (a.inRound ? bySeed(a, b) : (a.roundRank ?? Number.MAX_SAFE_INTEGER) - (b.roundRank ?? Number.MAX_SAFE_INTEGER) || (a.seedResult ?? Number.MAX_SAFE_INTEGER) - (b.seedResult ?? Number.MAX_SAFE_INTEGER)),
       name: () => 0,
       group: (a, b) => (competingGroup(a) ?? Number.MAX_SAFE_INTEGER) - (competingGroup(b) ?? Number.MAX_SAFE_INTEGER) || bySeed(a, b),
-      load: (a, b) => (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
+      // With minutes shown, the heaviest work first by minutes; otherwise by tasks.
+      load: (a, b) => withMinutes ? (minutes.get(b.personId) ?? 0) - (minutes.get(a.personId) ?? 0) || (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0) : (loads.get(b.personId) ?? 0) - (loads.get(a.personId) ?? 0),
     };
     // Searching for someone always lists the matches A to Z by name.
     return roundRows.filter(keep).sort((a, b) => (needle ? 0 : order[sortBy](a, b)) || byName(a, b));
-  }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads, segmentFilters]);
+  }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads, minutes, withMinutes, segmentFilters]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);
   // Group totals count the whole round, whatever the filter or search shows.
@@ -476,6 +504,7 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
       </div>
       <div className="history-actions">
         <label className="photo-toggle compact" title={t("review.photosHelp")}><input type="checkbox" checked={showPhotos} onChange={event => onShowPhotosChange(event.target.checked)} /> {t("review.photos")}</label>
+        {slots && <label className="photo-toggle compact" title={t("review.minutesHelp")}><input type="checkbox" checked={showMinutes} onChange={event => changeShowMinutes(event.target.checked)} /> {t("review.minutes")}</label>}
         <span className="help-anchor">
           <button type="button" aria-expanded={showHelp} onClick={() => setShowHelp(value => !value)}>{t("review.help")}</button>
           {showHelp && <div className="help-pop" role="dialog" aria-label={t("review.helpTitle")}>
@@ -601,7 +630,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         <td className="tasks-column">
           {load === 0 ? <span className="muted-mark">—</span> : (() => {
             const roles = DUTY_ROLES.filter(role => (roleTotals.get(item.personId)?.[role] ?? 0) > 0);
-            return <span className="task-totals" title={tp("review.totalTasks", load)}>{roles.map(role => <span key={role} className={`cell-chip mini ${role}`}>{TASK_CODES[role]}{roleTotals.get(item.personId)![role]}</span>)}{roles.length > 1 && <b>· {load}</b>}</span>;
+            return <span className="task-totals" title={tp("review.totalTasks", load)}>{roles.map(role => <span key={role} className={`cell-chip mini ${role}`}>{TASK_CODES[role]}{roleTotals.get(item.personId)![role]}</span>)}{roles.length > 1 && <b>· {load}</b>}{withMinutes && <small className="task-minutes" title={t("review.minutesHelp")}>{minutesText(minutes.get(item.personId) ?? 0)}</small>}</span>;
           })()}
         </td>
       </tr>;
