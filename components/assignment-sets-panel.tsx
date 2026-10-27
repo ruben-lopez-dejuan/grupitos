@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { EventIcon } from "@/components/event-icon";
 import { ScopeFields, ScopeRows, type ScopeLane, type ScopeRound } from "@/components/group-scope";
 import { useEventName, useI18n } from "@/components/i18n";
@@ -33,10 +33,57 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
   };
   const save = (set: AssignmentSetConfig) => onChange(sets.map(item => item.id === set.id ? set : item));
   const move = (index: number, step: -1 | 1) => {
+    if (index + step < 0 || index + step >= sets.length) return;
     const next = [...sets];
     [next[index], next[index + step]] = [next[index + step], next[index]];
     onChange(next);
   };
+  /** The set opened to edit; the others show one summary line. */
+  const [open, setOpen] = useState<string>();
+  /** While dragging (mouse or touch, like reordering a Google Keep list): the order on screen. */
+  const [drag, setDrag] = useState<{ id: string; order: string[] }>();
+  const listRef = useRef<HTMLOListElement>(null);
+  const shown = drag ? drag.order.map(id => sets.find(set => set.id === id)!).filter(Boolean) : sets;
+
+  function startDrag(event: PointerEvent<HTMLButtonElement>, id: string) {
+    event.preventDefault();
+    // Keeps the moves coming to the handle while the pointer leaves it (not every pointer can be captured).
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* moves still arrive while over the handle */ }
+    setDrag({ id, order: sets.map(set => set.id) });
+  }
+  function moveDrag(event: PointerEvent<HTMLButtonElement>) {
+    if (!drag || !listRef.current) return;
+    // The new place is after every other card whose middle is above the pointer.
+    const others = [...listRef.current.children].filter(item => (item as HTMLElement).dataset.id !== drag.id) as HTMLElement[];
+    const index = others.filter(item => { const box = item.getBoundingClientRect(); return box.top + box.height / 2 < event.clientY; }).length;
+    const order = others.map(item => item.dataset.id!);
+    order.splice(index, 0, drag.id);
+    if (order.join() !== drag.order.join()) setDrag({ ...drag, order });
+  }
+  function endDrag() {
+    if (!drag) return;
+    const order = drag.order;
+    setDrag(undefined);
+    if (order.join() !== sets.map(set => set.id).join()) onChange(order.map(id => sets.find(set => set.id === id)!));
+  }
+  function keyMove(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    move(index, event.key === "ArrowUp" ? -1 : 1);
+  }
+
+  /** One line: who, how many, which rounds and where. */
+  const summary = (set: AssignmentSetConfig) => {
+    const segment = segments.find(item => item.id === set.segment);
+    const who = set.segment ? segment?.name ?? (set.segment.startsWith("team:") ? t("sets.missingTeam", { team: set.segment.slice(5) }) : t("sets.missingCluster")) : t("sets.anyone");
+    const top = set.top !== undefined ? t("sets.summaryTop", { count: set.top, unit: set.perGroup === "round" ? t("sets.perRoundGroup") : set.perGroup ? t("sets.perGroup") : t("sets.perRound") }) : "";
+    const which = set.rounds === "first" ? t("sets.firstRounds") : set.rounds === "all" ? t("sets.allRounds") : tp("sets.roundCount", set.rounds.length);
+    const where = set.lanes.length ? set.lanes.map(key => lanes.find(lane => lane.key === key)?.name ?? key).join(", ") : t("sets.summaryAnywhere");
+    const groups = set.groups === "any" ? "" : set.groups === "first" ? t("sets.firstGroup") : set.groups === "last" ? t("sets.lastGroup") : `G${set.groups.join(", ")}`;
+    return [who, top, which, where, groups].filter(Boolean).join(" · ");
+  };
+  /** How many people the set takes: its top N, or the size of its cluster. */
+  const people = (set: AssignmentSetConfig) => set.top !== undefined ? `top ${set.top}` : set.segment ? String(segments.find(item => item.id === set.segment)?.size ?? 0) : t("sets.everyone");
   const mainLane = lanes[0]?.key;
 
   function add(template: SetTemplate) {
@@ -47,22 +94,33 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
         ? { ...base, segment: segments[0]?.id, lanes: [] }
         : { ...base, segment: onCluster(template), lanes: mainLane ? [mainLane] : [] };
     onChange([...sets, set]);
+    setOpen(set.id);
   }
 
   return <div className="assignment-sets">
     {sets.length === 0 && <p className="setup-note">{t("sets.empty")}</p>}
-    <ol>{sets.map((set, index) => {
-      return <li key={set.id} className={set.off ? "off" : ""}>
-        <div className="set-head">
+    <ol ref={listRef} className="set-cards">{shown.map((set, index) => {
+      const rows = preview?.get(set.id) ?? [];
+      const short = set.off ? [] : rows.filter(row => row.wanted > row.placed);
+      const isOpen = open === set.id && !drag;
+      return <li key={set.id} data-id={set.id} className={[set.off && "off", isOpen && "open", drag?.id === set.id && "dragging"].filter(Boolean).join(" ")}>
+        <div className="set-row">
+          <button type="button" className="drag-handle" aria-label={t("sets.drag", { name: set.name })} title={t("sets.dragHelp")}
+            onPointerDown={event => startDrag(event, set.id)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={event => keyMove(event, index)}>⋮⋮</button>
           <span className="task-order-position">{index + 1}</span>
+          <button type="button" className="set-summary" aria-expanded={isOpen} onClick={() => setOpen(current => current === set.id ? undefined : set.id)}>
+            <strong>{set.name}{set.featured && <span className="set-summary-star" title={t("sets.featured")}> ★</span>}{short.length > 0 && <span className="set-summary-warning" title={tp("sets.previewShort", short.length)}> ⚠</span>}</strong>
+            <small>{summary(set)}</small>
+          </button>
+          <span className="set-people" title={t("sets.peopleHelp")}>{people(set)}</span>
+          <label className="set-on" title={t("sets.active")}><input type="checkbox" checked={!set.off} onChange={event => save({ ...set, off: !event.target.checked })} aria-label={t("sets.active")} /></label>
+          <span className="set-chevron" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
+        </div>
+        {isOpen && <div className="set-body">
+        <div className="set-head">
           <input className="set-name" value={set.name} onChange={event => save({ ...set, name: event.target.value })} aria-label={t("sets.name")} />
           <button type="button" className={`set-star ${set.featured ? "on" : ""}`} aria-pressed={!!set.featured} onClick={() => save({ ...set, featured: !set.featured })} title={t("sets.featuredHelp")}>★ <span>{t("sets.featured")}</span></button>
-          <label className="set-on"><input type="checkbox" checked={!set.off} onChange={event => save({ ...set, off: !event.target.checked })} />{t("sets.active")}</label>
-          <span className="task-order-moves">
-            <button type="button" disabled={index === 0} onClick={() => move(index, -1)} aria-label={t("sets.up", { name: set.name })}>↑</button>
-            <button type="button" disabled={index === sets.length - 1} onClick={() => move(index, 1)} aria-label={t("sets.down", { name: set.name })}>↓</button>
-            <button type="button" onClick={() => onChange(sets.filter(item => item.id !== set.id))} aria-label={t("sets.remove", { name: set.name })}>×</button>
-          </span>
+          <button type="button" className="plain danger" onClick={() => onChange(sets.filter(item => item.id !== set.id))} aria-label={t("sets.remove", { name: set.name })}>{t("sets.delete")}</button>
         </div>
         <div className="set-fields">
           <label><span>{t("sets.who")}</span>
@@ -95,14 +153,13 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
           </label>)}
         </div>}
         {!set.off && (() => {
-          const rows = preview?.get(set.id) ?? [];
           if (!rows.length) return null;
-          const short = rows.filter(row => row.wanted > row.placed);
           const placed = rows.reduce((sum, row) => sum + row.placed, 0);
           return short.length
             ? <p className="set-preview short">{tp("sets.previewShort", short.length)}: {short.slice(0, 4).map(row => t("sets.previewRow", { round: roundName(row.roundId), wanted: row.wanted, seats: row.seats })).join(" · ")}{short.length > 4 ? " …" : ""}</p>
             : <p className="set-preview">{t("sets.previewOk", { people: placed, rounds: rows.length })}</p>;
         })()}
+        </div>}
       </li>;
     })}</ol>
     <div className="set-templates">

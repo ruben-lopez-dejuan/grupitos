@@ -167,7 +167,10 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - marca por debajo de un tiempo;
   - newcomer;
   - país;
-  - otro cluster.
+  - otro cluster;
+  - entre el X % más rápido del psych sheet de la prueba de la ronda (3BLD y OH por 3x3);
+  - una propiedad que nombra la prueba de la ronda (`chill`, `puzzles-to-scramble`);
+  - una lista de personas concretas.
 - El recuento y la lista se actualizan en vivo.
 - Hay plantillas: pueden mezclar, mayores de edad, staff y voluntarios… Cada equipo aparece también como cluster.
 
@@ -184,7 +187,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
 ### Orden de asignación, destacados y estaciones
 
-- **Conjuntos de asignación,** como el `AssignmentSet` de CompScript. Una lista ordenada en la que cada conjunto dice:
+- **Conjuntos de asignación,** como el `AssignmentSet` de CompScript. Se ven como una lista de tarjetas con una línea de resumen (quién, cuántos, rondas y dónde): se abren con un clic para editarlas y se reordenan arrastrando, con el ratón o el dedo, o con ↑ y ↓. Una lista ordenada en la que cada conjunto dice:
   - **quién:** un cluster y/o «solo los mejores N», con un N distinto por prueba si hace falta;
   - **en qué rondas;**
   - **dónde:** sala, escenario y números de grupo.
