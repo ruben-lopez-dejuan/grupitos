@@ -332,7 +332,8 @@ describe("multi-blind attempts", () => {
     const slots = groupSlots(schedule);
     const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots);
     expect(rounds.find(round => round.id === "333mbf-r1")!.groups).toBe(2);
-    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots });
+    // Day 2 has only the second attempt: with "tasks only on competing days" nobody else would be there.
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: { ...DEFAULT_OPTIONS, tasksOnCompetingDaysOnly: false }, slots });
     const mbf = assignments.filter(item => item.roundId === "333mbf-r1" && item.inRound);
     expect(mbf.length).toBeGreaterThan(0);
     for (const item of mbf) {
@@ -369,7 +370,7 @@ describe("multi-blind scrambling", () => {
     const slots = groupSlots(schedule);
     expect(slots.get("333mbf-r1")!.map(slot => slot.scrambleWindow)).toEqual([{ start: "2026-02-21T10:00", end: "2026-02-21T10:40" }, { start: "2026-02-22T09:00", end: "2026-02-22T09:40" }]);
     const rounds = withScheduledGroups(initialRounds(competition, 12, "fixed"), slots).map(round => round.id === "333mbf-r1" ? { ...round, scramblers: 2 } : round);
-    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, slots });
+    const assignments = generateAssignments({ competition, rounds, stations: 12, zoneMode: "fixed", people: peopleFromWcif(competition), options: { ...DEFAULT_OPTIONS, tasksOnCompetingDaysOnly: false }, slots });
     const scramblers = assignments.filter(item => item.roundId === "333mbf-r1" && item.tasks.some(task => task.role === "scrambler"));
     expect(scramblers.length).toBeGreaterThan(0);
     // Nobody scrambles their own multi, and scrambling on Saturday morning clashes with 3x3 for nobody.
