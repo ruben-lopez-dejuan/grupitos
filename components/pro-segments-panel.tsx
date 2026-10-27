@@ -110,6 +110,22 @@ export function ProSegmentsPanel({ people, eventIds, settings, proPeople, segmen
           })}
         </div>;
       }
+      case "roundTop": return <>
+        <input type="number" min={1} max={100} value={rule.percent} onChange={event => set({ percent: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })} aria-label={t("segments.topPercent")} className="percent-input" />
+        <span>{t("segments.topPercent")}</span>
+        <small className="round-note" title={t("segments.topMappingHelp")}>↻ {t("segments.topMapping")}</small>
+      </>;
+      case "roundProperty": return <>
+        <select value={rule.key} onChange={event => set({ key: event.target.value })} aria-label={t("segments.kinds.roundProperty")}>{[...new Set([rule.key, ...proPeople.propertyKeys])].filter(Boolean).map(key => <option key={key} value={key}>{key}</option>)}{!rule.key && <option value="">—</option>}</select>
+        <small className="round-note" title={t("segments.roundPropertyHelp")}>↻ {t("segments.roundPropertyNote")}</small>
+      </>;
+      case "people": {
+        const chosen = rule.keys.map(key => people.find(person => personKey(person) === key)).filter((person): person is WcifPerson => !!person);
+        return <span className="people-pick">
+          {chosen.sort(byName).map(person => <span key={personKey(person)} className="chip">{person.name}<button type="button" onClick={() => set({ keys: rule.keys.filter(key => key !== personKey(person)) })} aria-label={t("people.remove", { name: person.name })}>×</button></span>)}
+          <select value="" onChange={event => event.target.value && set({ keys: [...rule.keys, event.target.value] })} aria-label={t("segments.addPerson")}><option value="">{t("segments.addPerson")}</option>{[...people].sort(byName).filter(person => !rule.keys.includes(personKey(person))).map(person => <option key={personKey(person)} value={personKey(person)}>{person.name}{person.wcaId ? ` · ${person.wcaId}` : ""}</option>)}</select>
+        </span>;
+      }
       case "country": return <select value={rule.iso2} onChange={event => set({ iso2: event.target.value })} aria-label={t("segments.kinds.country")}>{[...new Set([rule.iso2, ...countries])].map(iso2 => <option key={iso2} value={iso2}>{iso2}</option>)}</select>;
       case "segment": return <select value={rule.id} onChange={event => set({ id: event.target.value })} aria-label={t("segments.kinds.segment")}>{!rule.id && <option value="">—</option>}{segments.filter(segment => segment.id !== selected?.id).map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select>;
     }

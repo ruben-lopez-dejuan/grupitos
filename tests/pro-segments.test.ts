@@ -3,7 +3,7 @@ import { buildDemoCompetition } from "@/lib/demo-competition";
 import { peopleFromWcif } from "@/lib/people";
 import { everyone, normalizeProPeople } from "@/lib/pro/people";
 import { matchesSegment, SEGMENT_TEMPLATES, segmentMembers, type Segment } from "@/lib/pro/segments";
-import { initialRounds, personKey } from "@/lib/rounds";
+import { bestAverageAndSingle, initialRounds, personKey } from "@/lib/rounds";
 import type { GeneratedAssignment } from "@/lib/assignments";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { validateRound } from "@/lib/validation";
@@ -23,6 +23,30 @@ describe("segments", () => {
     expect(count(segment([{ kind: "role", role: "organizer", negate: true }]))).toBe(people.length - organizers);
     expect(count(segment([{ kind: "role", role: "volunteer" }]))).toBe(1);
     expect(count(segment([{ kind: "newcomer" }]))).toBe(people.filter(person => !person.wcaId).length);
+  });
+
+  it("finds the fastest part of the round's event, with 3BLD by 3x3 (IsInTop25Psych)", () => {
+    const registered = people.filter(person => person.registration?.eventIds?.includes("333"));
+    const quarter = segment([{ kind: "roundTop", percent: 25, mapping: { "333bf": "333" } }]);
+    const members = segmentMembers(quarter, people, { people: settings, pro, segments: [quarter], eventId: "333" });
+    expect(members.length).toBeLessThanOrEqual(Math.ceil(registered.length * 0.25));
+    expect(members.length).toBeGreaterThan(0);
+    // Every member is at least as fast as anyone left out.
+    const best = (person: (typeof people)[number]) => bestAverageAndSingle(person, "333")[0];
+    const slowestIn = Math.max(...members.map(best));
+    expect(registered.filter(person => !members.includes(person)).every(person => best(person) >= slowestIn)).toBe(true);
+    // A 3BLD round ranks by 3x3.
+    expect(segmentMembers(quarter, people, { people: settings, pro, segments: [quarter], eventId: "333bf" }).map(personKey)).toEqual(members.map(personKey));
+  });
+
+  it("reads a property naming the round's event, and lists of people", () => {
+    const withChill = normalizeProPeople({ ...pro, propertyKeys: ["chill"], properties: { [keys[2]]: { chill: "333, Pyraminx" }, [keys[3]]: { chill: "2x2x2 Cube" } } });
+    const chill = segment([{ kind: "roundProperty", key: "chill" }]);
+    const at = (eventId: string) => segmentMembers(chill, people, { people: settings, pro: withChill, segments: [chill], eventId }).map(personKey);
+    expect(at("333")).toEqual([keys[2]]);
+    expect(at("222")).toEqual([keys[3]]);
+    expect(at("pyram")).toEqual([keys[2]]);
+    expect(count(segment([{ kind: "people", keys: [keys[4], keys[5]] }]))).toBe(2);
   });
 
   it("compares property values as numbers when both sides are numeric", () => {

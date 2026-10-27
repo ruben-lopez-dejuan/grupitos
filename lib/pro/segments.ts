@@ -8,6 +8,7 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { ageOf, rolesOf, type PeopleSettings, type PersonRole } from "@/lib/people";
 import type { ProPeople } from "@/lib/pro/people";
 import { bestAverageAndSingle, personalBestValue, personKey, SCRAMBLE_EVENT } from "@/lib/rounds";
+import { EVENT_NAMES_EN, SHORT_EVENT_NAMES } from "@/lib/scorecards/scorecards";
 
 export const SEGMENT_ROLES = ["delegate", "trainee-delegate", "organizer", "staff", "dataentry", "trusted", "volunteer"] as const;
 export type SegmentRole = typeof SEGMENT_ROLES[number];
@@ -31,16 +32,63 @@ export type Condition =
    * event, or in the event it maps to (3BLD and OH use 3x3), is below that event's limit.
    * Events without a limit take anyone with a result in them.
    */
-  | { kind: "roundPb"; limits: Record<string, number>; mapping: Record<string, string> };
+  | { kind: "roundPb"; limits: Record<string, number>; mapping: Record<string, string> }
+  /**
+   * In the fastest `percent` % of the psych sheet of the round's event, among those registered for
+   * it (CompScript's IsInTop25Psych in the Écija and Granada scripts); 3BLD and OH may use 3x3.
+   */
+  | { kind: "roundTop"; percent: number; mapping: Record<string, string> }
+  /** A property naming the round's event (Granada's `chill`, CubingUSA's `puzzles-to-scramble`). */
+  | { kind: "roundProperty"; key: string }
+  /** These people (the Écija and Granada scripts' sets by WCA ID). */
+  | { kind: "people"; keys: string[] };
 
-export const CONDITION_KINDS: Condition["kind"][] = ["role", "property", "age", "registered", "roundRegistered", "pb", "roundPb", "newcomer", "country", "segment"];
+export const CONDITION_KINDS: Condition["kind"][] = ["role", "property", "age", "registered", "roundRegistered", "pb", "roundPb", "roundTop", "roundProperty", "newcomer", "country", "people", "segment"];
 /** Conditions that depend on the round's event; without a round they hold if they hold for any event. */
-export const ROUND_KINDS: Condition["kind"][] = ["roundRegistered", "roundPb"];
+export const ROUND_KINDS: Condition["kind"][] = ["roundRegistered", "roundPb", "roundTop", "roundProperty"];
 
 export type SegmentRule = Condition & { negate?: boolean };
 export type Segment = { id: string; name: string; match: "all" | "any"; rules: SegmentRule[] };
 
-export type SegmentContext = { people: PeopleSettings; pro: ProPeople; segments: Segment[]; today?: Date; /** The round's event, for round conditions. */ eventId?: string };
+export type SegmentContext = {
+  people: PeopleSettings; pro: ProPeople; segments: Segment[]; today?: Date;
+  /** The round's event, for round conditions. */
+  eventId?: string;
+  /** Everyone being filtered: "top X %" ranks within the people registered for the event. */
+  population?: WcifPerson[];
+};
+
+/** Positions in each event's psych sheet (registered people, best first), per population. */
+const PSYCH_SHEETS = new WeakMap<WcifPerson[], Map<string, { position: Map<string, number>; size: number }>>();
+
+function psychSheet(population: WcifPerson[], eventId: string) {
+  const byEvent = PSYCH_SHEETS.get(population) ?? new Map<string, { position: Map<string, number>; size: number }>();
+  PSYCH_SHEETS.set(population, byEvent);
+  let sheet = byEvent.get(eventId);
+  if (!sheet) {
+    const registered = population.filter(person => person.registration?.eventIds?.includes(eventId))
+      .sort((a, b) => { const [a1, a2] = bestAverageAndSingle(a, eventId); const [b1, b2] = bestAverageAndSingle(b, eventId); return (a1 - b1) || (a2 - b2); });
+    sheet = { position: new Map(registered.map((person, index) => [personKey(person), index])), size: registered.length };
+    byEvent.set(eventId, sheet);
+  }
+  return sheet;
+}
+
+function inTop(person: WcifPerson, eventId: string, condition: Extract<Condition, { kind: "roundTop" }>, population: WcifPerson[]) {
+  const source = condition.mapping[eventId] || eventId;
+  const sheet = psychSheet(population, source);
+  const position = sheet.position.get(personKey(person));
+  return position !== undefined && Number.isFinite(bestAverageAndSingle(person, source)[0]) && position < (condition.percent / 100) * sheet.size;
+}
+
+/** Whether a property names an event: by its id (333bf) or its English or short name (3x3x3 Blindfolded, 3BLD). */
+function namesEvent(text: string | undefined, eventId: string) {
+  if (!text) return false;
+  const value = text.toLowerCase();
+  const tokens = value.split(/[,;|/]+/).map(token => token.trim()).filter(Boolean);
+  const names = [eventId, EVENT_NAMES_EN[eventId], SHORT_EVENT_NAMES[eventId]].filter(Boolean).map(name => name!.toLowerCase());
+  return names.some(name => tokens.includes(name)) || (value.trim() === eventId);
+}
 
 function underLimit(person: WcifPerson, eventId: string, condition: Extract<Condition, { kind: "roundPb" }>) {
   const source = condition.mapping[eventId] || eventId;
@@ -94,6 +142,16 @@ function test(condition: Condition, person: WcifPerson, context: SegmentContext,
       if (context.eventId) return underLimit(person, context.eventId, condition);
       return Object.keys({ ...condition.limits, ...condition.mapping }).some(eventId => underLimit(person, eventId, condition));
     }
+    case "roundTop": {
+      const population = context.population ?? [person];
+      if (context.eventId) return inTop(person, context.eventId, condition, population);
+      return (person.registration?.eventIds ?? []).some(eventId => inTop(person, eventId, condition, population));
+    }
+    case "roundProperty": {
+      const value = context.pro.properties[personKey(person)]?.[condition.key];
+      return context.eventId ? namesEvent(value, context.eventId) : !!value?.trim();
+    }
+    case "people": return condition.keys.includes(personKey(person));
     case "segment": {
       const other = context.segments.find(segment => segment.id === condition.id);
       // A segment that refers back to itself matches nobody through that rule.
@@ -111,7 +169,8 @@ export function matchesSegment(segment: Segment, person: WcifPerson, context: Se
 }
 
 export function segmentMembers(segment: Segment, people: WcifPerson[], context: SegmentContext) {
-  return people.filter(person => matchesSegment(segment, person, context));
+  const withPopulation = context.population ? context : { ...context, population: people };
+  return people.filter(person => matchesSegment(segment, person, withPopulation));
 }
 
 export function newSegmentId(segments: Segment[]) {
@@ -133,6 +192,9 @@ export function defaultRule(kind: Condition["kind"], options: { propertyKeys: st
     case "segment": return { kind, id: options.segmentIds[0] ?? "" };
     case "roundRegistered": return { kind };
     case "roundPb": return { kind, ...SCRAMBLE_LIMITS };
+    case "roundTop": return { kind, percent: 25, mapping: { ...SCRAMBLE_EVENT } };
+    case "roundProperty": return { kind, key: options.propertyKeys.find(key => key === "chill" || key === "puzzles-to-scramble") ?? options.propertyKeys[0] ?? "" };
+    case "people": return { kind, keys: [] };
   }
 }
 
@@ -142,13 +204,30 @@ export const SCRAMBLE_LIMITS: { limits: Record<string, number>; mapping: Record<
   mapping: { ...SCRAMBLE_EVENT },
 };
 
-/** Starting points from real CompScript scripts (EligibleVolunteer, EligibleRunner, CanScramble, EligibleScrambler). */
-export const SEGMENT_TEMPLATES: Array<{ id: "volunteers" | "runners" | "scramblers" | "eventScramblers" | "delegating" | "organizers" | "delegates" | "newcomers" | "adults" | "sideRoom" | "staffAndVolunteers"; segment: Omit<Segment, "id" | "name"> }> = [
-  { id: "volunteers", segment: { match: "all", rules: [{ kind: "role", role: "organizer", negate: true }, { kind: "role", role: "delegate", negate: true }, { kind: "role", role: "trainee-delegate", negate: true }, { kind: "newcomer", negate: true }] } },
-  { id: "runners", segment: { match: "all", rules: [{ kind: "age", op: "lt", value: 45 }] } },
+/** Starting points from real CompScript scripts: Álvaro López's Spanish scripts and CubingUSA's. */
+/** Not organizer, delegate or trainee: the people who can be asked to help (CanStaff). */
+const STAFFABLE: SegmentRule[] = [{ kind: "role", role: "organizer", negate: true }, { kind: "role", role: "delegate", negate: true }, { kind: "role", role: "trainee-delegate", negate: true }];
+
+export const SEGMENT_TEMPLATE_IDS = ["volunteers", "runners", "scramblers", "eventScramblers", "topQuarterScramblers", "offersToScramble", "staffThisEvent", "canJudge", "canRun", "canDelegate", "delegating", "organizers", "delegates", "newcomers", "adults", "sideRoom", "staffAndVolunteers", "somePeople"] as const;
+
+export const SEGMENT_TEMPLATES: Array<{ id: typeof SEGMENT_TEMPLATE_IDS[number]; segment: Omit<Segment, "id" | "name"> }> = [
+  // EligibleVolunteer (Álvaro's scripts): can be asked to help, and not a newcomer.
+  { id: "volunteers", segment: { match: "all", rules: [...STAFFABLE, { kind: "newcomer", negate: true }] } },
+  // EligibleRunner: an eligible volunteer under 45.
+  { id: "runners", segment: { match: "all", rules: [...STAFFABLE, { kind: "newcomer", negate: true }, { kind: "age", op: "lt", value: 45 }] } },
   { id: "scramblers", segment: { match: "any", rules: [{ kind: "pb", eventId: "333", type: "average", value: 2000 }, { kind: "role", role: "trusted" }] } },
+  // CanScramble with time limits per event (Amore Open 2026, Spanish Championship 2026).
   { id: "eventScramblers", segment: { match: "all", rules: [{ kind: "roundPb", ...SCRAMBLE_LIMITS }] } },
-  // IsDelegating in the Amore scripts: delegates who are not also organising.
+  // CanScrambleEvent (Écija and Granada Open): the fastest quarter of the event; 3BLD and OH by 3x3.
+  { id: "topQuarterScramblers", segment: { match: "all", rules: [...STAFFABLE, { kind: "roundTop", percent: 25, mapping: { ...SCRAMBLE_EVENT } }] } },
+  // CubingUSA's CanScramble: under the limit and offering to scramble that puzzle in the form.
+  { id: "offersToScramble", segment: { match: "all", rules: [{ kind: "roundProperty", key: "puzzles-to-scramble" }, { kind: "roundPb", ...SCRAMBLE_LIMITS }] } },
+  // CanStaffEvent (Granada Open): can help, except in the event they asked to rest in (`chill`).
+  { id: "staffThisEvent", segment: { match: "all", rules: [...STAFFABLE, { kind: "roundProperty", key: "chill", negate: true }] } },
+  // CanJudge / CanRun / CanDelegate (Spanish Championship 2026): weights of −1 say "never", the delegate team does not judge.
+  { id: "canJudge", segment: { match: "all", rules: [{ kind: "property", key: "weight-judge", op: "neq", value: "-1" }, { kind: "property", key: "team", op: "neq", value: "Delegado" }] } },
+  { id: "canRun", segment: { match: "all", rules: [{ kind: "property", key: "weight-runner", op: "neq", value: "-1" }, { kind: "property", key: "team", op: "neq", value: "Delegado" }] } },
+  { id: "canDelegate", segment: { match: "all", rules: [{ kind: "property", key: "delegate-cluster", op: "gt", value: "0" }] } },
   { id: "delegating", segment: { match: "all", rules: [{ kind: "role", role: "delegate" }, { kind: "role", role: "organizer", negate: true }] } },
   { id: "organizers", segment: { match: "all", rules: [{ kind: "role", role: "organizer" }] } },
   { id: "delegates", segment: { match: "any", rules: [{ kind: "role", role: "delegate" }, { kind: "role", role: "trainee-delegate" }] } },
@@ -156,6 +235,8 @@ export const SEGMENT_TEMPLATES: Array<{ id: "volunteers" | "runners" | "scramble
   { id: "adults", segment: { match: "all", rules: [{ kind: "age", op: "gte", value: 18 }] } },
   { id: "sideRoom", segment: { match: "all", rules: [{ kind: "property", key: "team", op: "contains", value: "side" }] } },
   { id: "staffAndVolunteers", segment: { match: "any", rules: [{ kind: "role", role: "staff" }, { kind: "role", role: "volunteer" }] } },
+  // UkuSet / DeLaTorreSet (Écija and Granada Open): people chosen one by one, to keep together.
+  { id: "somePeople", segment: { match: "all", rules: [{ kind: "people", keys: [] }] } },
 ];
 
 /** Jobs whose eligibility a segment can restrict (CompScript's Job(..., eligibility=...)). */

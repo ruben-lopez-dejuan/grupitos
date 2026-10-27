@@ -532,3 +532,9 @@ button.plain.danger{justify-self:start;color:var(--error)}
 
 /* Review: a task for the whole room (data entry with stages), not for the column's stage */
 .matrix-cell button.whole-room{outline:1px dashed currentColor;outline-offset:-4px}
+
+/* Clusters: "top %" and specific people */
+.segment-rules .percent-input{width:64px}
+.people-pick{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.people-pick .chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 8px;border:1px solid var(--line);border-radius:999px;font-size:13px}
+.people-pick .chip button{border:0;background:none;color:var(--muted);cursor:pointer}
