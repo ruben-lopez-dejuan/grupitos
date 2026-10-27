@@ -13,7 +13,10 @@ import { exportWcif, specUrlOf, type WcifExportReport } from "@/lib/wcif-export"
 import { isDraftExtension } from "@/lib/wcif-session";
 
 /** WCA extension ids are dot-separated words: no hyphens. */
-export const SETTINGS_EXTENSION_ID = "wcaEasyGroups.Settings";
+export const SETTINGS_EXTENSION_ID = "grupitos.Settings";
+/** The id under the app's first name (WCA Easy Groups): read if present, replaced when publishing. */
+const OLD_SETTINGS_EXTENSION_ID = "wcaEasyGroups.Settings";
+const isSettingsExtension = (id: string) => id === SETTINGS_EXTENSION_ID || id === OLD_SETTINGS_EXTENSION_ID;
 export const SETTINGS_SPEC_URL = "https://github.com/ruben-lopez-dejuan/grupitos/blob/main/docs/WCIF_EXTENSION.md";
 
 export type SavedSettings = { settings: WorkspaceSettings; generatedWith?: string; savedAt: string; savedBy?: string };
@@ -47,7 +50,7 @@ export async function settingsExtension(saved: SavedSettings): Promise<WcifExten
 
 /** The settings saved in a WCIF, read as a stored draft would be; undefined when absent or unreadable. */
 export async function readSettings(competition: StoredCompetition): Promise<SavedSettings | undefined> {
-  const data = competition.extensions?.find(item => item.id === SETTINGS_EXTENSION_ID)?.data as Partial<SettingsData> | undefined;
+  const data = (competition.extensions?.find(item => item.id === SETTINGS_EXTENSION_ID) ?? competition.extensions?.find(item => item.id === OLD_SETTINGS_EXTENSION_ID))?.data as Partial<SettingsData> | undefined;
   if (!data || data.version !== 1 || data.encoding !== "deflate-raw;base64" || typeof data.payload !== "string" || typeof data.savedAt !== "string") return undefined;
   try {
     const json = new TextDecoder().decode(await streamText(fromBase64(data.payload), new DecompressionStream("deflate-raw")));
@@ -126,7 +129,7 @@ export function buildPatch({ fresh, assignments, rounds, slots, schedule, people
   people?: ProPeople;
   settings: WcifExtension;
 }): { patch: WcifPatch; summary: PatchSummary } {
-  const extensions = [...(fresh.extensions ?? []).filter(item => item.id !== SETTINGS_EXTENSION_ID && !isDraftExtension(item.id)), settings];
+  const extensions = [...(fresh.extensions ?? []).filter(item => !isSettingsExtension(item.id) && !isDraftExtension(item.id)), settings];
   const patch: WcifPatch = { formatVersion: fresh.formatVersion ?? "2.2", id: fresh.id, extensions };
   const empty: PatchSummary = { people: 0, assignments: 0, groupsReused: 0, groupsCreated: 0, groupsRemoved: 0, newStaff: 0, skipped: [], changedPeople: 0, added: 0, removed: 0, withGroups: false };
   if (!assignments.length) return { patch, summary: empty };

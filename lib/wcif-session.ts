@@ -6,10 +6,10 @@
 import type { StoredCompetition, WcifExtension } from "@/lib/competition-store";
 import { parseDraft, type Draft } from "@/lib/draft";
 
-/** WCA extension ids are dot-separated words; the first files used a hyphenated id, still read. */
-export const DRAFT_EXTENSION_ID = "wcaEasyGroups.Draft";
-const OLD_DRAFT_EXTENSION_ID = "wca-easy-groups.Draft";
-export const isDraftExtension = (id: string) => id === DRAFT_EXTENSION_ID || id === OLD_DRAFT_EXTENSION_ID;
+/** WCA extension ids are dot-separated words. Files from the app's first name (WCA Easy Groups) are still read. */
+export const DRAFT_EXTENSION_ID = "grupitos.Draft";
+const OLD_DRAFT_EXTENSION_IDS = ["wcaEasyGroups.Draft", "wca-easy-groups.Draft"];
+export const isDraftExtension = (id: string) => id === DRAFT_EXTENSION_ID || OLD_DRAFT_EXTENSION_IDS.includes(id);
 
 type WithExtensions = StoredCompetition & { extensions?: WcifExtension[] };
 

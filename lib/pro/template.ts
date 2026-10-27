@@ -15,7 +15,9 @@ import type { StationRuleConfig } from "@/lib/pro/station-rules";
 import { normalizeTeams, type TeamBusy, type TeamSetup } from "@/lib/pro/teams";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 
-export const TEMPLATE_FORMAT = "wca-easy-groups/pro-template";
+export const TEMPLATE_FORMAT = "grupitos/pro-template";
+/** Templates saved under the app's first name (WCA Easy Groups) are still read. */
+const OLD_TEMPLATE_FORMAT = "wca-easy-groups/pro-template";
 
 /** A team busy time on the competition's n-th day. */
 export type TemplateBusy = Omit<TeamBusy, "day"> & { dayIndex: number };
@@ -85,7 +87,7 @@ export function exportTemplate(settings: WorkspaceSettings, name: string): ProTe
 export function parseTemplate(text: string): ProTemplate | undefined {
   try {
     const data = JSON.parse(text) as Partial<ProTemplate>;
-    if (data?.format !== TEMPLATE_FORMAT || data.version !== 1 || !data.pro || typeof data.pro !== "object") return undefined;
+    if ((data?.format !== TEMPLATE_FORMAT && data?.format !== OLD_TEMPLATE_FORMAT) || data.version !== 1 || !data.pro || typeof data.pro !== "object") return undefined;
     return { ...data, name: typeof data.name === "string" && data.name ? data.name : "PRO", pro: data.pro } as ProTemplate;
   } catch {
     return undefined;

@@ -2,15 +2,15 @@
 
 Grupitos keeps its settings in the competition's WCIF, as Groupifier and Delegate Dashboard keep theirs, so whoever manages the competition finds them on any device.
 
-The app was called WCA Easy Groups: the extension ids keep that name, so settings already published and files already downloaded stay readable.
+The app was first called WCA Easy Groups. Settings and files saved under the old ids (`wcaEasyGroups.Settings`, `wcaEasyGroups.Draft`, `wca-easy-groups.Draft`) are still read, and publishing replaces the old settings extension with `grupitos.Settings`.
 
-## `wcaEasyGroups.Settings` (competition)
+## `grupitos.Settings` (competition)
 
 Written when someone publishes from the app (Publish step) and read when the competition is opened.
 
 ```json
 {
-  "id": "wcaEasyGroups.Settings",
+  "id": "grupitos.Settings",
   "specUrl": "https://github.com/ruben-lopez-dejuan/grupitos/blob/main/docs/WCIF_EXTENSION.md",
   "data": {
     "version": 1,
@@ -26,7 +26,7 @@ Written when someone publishes from the app (Publish step) and read when the com
 - The groups and tasks themselves are not in the extension: they are the WCIF's own group activities and assignments.
 - Competition extensions are part of the public WCIF. The settings must not hold private data.
 
-## `wcaEasyGroups.Draft` (files only)
+## `grupitos.Draft` (files only)
 
 The WCIF downloaded from the Publish step carries the whole draft (settings and proposal, including hand edits) in this competition extension, so that importing the file on another device restores the work. It holds personal data and is never sent to the WCA.
 

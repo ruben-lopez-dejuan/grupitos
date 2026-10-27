@@ -216,7 +216,7 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 
 ### 6.7. Plantillas PRO (24/10/2026)
 
-- `lib/pro/template.ts`: `exportTemplate`, `parseTemplate`, `applyTemplate`. Formato `wca-easy-groups/pro-template` v1: clusters, conjuntos, reglas de estación, personal por sala, equipos, puntuación, opciones de reglas e impresión y mezcladores/runners por ronda. Salas y escenarios por **nombre** (sin tildes ni mayúsculas), horas ocupadas por **número de día**. Sin datos personales ni horario. Al aplicar, cada sección presente sustituye la actual y se avisa de salas, rondas y días que no existen.
+- `lib/pro/template.ts`: `exportTemplate`, `parseTemplate`, `applyTemplate`. Formato `grupitos/pro-template` v1: clusters, conjuntos, reglas de estación, personal por sala, equipos, puntuación, opciones de reglas e impresión y mezcladores/runners por ronda. Salas y escenarios por **nombre** (sin tildes ni mayúsculas), horas ocupadas por **número de día**. Sin datos personales ni horario. Al aplicar, cada sección presente sustituye la actual y se avisa de salas, rondas y días que no existen.
 - Plantilla incluida «Campeonato de España 2026» (`lib/pro/templates/spanish-championship-2026.ts`), con los valores de prueba destacados 1 y top 2 por grupo de la ronda.
 - Interfaz: Zona → Plantillas (`components/pro-template-panel.tsx`). Comprobado con el WCIF del Nacional: todo se encuentra.
 
@@ -244,7 +244,10 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 ### 6.14. Nuevo nombre: Grupitos (25/10/2026)
 
 - La app se llama **Grupitos** y su dominio pasa a ser <https://grupitos.lopezruben.com>. El repositorio es `ruben-lopez-dejuan/grupitos`; GitHub redirige el nombre antiguo.
-- **Identificadores internos con el nombre antiguo, a propósito**: se mantienen las claves del navegador (`wca-easy-groups:draft:…`, `wca-easy-groups-theme`, `wca-easy-groups:show-photos`, la cookie `wca-easy-groups-locale` y la base IndexedDB `wca-easy-groups`), el formato de plantillas `wca-easy-groups/pro-template` y las extensiones `wcaEasyGroups.Settings` y `wcaEasyGroups.Draft`. Cambiarlos dejaría sin leer lo ya guardado, lo publicado en la WCA y los archivos descargados.
+- **Identificadores**:
+  - Las claves del navegador mantienen el nombre antiguo, a propósito (`wca-easy-groups:draft:…`, `wca-easy-groups-theme`, `wca-easy-groups:show-photos`, la cookie `wca-easy-groups-locale` y la base IndexedDB `wca-easy-groups`), para no perder lo guardado en local.
+  - Lo que se escribe fuera pasa a llamarse Grupitos (27/10/2026, a petición del usuario): las extensiones del WCIF `grupitos.Settings` y `grupitos.Draft`, y el formato de plantillas `grupitos/pro-template`.
+  - Los ids antiguos (`wcaEasyGroups.Settings`, `wcaEasyGroups.Draft`, `wca-easy-groups.Draft`, `wca-easy-groups/pro-template`) se siguen leyendo, y al publicar se sustituye la extensión antigua de ajustes.
 - **Cambio de dominio**: el navegador guarda los borradores por dominio. Para llevarse el trabajo del dominio antiguo al nuevo hay dos caminos: publicar los ajustes en la WCA, o descargar el WCIF en el dominio antiguo e importarlo en el nuevo. Guía completa en [`docs/RENOMBRAR_A_GRUPITOS.md`](docs/RENOMBRAR_A_GRUPITOS.md).
 
 ### 6.13. Publicar en la WCA y ajustes compartidos (24/10/2026)
@@ -253,11 +256,11 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Qué se envía** (`buildPatch` en `lib/wca-sync.ts`), siempre construido sobre el WCIF recién descargado:
   - `schedule` con los grupos;
   - `persons` solo con `wcaUserId`, `assignments` y `extensions` (sin `registration`: con `isCompeting: false` la WCA crearía inscripciones; sin `roles`);
-  - `extensions` de la competición: todas las que ya tenía más `wcaEasyGroups.Settings`.
+  - `extensions` de la competición: todas las que ya tenía más `grupitos.Settings`.
 
   Por qué así, según el código de la WCA (`Competition#set_wcif!`): solo exige `id` y `formatVersion`, pero **sustituye** el horario entero, la lista entera de extensiones de la competición y, por persona, la lista de asignaciones y de extensiones.
-- **Extensiones**: la WCA exige `specUrl` (URL) y un id de palabras separadas por puntos (sin guiones). Por eso el borrador de los archivos pasa a `wcaEasyGroups.Draft` (se sigue leyendo el id antiguo), y `specUrlOf` en `lib/wcif-export.ts` pone la URL de natshelper o Groupifier a las que no la tienen.
-- **Ajustes en la WCA** (`wcaEasyGroups.Settings`, [`docs/WCIF_EXTENSION.md`](docs/WCIF_EXTENSION.md)): `{ settings, generatedWith }` comprimido (deflate-raw + base64, `CompressionStream`), porque la WCA guarda cada extensión en un `TEXT` de 64 KB. Los del Nacional ocupan 40 KB en JSON y 7 KB comprimidos. Lleva `savedAt` y `savedBy`. Es público.
+- **Extensiones**: la WCA exige `specUrl` (URL) y un id de palabras separadas por puntos (sin guiones). Por eso el borrador de los archivos pasa a `grupitos.Draft` (se sigue leyendo el id antiguo), y `specUrlOf` en `lib/wcif-export.ts` pone la URL de natshelper o Groupifier a las que no la tienen.
+- **Ajustes en la WCA** (`grupitos.Settings`, [`docs/WCIF_EXTENSION.md`](docs/WCIF_EXTENSION.md)): `{ settings, generatedWith }` comprimido (deflate-raw + base64, `CompressionStream`), porque la WCA guarda cada extensión en un `TEXT` de 64 KB. Los del Nacional ocupan 40 KB en JSON y 7 KB comprimidos. Lleva `savedAt` y `savedBy`. Es público.
 - **Comprobación**: antes de publicar, `changedRounds` bloquea los grupos si las rondas del horario de la WCA cambiaron desde la importación. Después, `checkPublished` vuelve a leer el WCIF y comprueba asignaciones y ajustes.
 - **Al abrir una competición**:
   - sin borrador local y con ajustes en el WCIF guardado, se abren esos ajustes con los grupos del WCIF;
