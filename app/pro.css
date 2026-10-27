@@ -565,11 +565,20 @@ button.plain.danger{justify-self:start;color:var(--error)}
 /* Rules: separate names */
 .split-extras{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:12px 22px 0}
 .split-extras>label{display:flex;align-items:center;gap:8px}
-/* Rules: the N best together in the last group of some events' first rounds */
+/* Rules: the best together in the last group of some events' first rounds, how many per event */
 .top-together{display:grid;gap:8px;margin:12px 22px 0}
 .top-together>label{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.top-together-count{width:64px}
 .top-together-events{display:flex;flex-wrap:wrap;gap:6px}
-.top-together-events button{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
-.top-together-events button.on{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,var(--surface));color:var(--ink)}
-.top-together-events .event-icon{width:22px;height:22px;min-width:22px;font-size:14px;border-radius:5px}
+.top-together-event{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--surface);overflow:hidden}
+.top-together-event.on{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,var(--surface))}
+.top-together-event>button{display:inline-flex;align-items:center;gap:6px;min-height:0;padding:4px 10px 4px 6px;border:0;border-radius:0;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.top-together-event.on>button{color:var(--ink);padding-right:8px}
+.top-together-event .event-icon{width:22px;height:22px;min-width:22px;font-size:14px;border-radius:5px}
+.top-together-stepper{display:inline-flex;align-items:center;gap:1px;margin-right:4px;border:1px solid color-mix(in srgb,var(--blue) 45%,var(--line));border-radius:999px;background:var(--surface)}
+.top-together-stepper:focus-within{border-color:var(--blue)}
+.top-together-stepper button{display:grid;place-items:center;width:22px;height:22px;min-height:0;padding:0;border:0;border-radius:999px;background:none;color:var(--blue);font:inherit;font-size:15px;font-weight:700;line-height:1;cursor:pointer}
+.top-together-stepper button:hover:not(:disabled){background:color-mix(in srgb,var(--blue) 18%,transparent)}
+.top-together-stepper button:disabled{color:var(--muted);opacity:.45;cursor:default}
+.top-together-stepper input{width:3ch;height:22px;min-height:0;padding:0;border:0;background:none;color:var(--ink);font:inherit;font-size:13px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;appearance:textfield;-moz-appearance:textfield}
+.top-together-stepper input::-webkit-inner-spin-button,.top-together-stepper input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.top-together-stepper input:focus{outline:none;box-shadow:none}

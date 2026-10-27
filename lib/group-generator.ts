@@ -35,12 +35,11 @@ export type AssignmentOptions = {
   /** After splitting, people who share a first name go to different groups (swapping with close seeds). */
   separateNames: boolean;
   /**
-   * First rounds of `topTogetherEvents`: the `topTogetherCount` best together in the round's last
-   * group (the rest split by the sorting rule).
+   * First rounds of the events in `topTogetherCounts`: that many of the best together in the
+   * round's last group (the rest split by the sorting rule).
    */
   topTogether: boolean;
-  topTogetherCount: number;
-  topTogetherEvents: string[];
+  topTogetherCounts: Record<string, number>;
   noRunningForForeigners: boolean;
   spreadDelegates: boolean;
   /** Off: delegates, trainees and organizers get no judging, scrambling or running. */
@@ -51,15 +50,24 @@ export type AssignmentOptions = {
   taskOrder: TaskOrderItem[];
 };
 
+/** How many of the best go together in the last group when nobody chose another number. */
+export const TOP_TOGETHER_COUNT = 4;
+
+export function topTogetherCountOf(value: unknown) {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 1 ? Math.min(999, Math.round(count)) : TOP_TOGETHER_COUNT;
+}
+
 /** Options from a draft or template of any age: old sorting rules mapped, missing ones filled in. */
 export function normalizeOptions(value: Partial<AssignmentOptions> & { sortingRule?: unknown } | undefined): AssignmentOptions {
   const { rule, separateNames } = normalizeSortingRule(value?.sortingRule);
-  const { eventRules: _retired, ...rest } = (value ?? {}) as Partial<AssignmentOptions> & { eventRules?: unknown };
-  const count = Number(rest.topTogetherCount);
+  // Retired: per-event rules, and one count for a list of events (now a count per event).
+  const { eventRules: _rules, topTogetherCount, topTogetherEvents, ...rest } = (value ?? {}) as Partial<AssignmentOptions> & { eventRules?: unknown; topTogetherCount?: unknown; topTogetherEvents?: unknown };
+  const counts = rest.topTogetherCounts && typeof rest.topTogetherCounts === "object" ? rest.topTogetherCounts
+    : Array.isArray(topTogetherEvents) ? Object.fromEntries(topTogetherEvents.map(eventId => [eventId, topTogetherCount])) : DEFAULT_OPTIONS.topTogetherCounts;
   return {
     ...DEFAULT_OPTIONS, ...rest, sortingRule: rule, separateNames: !!(rest.separateNames || separateNames),
-    topTogetherCount: Number.isFinite(count) && count >= 1 ? Math.round(count) : DEFAULT_OPTIONS.topTogetherCount,
-    topTogetherEvents: Array.isArray(rest.topTogetherEvents) ? rest.topTogetherEvents.filter((id): id is string => typeof id === "string") : DEFAULT_OPTIONS.topTogetherEvents,
+    topTogetherCounts: Object.fromEntries(Object.entries(counts).map(([eventId, count]) => [eventId, topTogetherCountOf(count)])),
     taskOrder: normalizeTaskOrder(rest.taskOrder),
   } as AssignmentOptions;
 }
@@ -83,9 +91,8 @@ export const DEFAULT_OPTIONS: AssignmentOptions = {
   balanceMinutes: false,
   separateNames: false,
   topTogether: false,
-  topTogetherCount: 4,
   // The sprint events, where the best usually compete together.
-  topTogetherEvents: ["222", "333", "skewb", "pyram"],
+  topTogetherCounts: { "222": TOP_TOGETHER_COUNT, "333": TOP_TOGETHER_COUNT, skewb: TOP_TOGETHER_COUNT, pyram: TOP_TOGETHER_COUNT },
   noRunningForForeigners: false,
   spreadDelegates: true,
   normalTasksForDelegatesAndOrganizers: false,
@@ -345,8 +352,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const roundColumns = (slots?.get(round.id) ?? []).filter(slot => !slot.linkedTo);
     const lastNumber = Math.max(0, ...roundColumns.map(slot => slot.number));
     const lastGroups = roundColumns.filter(slot => slot.number === lastNumber).map(slot => slot.group);
-    const topTogether = firstRound && options.topTogether && options.topTogetherEvents.includes(round.eventId);
-    const topSet = topTogether ? [{ id: `top-${round.eventId}`, name: "top", top: options.topTogetherCount, groups: lastGroups.length ? lastGroups : [primary], featured: false }] : [];
+    const topCount = firstRound && options.topTogether ? options.topTogetherCounts[round.eventId] : undefined;
+    const topSet = topCount ? [{ id: `top-${round.eventId}`, name: "top", top: topCount, groups: lastGroups.length ? lastGroups : [primary], featured: false }] : [];
     const sets = [...topSet, ...(assignmentSets?.({ ...round, groups: primary }) ?? [])];
     const { groups, allowed, featured, setOf } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
       : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined, setOf: undefined };

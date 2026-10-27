@@ -27,7 +27,7 @@ import { keyOf } from "@/lib/i18n";
 import { getCompetition, saveCompetition, type StoredCompetition } from "@/lib/competition-store";
 import { groupsFromWcif, hasWcifGroups, wcifGroupsNeedStages } from "@/lib/wcif-groups";
 import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
-import { normalizeOptions, DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
+import { TOP_TOGETHER_COUNT, topTogetherCountOf, normalizeOptions, DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
 import { fetchWcaNames } from "@/lib/wca-persons";
 import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, linkedVolunteers, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
@@ -55,7 +55,7 @@ const PHOTOS_KEY = "wca-easy-groups:show-photos";
 const ZONE_MODES: ZoneMode[] = ["fixed", "waiting", "mixed"];
 
 
-type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "topTogetherCount" | "topTogetherEvents">;
+type OptionKey = Exclude<keyof AssignmentOptions, "sortingRule" | "taskOrder" | "topTogetherCounts">;
 const MAIN_OPTIONS: Array<{ key: OptionKey; codes?: TaskRole[] }> = [
   { key: "assignJudges", codes: ["judge", "runner"] },
   { key: "avoidBeforeOwnGroup" },
@@ -707,12 +707,21 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
             <label><input type="checkbox" checked={options.separateNames} onChange={event => setOption("separateNames", event.target.checked)} /><strong>{t("rules.separateNames.label")}</strong><Hint text={t("rules.separateNames.help")} /></label>
           </div>
           <div className="top-together">
-            <label><input type="checkbox" checked={options.topTogether} onChange={event => setOption("topTogether", event.target.checked)} /><strong>{t("rules.topTogether.before")}</strong>
-              <input type="number" className="top-together-count" min={1} max={999} value={options.topTogetherCount} disabled={!options.topTogether} onChange={event => update({ options: { ...options, topTogetherCount: Math.max(1, Math.round(Number(event.target.value) || 1)) } })} aria-label={t("rules.topTogether.count")} />
-              <strong>{t("rules.topTogether.after")}</strong><Hint text={t("rules.topTogether.help")} /></label>
+            <label><input type="checkbox" checked={options.topTogether} onChange={event => setOption("topTogether", event.target.checked)} /><strong>{t("rules.topTogether.label")}</strong><Hint text={t("rules.topTogether.help")} /></label>
             {options.topTogether && <div className="top-together-events" role="group" aria-label={t("rules.topTogether.events")}>{(competition.events ?? []).map(event => event.id).map(eventId => {
-              const on = options.topTogetherEvents.includes(eventId);
-              return <button key={eventId} type="button" aria-pressed={on} className={on ? "on" : ""} title={eventName(eventId)} onClick={() => update({ options: { ...options, topTogetherEvents: on ? options.topTogetherEvents.filter(id => id !== eventId) : [...options.topTogetherEvents, eventId] } })}><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></button>;
+              const count = options.topTogetherCounts[eventId];
+              const setCount = (next: number | undefined) => {
+                const { [eventId]: _old, ...rest } = options.topTogetherCounts;
+                update({ options: { ...options, topTogetherCounts: next === undefined ? rest : { ...rest, [eventId]: topTogetherCountOf(next) } } });
+              };
+              return <span key={eventId} className={count ? "top-together-event on" : "top-together-event"}>
+                <button type="button" aria-pressed={!!count} title={eventName(eventId)} onClick={() => setCount(count ? undefined : TOP_TOGETHER_COUNT)}><EventIcon eventId={eventId} label={eventName(eventId)} /><span>{eventName(eventId)}</span></button>
+                {!!count && <span className="top-together-stepper">
+                  <button type="button" disabled={count <= 1} onClick={() => setCount(count - 1)} aria-label={t("rules.topTogether.less", { event: eventName(eventId) })}>−</button>
+                  <input type="number" inputMode="numeric" min={1} max={999} value={count} onChange={event => setCount(Number(event.target.value) || 1)} onFocus={event => event.target.select()} aria-label={t("rules.topTogether.count", { event: eventName(eventId) })} />
+                  <button type="button" disabled={count >= 999} onClick={() => setCount(count + 1)} aria-label={t("rules.topTogether.more", { event: eventName(eventId) })}>+</button>
+                </span>}
+              </span>;
             })}</div>}
           </div>
           <h3 className="panel-subheading">{t("rules.tasksTitle")}</h3>

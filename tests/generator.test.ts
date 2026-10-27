@@ -105,7 +105,10 @@ describe("splitIntoGroups (Groupifier rules)", () => {
   it("reads the retired rules of older drafts as the three left", () => {
     expect(normalizeOptions({ sortingRule: "balanced" } as never)).toMatchObject({ sortingRule: "symmetric", separateNames: false });
     expect(normalizeOptions({ sortingRule: "name-optimised" } as never)).toMatchObject({ sortingRule: "ranks", separateNames: true });
-    expect(normalizeOptions({ topTogetherCount: 0 } as never).topTogetherCount).toBe(DEFAULT_OPTIONS.topTogetherCount);
+    // One count for a list of events becomes a count per event; a bad count falls back to 4.
+    expect(normalizeOptions({ topTogetherCount: 6, topTogetherEvents: ["333", "222"] } as never).topTogetherCounts).toEqual({ "333": 6, "222": 6 });
+    expect(normalizeOptions({ topTogetherCount: 0, topTogetherEvents: ["333"] } as never).topTogetherCounts).toEqual({ "333": 4 });
+    expect(normalizeOptions({}).topTogetherCounts).toEqual(DEFAULT_OPTIONS.topTogetherCounts);
   });
 
   it("separates repeated first names, keeping everyone and the group sizes", () => {
@@ -335,15 +338,17 @@ describe("PRO: balancing by minutes", () => {
 });
 
 describe("the best together in the last group", () => {
-  it("puts the N best of the chosen events' first rounds together in the last group", () => {
+  it("puts each chosen event's own number of best together in the last group of its first round", () => {
     const competition = demoCompetition("small");
-    const rounds = initialRounds(competition, 12, "waiting").filter(round => round.id === "333-r1" || round.id === "222-r1").map(round => ({ ...round, enabled: true, groups: 3 }));
+    const rounds = initialRounds(competition, 12, "waiting").filter(round => ["333-r1", "222-r1", "pyram-r1"].includes(round.id)).map(round => ({ ...round, enabled: true, groups: 3 }));
+    expect(rounds).toHaveLength(3);
     const people = peopleFromWcif(competition);
-    const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people, options: { ...DEFAULT_OPTIONS, spreadDelegates: false, topTogether: true, topTogetherCount: 4, topTogetherEvents: ["333"] } });
-    const best = (roundId: string) => rows.filter(row => row.roundId === roundId && competingGroup(row) !== undefined).sort((a, b) => (a.seedResult ?? Infinity) - (b.seedResult ?? Infinity)).slice(0, 4);
-    // 3x3 is chosen: its four best all in group 3, the last one.
-    expect(best("333-r1").map(row => competingGroup(row))).toEqual([3, 3, 3, 3]);
-    // 2x2 is not: the scrambler-safe rule spreads its best over the groups.
-    expect(new Set(best("222-r1").map(row => competingGroup(row))).size).toBeGreaterThan(1);
+    const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people, options: { ...DEFAULT_OPTIONS, spreadDelegates: false, topTogether: true, topTogetherCounts: { "333": 3, "222": 5 } } });
+    const best = (roundId: string, count: number) => rows.filter(row => row.roundId === roundId && competingGroup(row) !== undefined).sort((a, b) => (a.seedResult ?? Infinity) - (b.seedResult ?? Infinity)).slice(0, count);
+    // 3x3 with 3 and 2x2 with 5: that many best, all in group 3, the last one.
+    expect(best("333-r1", 3).map(row => competingGroup(row))).toEqual([3, 3, 3]);
+    expect(best("222-r1", 5).map(row => competingGroup(row))).toEqual([3, 3, 3, 3, 3]);
+    // Pyraminx is not chosen: the scrambler-safe rule spreads its best over the groups.
+    expect(new Set(best("pyram-r1", 4).map(row => competingGroup(row))).size).toBeGreaterThan(1);
   });
 });
