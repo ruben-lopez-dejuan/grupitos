@@ -22,9 +22,17 @@ Written when someone publishes from the app (Publish step) and read when the com
 }
 ```
 
-- `payload` is the JSON `{ "settings": WorkspaceSettings, "generatedWith": string }` compressed with raw DEFLATE and encoded in base64. It is compressed because the WCA keeps each extension in a 64 KB text column. `WorkspaceSettings` is defined in [`lib/draft.ts`](../lib/draft.ts): stations, rounds, rules, people's roles, printing options and the PRO configuration (schedule, properties, volunteers, clusters, assignment sets, station rules, teams, scoring).
+- `payload` is the JSON `{ "settings": WorkspaceSettings }` compressed with raw DEFLATE and encoded in base64. It is compressed because the WCA keeps each extension in a 64 KB text column. `WorkspaceSettings` is defined in [`lib/draft.ts`](../lib/draft.ts): stations, rounds, rules, staff lists, printing options and the PRO configuration (schedule, clusters, assignment sets, station rules, teams, scoring). Settings saved before 2026-10-28 may also carry `generatedWith`; it is no longer written.
 - The groups and tasks themselves are not in the extension: they are the WCIF's own group activities and assignments.
-- Competition extensions are part of the public WCIF. The settings must not hold private data.
+- Competition extensions are part of the public WCIF, so **nothing personal is published** (`publicSettings` in [`lib/wca-sync.ts`](../lib/wca-sync.ts)). Left out:
+  - people's properties (form and spreadsheet answers) and their column names;
+  - busy times and their notes;
+  - volunteers (names, WCA IDs, countries);
+  - the "avoid tasks" and "no tasks" lists, which may say why someone does not work;
+  - the people picked by hand in clusters (the cluster and its other rules are kept);
+  - the generation signature, which holds several of the above.
+
+  They stay in the browser's draft and in the downloaded WCIF (`grupitos.Draft`). Settings loaded from the WCA keep the personal parts the browser already has (`withPrivateSettings`).
 
 ## `grupitos.Draft` (files only)
 
@@ -32,5 +40,5 @@ The WCIF downloaded from the Publish step carries the whole draft (settings and 
 
 ## Other extensions the app writes
 
-- `org.cubingusa.natshelper.v1.Room` (stages), `org.cubingusa.natshelper.v1.Group` (stage of a group) and `org.cubingusa.natshelper.v1.Person` (properties), as [CompScript](https://github.com/cubingusa/compscript) uses them.
+- `org.cubingusa.natshelper.v1.Room` (stages), `org.cubingusa.natshelper.v1.Group` (stage of a group) and `org.cubingusa.natshelper.v1.Person` (properties), as [CompScript](https://github.com/cubingusa/compscript) uses them. Person properties go only in the downloaded file: publishing never sends them, and takes out those already at the WCA (keeping the rest of that extension).
 - `groupifier.ActivityConfig` with `featuredCompetitorWcaUserIds`, as [Groupifier](https://github.com/jonatanklosko/groupifier) uses it.

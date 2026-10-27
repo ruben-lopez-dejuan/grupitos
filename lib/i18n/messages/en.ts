@@ -170,7 +170,7 @@ export const en: Messages = {
   sync: {
     title: "Publish to the WCA",
     hint: "Saves the groups, the tasks (with stations and featured competitors) and the app's settings at the WCA, as Groupifier and Delegate Dashboard do. Whoever manages the competition finds them when opening it on any device. Before sending, the current WCIF is downloaded from the WCA, what changes is shown and you are asked; afterwards it is read back to check. Events, rounds, results, roles and registrations are not touched.",
-    public: "The app's settings go in the competition's WCIF, which is public, like Groupifier's: do not write private data in the notes.",
+    public: "The app's settings go in the competition's WCIF, which is public, like Groupifier's. Nothing personal is published: properties, busy times and their notes, volunteers, the \"Avoid tasks\" and \"No tasks\" lists and people picked by hand in clusters stay in this browser and in the WCIF you download.",
     offline: "Not available in the demo: there is no competition at the WCA here.",
     prepare: "Review changes",
     preparing: "Downloading the WCIF from the WCA…",
@@ -226,7 +226,7 @@ export const en: Messages = {
     remoteNewer: "The WCA has newer settings than this browser (saved on {date}{by}).",
     remoteBy: " by {name}",
     loadRemote: "Load the WCA's",
-    remoteLoaded: "Settings loaded from the WCA (saved on {date}{by}).",
+    remoteLoaded: "Settings loaded from the WCA (saved on {date}{by}). Personal data is not at the WCA: if this browser lacks it, import the downloaded WCIF.",
   },
   publish: {
     title: "Export WCIF",

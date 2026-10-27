@@ -7,7 +7,8 @@
 import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition, WcifActivity, WcifExtension } from "@/lib/competition-store";
 import { parseDraft, type WorkspaceSettings } from "@/lib/draft";
-import type { ProPeople } from "@/lib/pro/people";
+import type { PersonRole } from "@/lib/people";
+import { PERSON_EXTENSION_ID, type ProPeople } from "@/lib/pro/people";
 import { roundIdOf, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
 import { exportWcif, specUrlOf, type WcifExportReport } from "@/lib/wcif-export";
 import { isDraftExtension } from "@/lib/wcif-session";
@@ -20,6 +21,48 @@ const isSettingsExtension = (id: string) => id === SETTINGS_EXTENSION_ID || id =
 export const SETTINGS_SPEC_URL = "https://github.com/ruben-lopez-dejuan/grupitos/blob/main/docs/WCIF_EXTENSION.md";
 
 export type SavedSettings = { settings: WorkspaceSettings; generatedWith?: string; savedAt: string; savedBy?: string };
+
+/** Lists that may say why someone does not work (another job, health…). */
+const PRIVATE_ROLES: PersonRole[] = ["avoid", "notasks"];
+
+/**
+ * The settings without anything personal, for the public WCIF: people's properties (form and
+ * spreadsheet answers), busy times and their notes, volunteers, the "avoid tasks" and "no tasks"
+ * lists and the people picked by hand in clusters. They stay in this browser's draft and in the
+ * downloaded WCIF file; `withPrivateSettings` puts them back when settings come from the WCA.
+ */
+export function publicSettings(settings: WorkspaceSettings): WorkspaceSettings {
+  const roles = Object.fromEntries(Object.entries(settings.people.roles).filter(([role]) => !PRIVATE_ROLES.includes(role as PersonRole)));
+  const pro = settings.pro && {
+    ...settings.pro,
+    ...(settings.pro.people ? { people: { ...settings.pro.people, propertyKeys: [], properties: {}, volunteers: [], unavailable: [] } } : {}),
+    ...(settings.pro.segments ? { segments: settings.pro.segments.map(segment => ({ ...segment, rules: segment.rules.map(rule => rule.kind === "people" ? { ...rule, keys: [] } : rule) })) } : {}),
+  };
+  return { ...settings, people: { ...settings.people, roles }, ...(pro ? { pro } : {}) };
+}
+
+/** Settings from the WCA with the personal parts this browser keeps (see `publicSettings`). */
+export function withPrivateSettings(remote: WorkspaceSettings, local: WorkspaceSettings | undefined): WorkspaceSettings {
+  if (!local) return remote;
+  const roles = { ...remote.people.roles };
+  for (const role of PRIVATE_ROLES) if (local.people.roles[role]) roles[role] = local.people.roles[role];
+  const people = { ...remote.people, roles };
+  if (!remote.pro) return { ...remote, people };
+  const own = local.pro?.people;
+  const keys = new Map((local.pro?.segments ?? []).map(segment => [segment.id, segment.rules]));
+  return {
+    ...remote,
+    people,
+    pro: {
+      ...remote.pro,
+      ...(own ? { people: { ...(remote.pro.people ?? own), propertyKeys: own.propertyKeys, properties: own.properties, volunteers: own.volunteers, unavailable: own.unavailable } } : {}),
+      ...(remote.pro.segments ? { segments: remote.pro.segments.map(segment => ({ ...segment, rules: segment.rules.map((rule, index) => {
+        const mine = keys.get(segment.id)?.[index];
+        return rule.kind === "people" && mine?.kind === "people" ? { ...rule, keys: mine.keys } : rule;
+      }) })) } : {}),
+    },
+  };
+}
 type SettingsData = { version: 1; savedAt: string; savedBy?: string; encoding: "deflate-raw;base64"; payload: string };
 
 const GROUP_CODE = /-g\d+(?:-a\d+)?$/;
@@ -40,10 +83,12 @@ const fromBase64 = (text: string) => Uint8Array.from(atob(text), char => char.ch
 /**
  * The settings as a competition extension. The WCA keeps an extension in a 64 KB text column, so
  * they go compressed (a national championship's settings: about 40 KB of JSON, 7 KB compressed).
- * Competition extensions are part of the public WCIF: nothing here may be private.
+ * Competition extensions are part of the public WCIF: nothing here may be private, so the settings
+ * go through `publicSettings`, and the generation signature (which holds people's properties and
+ * busy times) is not sent.
  */
 export async function settingsExtension(saved: SavedSettings): Promise<WcifExtension> {
-  const payload = toBase64(await streamText(new TextEncoder().encode(JSON.stringify({ settings: saved.settings, generatedWith: saved.generatedWith })), new CompressionStream("deflate-raw")));
+  const payload = toBase64(await streamText(new TextEncoder().encode(JSON.stringify({ settings: publicSettings(saved.settings) })), new CompressionStream("deflate-raw")));
   const data: SettingsData = { version: 1, savedAt: saved.savedAt, ...(saved.savedBy ? { savedBy: saved.savedBy } : {}), encoding: "deflate-raw;base64", payload };
   return { id: SETTINGS_EXTENSION_ID, specUrl: SETTINGS_SPEC_URL, data };
 }
@@ -115,10 +160,22 @@ function withSpecUrls(node: unknown) {
 const assignmentKey = (item: { activityId: number; assignmentCode: string; stationNumber?: number | null }) => `${item.activityId}|${item.assignmentCode}|${item.stationNumber ?? ""}`;
 
 /**
+ * A person's extensions for the public WCIF: natshelper's person properties (form answers) are
+ * personal, so they are never sent, and those already at the WCA are taken out.
+ */
+function publicPersonExtensions(extensions: WcifExtension[]) {
+  return extensions.flatMap(item => {
+    if (item.id !== PERSON_EXTENSION_ID) return [item];
+    const { properties: _private, ...rest } = (item.data ?? {}) as Record<string, unknown>;
+    return Object.keys(rest).length ? [{ ...item, data: rest }] : [];
+  });
+}
+
+/**
  * What to send: the groups and assignments (when there is a proposal) built on the fresh WCIF, the
- * natshelper and Groupifier extensions, and the settings. Only `wcaUserId`, assignments and
+ * natshelper (stages) and Groupifier extensions, and the settings. Only `wcaUserId`, assignments and
  * extensions go per person, so roles and registrations stay as the WCA has them; events are not
- * sent at all.
+ * sent at all. Nothing personal is sent (see `publicSettings` and `publicPersonExtensions`).
  */
 export function buildPatch({ fresh, assignments, rounds, slots, schedule, people, settings }: {
   fresh: StoredCompetition;
@@ -146,7 +203,7 @@ export function buildPatch({ fresh, assignments, rounds, slots, schedule, people
     summary.added += added;
     summary.removed += removed;
     if (added || removed) summary.changedPeople += 1;
-    return { wcaUserId: person.wcaUserId!, assignments: person.assignments ?? [], extensions: person.extensions ?? [], ...(before.has(person.wcaUserId) ? {} : { registration: { isCompeting: false as const } }) };
+    return { wcaUserId: person.wcaUserId!, assignments: person.assignments ?? [], extensions: publicPersonExtensions(person.extensions ?? []), ...(before.has(person.wcaUserId) ? {} : { registration: { isCompeting: false as const } }) };
   });
   withSpecUrls(patch);
   return { patch, summary };

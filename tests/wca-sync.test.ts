@@ -8,7 +8,7 @@ import { groupSlots, importSchedule, withScheduledGroups } from "@/lib/pro/sched
 import { initialRounds } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { groupsFromWcif } from "@/lib/wcif-groups";
-import { buildPatch, changedRounds, checkPublished, readSettings, settingsExtension, SETTINGS_EXTENSION_ID } from "@/lib/wca-sync";
+import { buildPatch, changedRounds, checkPublished, publicSettings, readSettings, settingsExtension, SETTINGS_EXTENSION_ID, withPrivateSettings } from "@/lib/wca-sync";
 
 describe("publishing to the WCA", () => {
   const competition = { ...demoCompetition("large"), formatVersion: "2.2", extensions: [{ id: "groupifier.CompetitionConfig", specUrl: "https://groupifier.jonatanklosko.com/wcif-extensions/CompetitionConfig.json", data: { scorecardPaperSize: "a4" } }] };
@@ -27,7 +27,8 @@ describe("publishing to the WCA", () => {
     expect(extension.specUrl).toMatch(/^https:\/\//);
     expect(JSON.stringify(extension.data).length).toBeLessThan(JSON.stringify(settings).length / 3);
     const read = await readSettings({ ...competition, extensions: [extension] });
-    expect(read).toEqual({ ...saved, settings: parseDraft(JSON.stringify({ version: 3, settings, assignments: [] }))!.settings });
+    // The generation signature holds personal data, so it stays at home.
+    expect(read).toEqual({ ...saved, generatedWith: undefined, settings: parseDraft(JSON.stringify({ version: 3, settings: publicSettings(settings), assignments: [] }))!.settings });
     expect(await readSettings(competition)).toBeUndefined();
   });
 
@@ -83,7 +84,8 @@ describe("publishing to the WCA", () => {
     const sent = patch.persons!.find(person => person.wcaUserId === 987654)!;
     expect(sent.registration).toEqual({ isCompeting: false });
     expect(sent.assignments).toHaveLength(1);
-    expect(sent.extensions.find(item => item.id === "org.cubingusa.natshelper.v1.Person")?.data).toEqual({ properties: { team: "Voluntario normal" } });
+    // Their properties are personal: never sent.
+    expect(sent.extensions.find(item => item.id === "org.cubingusa.natshelper.v1.Person")).toBeUndefined();
     // Only new people carry a registration: the WCA would otherwise touch existing ones.
     expect(patch.persons!.filter(person => person.registration)).toHaveLength(1);
     // Once the WCA has them, their tasks come back to the volunteer, not to a new person.
@@ -93,6 +95,44 @@ describe("publishing to the WCA", () => {
     const again = buildPatch({ fresh: reread, assignments: [...assignments, row], rounds, slots, schedule, people, settings: await settingsExtension(saved) });
     expect(again.summary.newStaff).toBe(0);
     expect(again.patch.persons!.some(person => person.registration)).toBe(false);
+  });
+
+  it("publishes nothing personal, and loading from the WCA keeps this browser's personal data", async () => {
+    const [first, second] = competition.persons!;
+    const key = String(first.registrantId);
+    const people = {
+      propertyKeys: ["phone", "team"],
+      properties: { [key]: { phone: "600123123", team: "Mezcladores" } },
+      volunteers: [{ key: "vol-1", name: "Ana Sin Marca", wcaId: "2020ANAS01" }],
+      unavailable: [{ id: "u1", personKey: key, start: "2026-10-24T10:00", end: "2026-10-24T12:00", note: "Médico" }],
+    };
+    const segments = [{ id: "family", name: "Familia", match: "all" as const, rules: [{ kind: "people" as const, keys: [key] }, { kind: "newcomer" as const }] }];
+    const personal: WorkspaceSettings = { ...settings, people: { ...settings.people, roles: { ...settings.people.roles, notasks: [key], avoid: [key], staff: [key] } }, pro: { enabled: true, schedule, people, segments } };
+    const extension = await settingsExtension({ ...saved, settings: personal, generatedWith: JSON.stringify({ people }) });
+    const read = (await readSettings({ ...competition, extensions: [extension] }))!;
+    const text = JSON.stringify(read);
+    for (const secret of ["600123123", "Mezcladores", "phone", "Ana Sin Marca", "2020ANAS01", "Médico"]) expect(text).not.toContain(secret);
+    expect(read.generatedWith).toBeUndefined();
+    expect(read.settings.people.roles).not.toHaveProperty("notasks");
+    expect(read.settings.people.roles).not.toHaveProperty("avoid");
+    // Staff lists and cluster rules are not personal and travel as before.
+    expect(read.settings.people.roles.staff).toEqual([key]);
+    expect(read.settings.pro?.segments?.[0].rules).toEqual([{ kind: "people", keys: [] }, { kind: "newcomer" }]);
+    // Back on a device that has them, they are kept.
+    const merged = withPrivateSettings(read.settings, personal);
+    expect(merged.pro?.people).toEqual(people);
+    expect(merged.pro?.segments).toEqual(segments);
+    expect(merged.people.roles).toMatchObject({ notasks: [key], avoid: [key], staff: [key] });
+    expect(withPrivateSettings(read.settings, undefined)).toBe(read.settings);
+
+    // natshelper properties already at the WCA are taken out; the rest of the extension stays.
+    const natshelper = "org.cubingusa.natshelper.v1.Person";
+    const fresh = { ...competition, persons: competition.persons!.map(person => person === first ? { ...person, extensions: [{ id: natshelper, specUrl: "https://example.org", data: { properties: { phone: "600123123" }, other: 1 } }] } : person === second ? { ...person, extensions: [{ id: natshelper, specUrl: "https://example.org", data: { properties: { phone: "600999999" } } }] } : person) };
+    const { patch } = buildPatch({ fresh, assignments, rounds, slots, schedule, people, settings: extension });
+    expect(JSON.stringify(patch)).not.toContain("600123123");
+    expect(JSON.stringify(patch)).not.toContain("600999999");
+    expect(patch.persons!.find(person => person.wcaUserId === first.wcaUserId)?.extensions.find(item => item.id === natshelper)?.data).toEqual({ other: 1 });
+    expect(patch.persons!.find(person => person.wcaUserId === second.wcaUserId)?.extensions.some(item => item.id === natshelper)).toBe(false);
   });
 
   it("notices round times changed at the WCA since the import", () => {

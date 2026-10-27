@@ -172,7 +172,7 @@ export const es = {
   sync: {
     title: "Publicar en la WCA",
     hint: "Guarda en la WCA los grupos, las tareas (con estación y destacados) y los ajustes de la app, como hacen Groupifier y Delegate Dashboard. Quien gestione la competición los encuentra al abrirla en cualquier dispositivo. Antes de enviar se descarga el WCIF actual de la WCA, se enseña qué cambia y se pide confirmación; después se vuelve a leer para comprobarlo. No se tocan pruebas, rondas, resultados, roles ni inscripciones.",
-    public: "Los ajustes de la app van en el WCIF de la competición, que es público, igual que los de Groupifier: no escribas datos privados en las notas.",
+    public: "Los ajustes de la app van en el WCIF de la competición, que es público, igual que los de Groupifier. Nada personal se publica: propiedades, horas no disponibles y sus notas, voluntarios, las listas «Evitar tareas» y «Sin tareas» y las personas elegidas a mano en clusters se quedan en este navegador y en el WCIF que descargas.",
     offline: "No disponible en la demo: aquí no hay competición en la WCA.",
     prepare: "Revisar cambios",
     preparing: "Descargando el WCIF de la WCA…",
@@ -228,7 +228,7 @@ export const es = {
     remoteNewer: "La WCA tiene ajustes más nuevos que los de este navegador (guardados el {date}{by}).",
     remoteBy: " por {name}",
     loadRemote: "Cargar los de la WCA",
-    remoteLoaded: "Ajustes cargados de la WCA (guardados el {date}{by}).",
+    remoteLoaded: "Ajustes cargados de la WCA (guardados el {date}{by}). Los datos personales no están en la WCA: si faltan en este navegador, importa el WCIF descargado.",
   },
   publish: {
     title: "Exportar WCIF",

@@ -2,7 +2,7 @@
 
 import { AppMark } from "@/components/app-mark";
 import { ResumeFromFile, savedAtText, storeSession, type ReadFile } from "@/components/resume-from-file";
-import { readSettings, type SavedSettings } from "@/lib/wca-sync";
+import { readSettings, withPrivateSettings, type SavedSettings } from "@/lib/wca-sync";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { AssignmentSetsPanel } from "@/components/assignment-sets-panel";
@@ -154,7 +154,9 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     await saveCompetition(data);
     setCompetition(data);
     const defaults = defaultSettings(data);
-    const base = { ...defaults, ...saved.settings, people: migrateWcaStaffRoles(saved.settings.people, data), options: normalizeOptions(saved.settings.options), printing: { ...defaults.printing, ...saved.settings.printing } };
+    // The WCA has no personal data (see publicSettings): keep this browser's.
+    const remote = withPrivateSettings(saved.settings, parseDraft(localStorage.getItem(draftStorageKey(data.id)))?.settings);
+    const base = { ...defaults, ...remote, people: migrateWcaStaffRoles(remote.people, data), options: normalizeOptions(remote.options), printing: { ...defaults.printing, ...remote.printing } };
     const result = hasWcifGroups(data) ? withWcifGroups(data, base) : { settings: base, proposal: [] };
     setSettings(result.settings);
     setProposal(result.proposal);
