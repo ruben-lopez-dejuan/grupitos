@@ -139,6 +139,8 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
 ### Personas, voluntarios y equipos
 
+- **No disponibles** (también sin PRO, en Personas): una franja horaria de un día («el delegado se va a las 17:00») o «mientras compite X». Esas personas no reciben tareas entonces. Sin PRO, la hora de cada grupo sale del horario de la WCA; su propio grupo de competición no se mueve, pero la revisión avisa. No se publica.
+
 - **Voluntarios que no compiten:**
   - se pueden añadir a mano o importar;
   - si tienen WCA ID, el nombre se toma de la WCA, porque el WCA ID es lo que los identifica.
@@ -150,7 +152,6 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - **cabeceras:** entiende las de CompScript (`identifier:`, `property:`, `ignore:`);
   - **emparejamiento:** por WCA ID, luego número de inscripción, correo y nombre;
   - **comprobación:** enseña antes cómo empareja cada fila y nunca duplica a nadie. «Fusionar duplicados» arregla las copias de importaciones antiguas.
-- **Indisponibilidades:** una franja horaria o «mientras compite X».
 - **Equipos en vivo:** cada valor de la propiedad de equipo tiene un comportamiento:
   - **tipo:** mantener roles, voluntarios, evitar tareas, sin tareas o data entry;
   - **sala:** primero allí o solo allí;

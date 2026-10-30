@@ -121,11 +121,13 @@ describe("publishing to the WCA", () => {
       unavailable: [{ id: "u1", personKey: key, start: "2026-10-24T10:00", end: "2026-10-24T12:00", note: "Médico" }],
     };
     const segments = [{ id: "family", name: "Familia", match: "all" as const, rules: [{ kind: "people" as const, keys: [key] }, { kind: "newcomer" as const }] }];
-    const personal: WorkspaceSettings = { ...settings, people: { ...settings.people, roles: { ...settings.people.roles, notasks: [key], avoid: [key], staff: [key] } }, pro: { enabled: true, schedule, people, segments } };
+    const leaving = [{ id: "u9", personKey: key, start: "2026-10-24T17:00", end: "2026-10-24T20:00", note: "Se va pronto" }];
+    const personal: WorkspaceSettings = { ...settings, people: { ...settings.people, roles: { ...settings.people.roles, notasks: [key], avoid: [key], staff: [key] }, unavailable: leaving }, pro: { enabled: true, schedule, people, segments } };
     const extension = await settingsExtension({ ...saved, settings: personal, generatedWith: JSON.stringify({ people }) });
     const read = (await readSettings({ ...competition, extensions: [extension] }))!;
     const text = JSON.stringify(read);
-    for (const secret of ["600123123", "Mezcladores", "phone", "Ana Sin Marca", "2020ANAS01", "Médico"]) expect(text).not.toContain(secret);
+    for (const secret of ["600123123", "Mezcladores", "phone", "Ana Sin Marca", "2020ANAS01", "Médico", "Se va pronto"]) expect(text).not.toContain(secret);
+    expect(read.settings.people).not.toHaveProperty("unavailable");
     expect(read.generatedWith).toBeUndefined();
     expect(read.settings.people.roles).not.toHaveProperty("notasks");
     expect(read.settings.people.roles).not.toHaveProperty("avoid");
@@ -137,6 +139,7 @@ describe("publishing to the WCA", () => {
     expect(merged.pro?.people).toEqual(people);
     expect(merged.pro?.segments).toEqual(segments);
     expect(merged.people.roles).toMatchObject({ notasks: [key], avoid: [key], staff: [key] });
+    expect(merged.people.unavailable).toEqual(leaving);
     expect(withPrivateSettings(read.settings, undefined)).toBe(read.settings);
 
     // natshelper properties already at the WCA are taken out; the rest of the extension stays.

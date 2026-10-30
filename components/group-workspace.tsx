@@ -12,6 +12,7 @@ import { LanguageSwitcher, useEventName, useI18n } from "@/components/i18n";
 import { GroupReview } from "@/components/group-review";
 import { Hint } from "@/components/hint";
 import { PeoplePanel } from "@/components/people-panel";
+import { UnavailabilityPanel } from "@/components/unavailability-panel";
 import { PrintingPanel } from "@/components/printing-panel";
 import { PublishPanel } from "@/components/publish-panel";
 import { ProTemplatePanel } from "@/components/pro-template-panel";
@@ -26,9 +27,9 @@ import { TASK_CODES, type GeneratedAssignment, type TaskRole } from "@/lib/assig
 import { keyOf } from "@/lib/i18n";
 import { getCompetition, saveCompetition, type StoredCompetition } from "@/lib/competition-store";
 import { groupsFromWcif, hasWcifGroups, wcifGroupsNeedStages } from "@/lib/wcif-groups";
-import { draftStorageKey, generationSignature, parseDraft, type Draft, type WorkspaceSettings } from "@/lib/draft";
+import { draftStorageKey, generationSignature, parseDraft, withSharedUnavailability, type Draft, type WorkspaceSettings } from "@/lib/draft";
 import { TOP_TOGETHER_COUNT, topTogetherCountOf, normalizeOptions, DEFAULT_OPTIONS, generateAssignments, groupSizes, type AssignmentOptions } from "@/lib/group-generator";
-import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif } from "@/lib/people";
+import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, rekeyPeople, staleKeys } from "@/lib/people";
 import { fetchWcaNames } from "@/lib/wca-persons";
 import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, linkedVolunteers, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
 import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
@@ -136,8 +137,10 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   }, []);
 
   /** Opens a competition with its draft, or, without one, the WCIF's own groups if it has any. */
-  const openCompetition = useCallback((data: StoredCompetition, draft: Draft | undefined) => {
+  const openCompetition = useCallback((data: StoredCompetition, saved: Draft | undefined) => {
     setCompetition(data);
+    // Someone the WCA has registered since (staff with tasks, when publishing) has a new key.
+    const draft = saved && rekeyPeople({ ...saved, settings: saved.settings && withSharedUnavailability(saved.settings) }, staleKeys(data));
     const defaults = defaultSettings(data);
     // First time here and the WCIF already has groups: open them for review.
     if (!draft && hasWcifGroups(data)) return openWcifGroups(data, wcifGroupsNeedStages(data) ? { ...defaults, pro: { enabled: true, schedule: importSchedule(data, roundId => defaults.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : defaults);
@@ -156,7 +159,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     setCompetition(data);
     const defaults = defaultSettings(data);
     // The WCA has no personal data (see publicSettings): keep this browser's.
-    const remote = withPrivateSettings(saved.settings, parseDraft(localStorage.getItem(draftStorageKey(data.id)))?.settings);
+    const remote = rekeyPeople(withSharedUnavailability(withPrivateSettings(saved.settings, parseDraft(localStorage.getItem(draftStorageKey(data.id)))?.settings)), staleKeys(data));
     const base = { ...defaults, ...remote, people: migrateWcaStaffRoles(remote.people, data), options: normalizeOptions(remote.options), printing: { ...defaults.printing, ...remote.printing } };
     const result = hasWcifGroups(data) ? withWcifGroups(data, base) : { settings: base, proposal: [] };
     setSettings(result.settings);
@@ -262,6 +265,12 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   async function afterPublish(fresh: StoredCompetition, savedAt: string) {
     await saveCompetition(fresh);
     setCompetition(fresh);
+    // Staff the WCA has just registered to keep their tasks now have a registrant id as key.
+    const aliases = staleKeys(fresh);
+    if (aliases.size) {
+      setSettings(current => current && rekeyPeople(current, aliases));
+      setProposal(current => rekeyPeople(current, aliases));
+    }
     setRemoteSavedAt(savedAt);
     setRemoteNewer(undefined);
   }
@@ -303,6 +312,10 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const signature = useMemo(() => settings ? generationSignature(settings) : "", [settings]);
   const pro = settings?.pro?.enabled ? settings.pro : undefined;
   const slots = useMemo(() => pro ? groupSlots(pro.schedule) : undefined, [pro]);
+  /** Without PRO, the WCA schedule's group times: only for unavailabilities. */
+  const wcaSchedule = useMemo(() => !pro && competition && settings ? importSchedule(competition, roundId => settings.rounds.find(round => round.id === roundId)?.groups ?? 1) : undefined, [pro, competition, settings]);
+  const unavailableInUse = useMemo(() => [...(settings?.people.unavailable ?? []), ...(teamState?.unavailable ?? [])], [settings?.people.unavailable, teamState]);
+  const availabilitySlots = useMemo(() => wcaSchedule && settings?.people.unavailable?.length ? groupSlots(wcaSchedule) : undefined, [wcaSchedule, settings?.people.unavailable]);
   /** Rounds as generated: in PRO mode, scheduled rounds take their groups from the schedule. */
   const effectiveRounds = useMemo(() => {
     if (!settings || !competition) return [];
@@ -416,7 +429,13 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   }
   // Until first edited, PRO people start from the properties already in the WCIF.
   const proPeople: ProPeople = settings.pro?.people ?? { ...EMPTY_PRO_PEOPLE, ...importPersonProperties(competition) };
-  const setProPeople = (next: ProPeople) => updatePro(() => ({ people: next }));
+  const setProPeople = (next: ProPeople) => setSettings(current => {
+    if (!current?.pro) return current;
+    // A removed volunteer's unavailabilities go with them.
+    const gone = new Set((current.pro.people?.volunteers ?? []).map(volunteer => volunteer.key).filter(key => !next.volunteers.some(volunteer => volunteer.key === key)));
+    const unavailable = current.people.unavailable?.filter(item => !gone.has(item.personKey) && !gone.has(item.whileCompeting ?? ""));
+    return { ...current, people: { ...current.people, ...(unavailable ? { unavailable } : {}) }, pro: { ...current.pro, enabled: true, people: next } };
+  });
   /** Volunteers that copy a registered person, and properties of nobody: merged or dropped in one click. */
   const peopleRepair = pro ? { copies: findVolunteerCopies(competition, proPeople).length, orphans: orphanPropertyKeys(competition, proPeople).length } : undefined;
   const repairPeople = () => setSettings(current => {
@@ -561,7 +580,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const delegatesWithoutDuties = options.assignDelegateDuties && !peopleInUse.delegateDutyIds.some(key => isDelegate(peopleInUse, key));
 
   /** Everything the generator needs except the rounds to generate. */
-  const generationInput = { competition, stations, zoneMode, seating, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
+  const generationInput = { competition, stations, zoneMode, seating, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: unavailableInUse, availabilitySlots, eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
   // Mid-competition: enabled rounds with known competitors that the proposal does not have yet.
   const newRounds = proposal.length ? activeRounds.filter(round => round.competitorsKnown && !pastRoundIds.has(round.id) && !generatedRoundIds.has(round.id)) : [];
   const roundName = (round: { eventId: string; roundNumber: number }) => `${eventName(round.eventId)} R${round.roundNumber}`;
@@ -590,6 +609,11 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
       const data = await response.json() as StoredCompetition;
       await saveCompetition(data);
       setCompetition(data);
+      const aliases = staleKeys(data);
+      if (aliases.size) {
+        setSettings(current => current && rekeyPeople(current, aliases));
+        setProposal(current => rekeyPeople(current, aliases));
+      }
       // Someone else may have saved newer settings at the WCA.
       const saved = await readSettings(data);
       if (saved && saved.savedAt > (remoteSavedAt ?? "")) setRemoteNewer({ data, saved });
@@ -777,6 +801,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         </section>}
 
         {tab === "people" && <><PeoplePanel people={pro ? everyone(competition, proPeople) : rolePeople} settings={settings.people} inUse={peopleInUse} fromTeam={teamState?.fromTeam} onChange={next => update({ people: next })} delegateDuties={options.assignDelegateDuties} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} />
+          <UnavailabilityPanel people={pro ? everyone(competition, proPeople) : rolePeople} days={(pro?.schedule ?? wcaSchedule)?.days ?? []} value={settings.people.unavailable ?? []} onChange={unavailable => update({ people: { ...settings.people, unavailable } })} />
           {pro && <ProPeoplePanel repair={peopleRepair} onRepair={repairPeople} people={everyone(competition, proPeople)} days={pro.schedule.days} value={proPeople} onChange={setProPeople} lanes={laneChoices(pro.schedule)} onReimport={() => { const imported = importPersonProperties(competition); setProPeople({ ...proPeople, propertyKeys: [...new Set([...proPeople.propertyKeys, ...imported.propertyKeys])], properties: { ...proPeople.properties, ...imported.properties } }); }} />}
         </>}
 
@@ -832,7 +857,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
             const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
             return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
-          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : undefined} segmentFilters={segmentFilters} />}
+          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={unavailableInUse} availabilitySlots={availabilitySlots} segmentFilters={segmentFilters} />}
         </>}
 
         {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} outdated={proposalOutdated} userName={userName} offline={offline} lastPublished={remoteSavedAt} onPublished={afterPublish} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}

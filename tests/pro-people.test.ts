@@ -3,7 +3,8 @@ import type { GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { buildDemoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
-import { byName, hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, staffRoleFromWcif } from "@/lib/people";
+import { byName, hasWcaJob, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, rekeyPeople, staffRoleFromWcif, staleKeys } from "@/lib/people";
+import { withSharedUnavailability, type WorkspaceSettings } from "@/lib/draft";
 import { everyone, findVolunteerCopies, importPersonProperties, mergeVolunteerCopies, newVolunteerKey, normalizeProPeople, PERSON_EXTENSION_ID, propertyValues, unavailableWindows, volunteerPerson, withWcaNames } from "@/lib/pro/people";
 import { suggestTeamSetup, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams, type TeamSetup } from "@/lib/pro/teams";
 import { groupSlots, overlaps, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
@@ -93,6 +94,52 @@ describe("generator with PRO people", () => {
     const parentDuties = assignments.find(item => item.personId === parent)?.tasks.filter(task => task.role !== "competitor") ?? [];
     expect(parentDuties.every(task => !overlaps(windowOf(task.group), windowOf(kidGroup)))).toBe(true);
     expect(assignments.find(item => item.personId === other)?.tasks.filter(task => task.role !== "competitor") ?? []).toEqual([]);
+  });
+
+  it("without PRO, keeps unavailable people out of tasks using the WCA schedule's group times", () => {
+    const [parent, kid, other] = competition.persons!.map(personKey);
+    const unavailable = [{ id: "u1", personKey: parent, whileCompeting: kid }, { id: "u2", personKey: other, start: day("10:20"), end: day("11:00") }];
+    const assignments = generateAssignments({ competition, rounds, stations: 8, zoneMode: "fixed", people, options: DEFAULT_OPTIONS, availabilitySlots: slots, unavailable });
+    const kidGroup = assignments.find(item => item.personId === kid)!.tasks.find(task => task.role === "competitor")!.group;
+    expect(assignments.find(item => item.personId === parent)?.tasks.some(task => task.role !== "competitor" && task.group === kidGroup)).not.toBe(true);
+    // From 10:20 they miss groups 2 and 3 (10:20-11:00), not group 1.
+    expect(assignments.find(item => item.personId === other)?.tasks.filter(task => task.role !== "competitor" && task.group > 1) ?? []).toEqual([]);
+    // Their own competitor groups do not move without PRO: the review warns instead.
+    expect(validateAvailability(assignments, slots, unavailable).filter(issue => issue.params.task !== "competitor")).toEqual([]);
+  });
+});
+
+describe("person keys after the WCA registers someone", () => {
+  it("replaces a WCA ID or name key by the new registrant id, everywhere but in text", () => {
+    const competition = { id: "K", name: "K", persons: [
+      { name: "Nico Delega", wcaId: "2017NICO01", registrantId: 38, wcaUserId: 1, roles: ["delegate"], registration: { status: "accepted", isCompeting: false, eventIds: [] } },
+      { name: "Olga Organiza", wcaId: null, registrantId: 39, wcaUserId: 2, roles: ["organizer"], registration: { status: "accepted", isCompeting: false, eventIds: [] } },
+      { name: "Sin Inscripción", wcaId: "2019SINI01", registrantId: null, wcaUserId: 3, roles: ["organizer"] },
+    ] } as unknown as StoredCompetition;
+    const aliases = staleKeys(competition);
+    expect([...aliases]).toEqual([["2017NICO01", "38"], ["Olga Organiza", "39"]]);
+    const before = {
+      roles: { delegate: ["2017NICO01", "38"], organizer: ["Olga Organiza", "2019SINI01"] },
+      unavailable: [{ id: "u1", personKey: "2017NICO01", note: "2017NICO01 se va" }],
+      properties: { "Olga Organiza": { team: "Olga Organiza" } },
+      rows: [{ id: "333-r1:2017NICO01", personId: "2017NICO01", name: "Nico Delega", wcaId: "2017NICO01", groups: [2, 2] }],
+    };
+    expect(rekeyPeople(before, aliases)).toEqual({
+      roles: { delegate: ["38"], organizer: ["39", "2019SINI01"] },
+      unavailable: [{ id: "u1", personKey: "38", note: "2017NICO01 se va" }],
+      properties: { "39": { team: "39" } },
+      rows: [{ id: "333-r1:38", personId: "38", name: "Nico Delega", wcaId: "2017NICO01", groups: [2, 2] }],
+    });
+    expect(rekeyPeople(before, new Map())).toBe(before);
+  });
+
+  it("moves PRO unavailabilities to the shared people settings", () => {
+    const item = { id: "u1", personKey: "1", start: day("10:00"), end: day("11:00") };
+    const settings = { people: { roles: {}, trustedIds: [], delegateDutyIds: [] }, pro: { enabled: true, people: { propertyKeys: [], properties: {}, volunteers: [], unavailable: [item] } } } as unknown as WorkspaceSettings;
+    const moved = withSharedUnavailability(settings);
+    expect(moved.people.unavailable).toEqual([item]);
+    expect(moved.pro?.people?.unavailable).toEqual([]);
+    expect(withSharedUnavailability(moved)).toBe(moved);
   });
 });
 

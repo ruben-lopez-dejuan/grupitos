@@ -170,11 +170,12 @@ export function mergeVolunteerCopies(competition: StoredCompetition, people: Pro
   const order = Object.keys(people.properties).sort((a, b) => Number(moved.has(a)) - Number(moved.has(b)) || a.localeCompare(b, undefined, { numeric: true }));
   for (const key of order) properties[target(key)] = { ...properties[target(key)], ...people.properties[key] };
   const remap = (keys: string[]) => [...new Set(keys.map(target))];
+  const remapBusy = (items: Unavailability[]) => items.map(item => ({ ...item, personKey: target(item.personKey), ...(item.whileCompeting !== undefined ? { whileCompeting: target(item.whileCompeting) } : {}) })) as Unavailability[];
   const mergedPeople: ProPeople = {
     ...people,
     volunteers: people.volunteers.filter(volunteer => !moved.has(volunteer.key)),
     properties,
-    unavailable: people.unavailable.map(item => ({ ...item, personKey: target(item.personKey), ...(item.whileCompeting !== undefined ? { whileCompeting: target(item.whileCompeting) } : {}) })) as Unavailability[],
+    unavailable: remapBusy(people.unavailable),
   };
   const orphans = orphanPropertyKeys(competition, mergedPeople);
   for (const key of orphans) delete mergedPeople.properties[key];
@@ -183,6 +184,7 @@ export function mergeVolunteerCopies(competition: StoredCompetition, people: Pro
     roles: Object.fromEntries(Object.entries(settings.roles).map(([role, keys]) => [role, remap(keys ?? [])])),
     trustedIds: remap(settings.trustedIds),
     delegateDutyIds: remap(settings.delegateDutyIds),
+    ...(settings.unavailable ? { unavailable: remapBusy(settings.unavailable) } : {}),
   };
   return { people: mergedPeople, settings: mergedSettings, merged: copies.length, orphans: orphans.length };
 }

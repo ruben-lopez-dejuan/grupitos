@@ -38,7 +38,8 @@ export function publicSettings(settings: WorkspaceSettings): WorkspaceSettings {
     ...(settings.pro.people ? { people: { ...settings.pro.people, propertyKeys: [], properties: {}, volunteers: [], unavailable: [] } } : {}),
     ...(settings.pro.segments ? { segments: settings.pro.segments.map(segment => ({ ...segment, rules: segment.rules.map(rule => rule.kind === "people" ? { ...rule, keys: [] } : rule) })) } : {}),
   };
-  return { ...settings, people: { ...settings.people, roles }, ...(pro ? { pro } : {}) };
+  const { unavailable: _unavailable, ...people } = settings.people;
+  return { ...settings, people: { ...people, roles }, ...(pro ? { pro } : {}) };
 }
 
 /** Settings from the WCA with the personal parts this browser keeps (see `publicSettings`). */
@@ -46,7 +47,7 @@ export function withPrivateSettings(remote: WorkspaceSettings, local: WorkspaceS
   if (!local) return remote;
   const roles = { ...remote.people.roles };
   for (const role of PRIVATE_ROLES) if (local.people.roles[role]) roles[role] = local.people.roles[role];
-  const people = { ...remote.people, roles };
+  const people = { ...remote.people, roles, ...(local.people.unavailable ? { unavailable: local.people.unavailable } : {}) };
   if (!remote.pro) return { ...remote, people };
   const own = local.pro?.people;
   const keys = new Map((local.pro?.segments ?? []).map(segment => [segment.id, segment.rules]));

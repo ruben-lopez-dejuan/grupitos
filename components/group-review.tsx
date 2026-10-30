@@ -89,7 +89,7 @@ function attemptNumber(roundSlots: GroupSlot[], slot: GroupSlot) {
   return slot.attempt ?? (roundSlots.some(item => item.linkedTo === slot.group) ? 1 : undefined);
 }
 
-export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, rooms }: {
+export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, availabilitySlots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -104,6 +104,8 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
   rooms?: ProRoom[];
   /** PRO mode: people's unavailabilities, checked against what they are given. */
   unavailable?: Unavailability[];
+  /** Without PRO: group times from the WCA schedule, only to check unavailabilities. */
+  availabilitySlots?: Map<string, GroupSlot[]>;
   /** PRO mode: segments offered as row filters. */
   segmentFilters?: SegmentFilter[];
   /** Rounds already held (with results): listed after the ones still to review, apart. */
@@ -169,13 +171,14 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
   useEffect(() => { onChange(assignments); }, [assignments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const issuesByRound = useMemo(() => {
-    const timeIssues = slots ? [...validateTimes(assignments, slots), ...validateAvailability(assignments, slots, unavailable)] : [];
+    const timed = slots ?? availabilitySlots;
+    const timeIssues = [...(slots ? validateTimes(assignments, slots) : []), ...(timed ? validateAvailability(assignments, timed, unavailable) : [])];
     return new Map(rounds.map(round => {
       const rows = assignments.filter(item => item.roundId === round.id);
       const issues = [...validateRound(round.id, rows, rules[round.id] ?? fallbackRules(rows)), ...timeIssues.filter(issue => issue.roundId === round.id)];
       return [round.id, issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (a.group ?? 0) - (b.group ?? 0))];
     }));
-  }, [assignments, rounds, rules, slots, unavailable]);
+  }, [assignments, rounds, rules, slots, availabilitySlots, unavailable]);
   const roundSlots = slots?.get(roundId);
 
   // People in the round first, by seed; staff who only work in this round after them, by name.

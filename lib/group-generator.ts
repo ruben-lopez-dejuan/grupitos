@@ -257,7 +257,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, seating, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, seating, people, options, slots, availabilitySlots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -272,8 +272,13 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
   eventWindows?: Map<string, TimeWindow[]>;
   /** PRO mode: volunteers who do not compete; they can take staff tasks. */
   extraPeople?: WcifPerson[];
-  /** PRO mode: times when people cannot be given tasks (needs `slots`). */
+  /** Times when people cannot be given tasks (needs `slots` or `availabilitySlots`). */
   unavailable?: Unavailability[];
+  /**
+   * Without PRO: when each group is, from the WCA schedule. Only keeps unavailable people out of
+   * tasks in the groups they miss; nothing else uses times.
+   */
+  availabilitySlots?: Map<string, GroupSlot[]>;
   /** PRO mode: who (keys) may judge, scramble or run, per event; absent means the usual rules. */
   eligible?: Partial<Record<"judge" | "scrambler" | "runner", Map<string, Set<string>>>>;
   /** PRO mode: stations and staff per group where a room or stage overrides the round's values. */
@@ -428,8 +433,22 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
     const days = competingDays.get(key);
     return !!days && !days.has(day);
   };
-  /** Members of a room's team work only in that room. */
-  const blockedHere = (roundId: string, group: number, key: string) => !!laneTeams?.members.has(key) && !teamHere(roundId, group, key);
+  // Without PRO times, unavailable people are kept out of the groups whose times they miss.
+  const awayGroups = new Set<string>();
+  if (!slots && availabilitySlots && unavailable.length) {
+    const groupWindows = (roundId: string, group: number) => availabilitySlots.get(roundId)?.find(slot => slot.group === group)?.windows ?? [];
+    const competing = new Map<string, TimeWindow[]>();
+    for (const plan of plans) plan.groups.forEach((members, index) => {
+      for (const person of members) competing.set(personKey(person), [...(competing.get(personKey(person)) ?? []), ...groupWindows(plan.round.id, index + 1)]);
+    });
+    const away = unavailableWindows(unavailable, other => competing.get(other) ?? []);
+    for (const plan of plans) plan.groups.forEach((_, index) => {
+      const windows = groupWindows(plan.round.id, index + 1);
+      for (const [key, busy] of away) if (windows.some(window => busy.some(item => overlaps(item, window)))) awayGroups.add(`${plan.round.id}:${index + 1}:${key}`);
+    });
+  }
+  /** Members of a room's team work only in that room; unavailable people not in groups they miss. */
+  const blockedHere = (roundId: string, group: number, key: string) => awayGroups.has(`${roundId}:${group}:${key}`) || (!!laneTeams?.members.has(key) && !teamHere(roundId, group, key));
 
   // Delegate duty is planned for the whole competition first, scarcest group first: groups in a
   // side room, or at times when most delegates compete, are served before the busy main stages

@@ -1,4 +1,5 @@
 import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
+import type { Unavailability } from "@/lib/pro/people";
 import { acceptedPeople, personKey } from "@/lib/rounds";
 
 /**
@@ -16,6 +17,8 @@ export type PeopleSettings = {
   delegateDutyIds: string[];
   /** 2 once `staff-*` roles follow Groupifier's meaning (see `migrateWcaStaffRoles`). */
   wcaStaffRoles?: 2;
+  /** When people cannot take tasks (a delegate leaving early…), in both modes. Personal: never published. */
+  unavailable?: Unavailability[];
 };
 
 /** WCA roles for a staff job, as Groupifier's roles manager sets them. */
@@ -104,4 +107,43 @@ export function ageOf(person: WcifPerson, today = new Date()) {
 
 export function competitionCountry(competition: StoredCompetition) {
   return competition.schedule?.venues?.find(venue => venue.countryIso2)?.countryIso2;
+}
+
+/**
+ * Keys that changed because the WCA registered someone: people without a registration are keyed
+ * by WCA ID (or name), and by registrant id once registered (as staff, when publishing their tasks).
+ */
+export function staleKeys(competition: StoredCompetition): Map<string, string> {
+  const persons = competition.persons ?? [];
+  const current = new Set(persons.map(personKey));
+  const aliases = new Map<string, string>();
+  for (const person of persons) {
+    if (person.registrantId === null || person.registrantId === undefined || person.appKey) continue;
+    const old = person.wcaId ?? person.name;
+    if (old && !current.has(old)) aliases.set(old, personKey(person));
+  }
+  return aliases;
+}
+
+/** Fields that hold text about a person, never a key. */
+const TEXT_FIELDS = new Set(["name", "wcaId", "note", "label", "title"]);
+
+/** Settings or a proposal with stale person keys (see `staleKeys`) replaced, in values and object keys. */
+export function rekeyPeople<T>(value: T, aliases: Map<string, string>): T {
+  if (!aliases.size) return value;
+  const walk = (item: unknown): unknown => {
+    if (typeof item === "string") {
+      // Row ids are `roundId:personKey`.
+      const at = item.lastIndexOf(":");
+      return aliases.get(item) ?? (at > 0 && aliases.has(item.slice(at + 1)) ? `${item.slice(0, at + 1)}${aliases.get(item.slice(at + 1))}` : item);
+    }
+    if (Array.isArray(item)) {
+      const mapped = item.map(walk);
+      // A list of keys may now hold the same person twice.
+      return item.some(inner => typeof inner === "string" && aliases.has(inner)) ? [...new Set(mapped)] : mapped;
+    }
+    if (!item || typeof item !== "object") return item;
+    return Object.fromEntries(Object.entries(item).map(([key, inner]) => [aliases.get(key) ?? key, TEXT_FIELDS.has(key) ? inner : walk(inner)]));
+  };
+  return walk(value) as T;
 }

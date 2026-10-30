@@ -778,7 +778,7 @@ export const es = {
     importHint: "Lee el formulario de voluntarios (Google Sheets o CSV) y vuelca sus columnas como propiedades, como ReadSpreadsheet de CompScript.",
     "not-eligible": "{name} tiene «{task}» en G{group}, pero no está en el cluster que puede hacerlo.",
     unavailable: "No disponibles",
-    unavailableHint: "Franjas en las que alguien no puede recibir tareas, o «mientras compite» otra persona (un padre que acompaña a su hija). El generador lo respeta y la revisión avisa si no se cumple.",
+    unavailableHint: "Franjas en las que alguien no puede recibir tareas, o «mientras compite» otra persona (un padre que acompaña a su hija). El generador lo respeta y la revisión avisa si no se cumple. Sin el modo PRO, la hora de cada grupo sale del horario de la WCA. No se publica.",
     when: "Cuándo",
     timeRange: "Franja horaria",
     whileCompeting: "Mientras compite…",

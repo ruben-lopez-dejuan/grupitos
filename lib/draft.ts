@@ -32,6 +32,18 @@ export type Draft = {
   remoteSavedAt?: string;
 };
 
+/**
+ * Unavailabilities used to live in PRO people; they are now for both modes, in `people`. Moves
+ * the old ones over, once.
+ */
+export function withSharedUnavailability(settings: WorkspaceSettings): WorkspaceSettings {
+  const old = settings.pro?.people?.unavailable ?? [];
+  if (!old.length) return settings;
+  const own = settings.people.unavailable ?? [];
+  const unavailable = [...own, ...old.filter(item => !own.some(other => other.id === item.id))];
+  return { ...settings, people: { ...settings.people, unavailable }, pro: { ...settings.pro!, people: { ...settings.pro!.people!, unavailable: [] } } };
+}
+
 export function draftStorageKey(competitionId: string) {
   // Storage keys keep the app's first name (WCA Easy Groups), so saved drafts stay readable.
   return `wca-easy-groups:draft:${competitionId}`;

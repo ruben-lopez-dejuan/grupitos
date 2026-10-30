@@ -776,7 +776,7 @@ export const en: Messages = {
     importHint: "Reads the volunteer form (Google Sheets or CSV) and turns its columns into properties, like CompScript's ReadSpreadsheet.",
     "not-eligible": "{name} has “{task}” in G{group} but is not in the cluster allowed to do it.",
     unavailable: "Unavailable",
-    unavailableHint: "Times when someone cannot be given tasks, or \"while someone else competes\" (a parent with their child). The generator respects it and the review warns when it is not met.",
+    unavailableHint: "Times when someone cannot be given tasks, or \"while someone else competes\" (a parent with their child). The generator respects it and the review warns when it is not met. Without PRO mode, each group's time comes from the WCA schedule. Never published.",
     when: "When",
     timeRange: "Time range",
     whileCompeting: "While competing…",
