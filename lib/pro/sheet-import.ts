@@ -10,6 +10,8 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { newVolunteerKey, type ProPeople } from "@/lib/pro/people";
 import { personKey } from "@/lib/rounds";
 
+export { parseCsv } from "@/lib/csv";
+
 export const IDENTITIES = ["wcaId", "registrantId", "email", "name"] as const;
 export type Identity = typeof IDENTITIES[number];
 
@@ -32,40 +34,15 @@ export type SheetMapping = {
 export type RowOutcome = { row: number; label: string; by?: Identity; key?: string; result: "matched" | "created" | "ambiguous" | "unmatched" | "empty" };
 export type SheetImportResult = { people: ProPeople; matched: number; created: number; unmatched: string[]; ambiguous: string[]; outcomes: RowOutcome[] };
 
+/** The tab of a Google Sheets URL (its gid), if the link names one. */
+export const sheetGidFromUrl = (text: string) => text.match(/[#&?]gid=(\d{1,12})/)?.[1];
+
 /** The spreadsheet id from a Google Sheets URL, or the id itself. */
 export function spreadsheetIdFromUrl(text: string) {
   const trimmed = text.trim();
   return trimmed.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,100})/)?.[1] ?? (/^[A-Za-z0-9_-]{20,100}$/.test(trimmed) ? trimmed : undefined);
 }
 
-/** CSV or TSV as exported by Google Forms or Excel: quoted fields, "" escapes, , ; or tab. */
-export function parseCsv(input: string): string[][] {
-  const text = input.replace(/^﻿/, "");
-  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
-  const separator = ["\t", ";", ","].map(candidate => ({ candidate, count: firstLine.split(candidate).length })).sort((a, b) => b.count - a.count)[0].candidate;
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let quoted = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (quoted) {
-      if (char === "\"" && text[index + 1] === "\"") { cell += "\""; index += 1; }
-      else if (char === "\"") quoted = false;
-      else cell += char;
-    } else if (char === "\"" && cell === "") quoted = true;
-    else if (char === separator) { row.push(cell); cell = ""; }
-    else if (char === "\n" || char === "\r") {
-      if (char === "\r" && text[index + 1] === "\n") index += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else cell += char;
-  }
-  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
-  return rows.filter(item => item.some(value => value.trim() !== ""));
-}
 
 export const normalizeName = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 const normalizeIdentity = (identity: Identity, text: string) => identity === "name" ? normalizeName(text) : text.trim().toLowerCase();

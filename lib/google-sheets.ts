@@ -1,11 +1,15 @@
 /*
- * Server-only reading of a Google Sheet with a service account (no user OAuth): the sheet is
- * shared with the account's e-mail, as with CompScript's ReadSpreadsheet. Configure with
+ * Server-only reading of a Google Sheet, no user OAuth. A sheet shared as "anyone with the link can
+ * view" is read as CSV with no setup. With a service account the sheet can instead be shared with
+ * the account's e-mail only, as with CompScript's ReadSpreadsheet; configure it with
  * GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (see docs/GOOGLE_SHEETS.md).
  */
 import { createSign } from "node:crypto";
 
-export type SheetErrorCode = "not-configured" | "forbidden" | "not-found" | "google-error";
+export type SheetErrorCode = "not-configured" | "forbidden" | "not-shared" | "not-found" | "range-sheet" | "too-large" | "google-error";
+
+/** Largest CSV read from a shared link. */
+const MAX_CSV = 5_000_000;
 
 export class SheetError extends Error {
   constructor(readonly code: SheetErrorCode, readonly status?: number) {
@@ -36,15 +40,50 @@ async function accessToken(email: string, key: string) {
   return (await response.json() as { access_token: string }).access_token;
 }
 
-/** The sheet's values as rows of text; the first sheet when no range names one. */
-export async function readSheet(spreadsheetId: string, range = "A1:ZZ3000"): Promise<string[][]> {
-  const account = sheetsAccount();
-  if (!account) throw new SheetError("not-configured");
-  const token = await accessToken(account.email, account.key);
-  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?majorDimension=ROWS`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+function checkAccess(response: Response) {
   if (response.status === 403) throw new SheetError("forbidden", 403);
   if (response.status === 404) throw new SheetError("not-found", 404);
   if (!response.ok) throw new SheetError("google-error", response.status);
+}
+
+/** Title of the tab with this gid (the number in the link after #gid=). */
+async function tabTitle(spreadsheetId: string, gid: string, token: string) {
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties(sheetId,title)`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  checkAccess(response);
+  const data = await response.json() as { sheets?: { properties?: { sheetId?: number; title?: string } }[] };
+  return data.sheets?.find(sheet => String(sheet.properties?.sheetId) === gid)?.properties?.title;
+}
+
+/**
+ * The sheet's values as rows of text, with the service account. A range naming a sheet
+ * ("Respuestas!A1:Z") reads that one; otherwise the link's tab (gid), or the first one.
+ */
+export async function readSheet(spreadsheetId: string, range?: string, gid?: string): Promise<string[][]> {
+  const account = sheetsAccount();
+  if (!account) throw new SheetError("not-configured");
+  const token = await accessToken(account.email, account.key);
+  const title = gid && !range?.includes("!") ? await tabTitle(spreadsheetId, gid, token) : undefined;
+  const cells = title ? `'${title.replace(/'/g, "''")}'!${range ?? "A1:ZZ3000"}` : range ?? "A1:ZZ3000";
+  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(cells)}?majorDimension=ROWS`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  checkAccess(response);
   const data = await response.json() as { values?: unknown[][] };
   return (data.values ?? []).map(row => row.map(cell => cell === null || cell === undefined ? "" : String(cell)));
+}
+
+/**
+ * A sheet shared as "anyone with the link can view", as CSV text: no account needed. Reads the
+ * link's tab (gid), or the first one; a range can only give cells (A1:Z), not another sheet.
+ */
+export async function readSharedSheet(spreadsheetId: string, gid?: string, range?: string): Promise<string> {
+  if (range?.includes("!")) throw new SheetError("range-sheet");
+  const query = new URLSearchParams({ format: "csv", ...(gid ? { gid } : {}), ...(range ? { range } : {}) });
+  const response = await fetch(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?${query}`, { cache: "no-store" });
+  if (response.status === 404) throw new SheetError("not-found", 404);
+  // A sheet that is not shared by link ends in Google's sign-in page instead of a CSV.
+  const csv = response.ok && response.headers.get("content-type")?.includes("text/csv");
+  if (!csv) throw new SheetError(response.ok || response.status === 401 || response.status === 403 ? "not-shared" : "google-error", response.status);
+  if (Number(response.headers.get("content-length")) > MAX_CSV) throw new SheetError("too-large");
+  const text = await response.text();
+  if (text.length > MAX_CSV) throw new SheetError("too-large");
+  return text;
 }

@@ -7,12 +7,15 @@ import type { WcifPerson } from "@/lib/competition-store";
 import { keyOf } from "@/lib/i18n";
 import { withWcaNames, type ProPeople } from "@/lib/pro/people";
 import { fetchWcaNames } from "@/lib/wca-persons";
-import { applySheetImport, guessMapping, IDENTITIES, parseCsv, propertiesTemplate, spreadsheetIdFromUrl, type Identity, type SheetImportResult, type SheetMapping } from "@/lib/pro/sheet-import";
+import { applySheetImport, guessMapping, IDENTITIES, parseCsv, propertiesTemplate, sheetGidFromUrl, spreadsheetIdFromUrl, type Identity, type SheetImportResult, type SheetMapping } from "@/lib/pro/sheet-import";
 
 type Source = "google" | "csv";
 type Status = { configured: boolean; email?: string } | { error: string };
 
-/** Volunteer form import: read a Google Sheet (server, service account) or pasted CSV, then map columns. */
+/**
+ * Volunteer form import: read a Google Sheet (on the server: shared by link, or with the service
+ * account) or pasted CSV, then map columns.
+ */
 export function SheetImportPanel({ people, value, onApply }: { people: WcifPerson[]; value: ProPeople; onApply: (value: ProPeople) => void }) {
   const { t, tp } = useI18n();
   const [source, setSource] = useState<Source>("google");
@@ -44,7 +47,8 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/sheets?${new URLSearchParams({ id, ...(range.trim() ? { range: range.trim() } : {}) })}`);
+      const gid = sheetGidFromUrl(url);
+      const response = await fetch(`/api/sheets?${new URLSearchParams({ id, ...(gid ? { gid } : {}), ...(range.trim() ? { range: range.trim() } : {}) })}`);
       const data = await response.json() as { rows?: string[][]; error?: string; email?: string };
       if (!response.ok) return setMessage(t(keyOf("sheetImport.errors", data.error ?? "google-error"), { email: data.email ?? "" }));
       load(data.rows ?? []);
@@ -99,7 +103,8 @@ export function SheetImportPanel({ people, value, onApply }: { people: WcifPerso
       <Hint align="end" text={t("sheetImport.templateHelp")} />
     </div>
     {!rows && (source === "google" ? <div className="sheet-source">
-      <p className="sheet-status">{!status ? "…" : "error" in status ? t(keyOf("sheetImport.errors", status.error), { email: "" }) : status.configured ? t("sheetImport.shareWith", { email: status.email ?? "" }) : t("sheetImport.errors.not-configured", { email: "" })}</p>
+      <p className="sheet-status">{!status ? "…" : "error" in status ? t(keyOf("sheetImport.errors", status.error), { email: "" }) : status.configured ? t("sheetImport.shareWith", { email: status.email ?? "" }) : t("sheetImport.shareByLink")}</p>
+      {status && !("error" in status) && <p className="sheet-status">{t("sheetImport.linkPrivacy")}</p>}
       <form className="volunteer-form" onSubmit={event => { event.preventDefault(); readGoogle(); }}>
         <input className="wide" value={url} onChange={event => setUrl(event.target.value)} placeholder={t("sheetImport.url")} aria-label={t("sheetImport.url")} />
         <input value={range} onChange={event => setRange(event.target.value)} placeholder={t("sheetImport.range")} aria-label={t("sheetImport.range")} title={t("sheetImport.rangeHelp")} />

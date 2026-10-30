@@ -148,7 +148,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - las de natshelper se leen del WCIF;
   - se pueden descargar como plantilla CSV para rellenarlas.
 - **Importación de hojas:**
-  - **origen:** CSV pegado o subido, o Google Sheets directamente si el servidor tiene cuenta de servicio;
+  - **origen:** CSV pegado o subido (también las celdas copiadas de Google Sheets), o Google Sheets directamente: una hoja compartida por enlace, sin configurar nada, o compartida con la cuenta de servicio del servidor;
   - **cabeceras:** entiende las de CompScript (`identifier:`, `property:`, `ignore:`);
   - **emparejamiento:** por WCA ID, luego número de inscripción, correo y nombre;
   - **comprobación:** enseña antes cómo empareja cada fila y nunca duplica a nadie. «Fusionar duplicados» arregla las copias de importaciones antiguas.
@@ -245,7 +245,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - el token OAuth queda en la sesión cifrada del servidor.
 - **Escritura:** solo se escribe en la WCA al publicar, después de enseñar los cambios y pedir confirmación. Los ajustes de la app van en el WCIF público de la competición: no pongas datos privados en las notas.
 - **El archivo exportado** lleva datos personales (los del WCIF privado y tu propuesta). Guárdalo como guardarías el WCIF.
-- **Google Sheets:** las hojas se leen desde el servidor solo cuando lo pides, y solo las que hayas compartido con la cuenta de servicio.
+- **Google Sheets:** las hojas se leen desde el servidor solo cuando lo pides, y solo las que hayas compartido por enlace o con la cuenta de servicio. Una hoja compartida por enlace la puede ver cualquiera que tenga el enlace: vuelve a restringirla al terminar.
 
 ## Lo que todavía no hace
 
@@ -271,7 +271,7 @@ npm run dev
 | `NEXTAUTH_URL` | URL de la app, por ejemplo `http://localhost:3000`. |
 | `WCA_CLIENT_ID`, `WCA_CLIENT_SECRET` | Aplicación OAuth de la WCA. |
 | `WCA_BASE_URL` | `https://www.worldcubeassociation.org`, o la de staging. |
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Opcional: leer Google Sheets en el modo PRO. Ver [`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md). |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Opcional: leer en el modo PRO hojas de Google no compartidas por enlace. Ver [`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md). |
 
 Para la aplicación OAuth de la WCA:
 
