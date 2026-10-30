@@ -60,7 +60,7 @@ export function generationSignature(settings: WorkspaceSettings) {
     stations: settings.stations,
     zoneMode: settings.zoneMode,
     // Seating from the middle depends on how many stations a row has; in order, on nothing.
-    ...(settings.seating?.order === "center" || settings.pro?.stationRules?.some(rule => !rule.off && rule.seating === "center") ? { seating: { tables: settings.seating?.tables, seats: settings.seating?.seats } } : {}),
+    ...(settings.seating?.order === "center" || settings.pro?.stationRules?.some(rule => !rule.off && rule.seating === "center") ? { seating: { tables: settings.seating?.tables, seats: settings.seating?.seats, rowTables: settings.seating?.rowTables } } : {}),
     rounds: settings.rounds.filter(round => round.enabled).map(({ id, groups, scramblers, runners }) => ({ id, groups, scramblers, runners })),
     options: settings.options,
     people: settings.people,

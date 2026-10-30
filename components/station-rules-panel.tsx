@@ -53,7 +53,7 @@ export function StationRulesPanel({ rules, onChange, segments, lanes, rounds, pr
             {segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name} ({segment.size})</option>)}
             {rule.first && !segments.some(segment => segment.id === rule.first) && <option value={rule.first}>{t("sets.missingCluster")}</option>}
           </select>
-          <select value={rule.seating ?? "ranked"} onChange={event => save({ ...rule, seating: event.target.value === "center" ? "center" : undefined })} aria-label={t("stationRules.seating")} title={rule.seating === "center" ? t("stationRules.centerLayout", { tables: seating.tables, seats: seating.seats }) : undefined}>
+          <select value={rule.seating ?? "ranked"} onChange={event => save({ ...rule, seating: event.target.value === "center" ? "center" : undefined })} aria-label={t("stationRules.seating")} title={rule.seating === "center" ? seating.rowTables ? t("stationRules.centerRows", { tables: seating.rowTables.join("/"), seats: seating.seats }) : t("stationRules.centerLayout", { tables: seating.tables, seats: seating.seats }) : undefined}>
             {SEATING_ORDERS.map(order => <option key={order} value={order}>{t(keyOf("stationRules.seatings", order))}</option>)}
           </select>
         </div>

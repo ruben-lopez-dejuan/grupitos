@@ -596,6 +596,9 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .seating-row{display:flex;align-items:center;gap:10px}
 .seating-row-label{width:56px;flex:none;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
 .seating-tables{display:flex;gap:10px}
+.seating-row-tables{display:flex;align-items:center;gap:4px;flex:none;color:var(--muted);font-size:12px}
+/* Rows of different lengths line up on the centre of the room. */
+.seating-row .seating-tables{flex:1;justify-content:safe center}
 .seating-table{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
 .seat{display:grid;place-items:center;width:30px;height:34px;border-radius:4px;background:color-mix(in srgb,var(--blue) 8%,transparent);line-height:1.05;font-variant-numeric:tabular-nums}
 .seat strong{font-size:14px}
@@ -603,7 +606,7 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .seat.best{background:color-mix(in srgb,var(--blue) 26%,transparent)}
 .seating-preview figcaption{color:var(--muted);font-size:12px}
 .number-field button:disabled{opacity:.4;cursor:default}
-@media (max-width:700px){.seating{margin-inline:12px}.seating-row{gap:6px}.seating-row-label{width:44px;font-size:11px}.seating-tables{gap:6px}.seat{width:22px;height:30px}.seat strong{font-size:12px}}
+@media (max-width:700px){.seating{margin-inline:12px}.seating-row{gap:6px;flex-wrap:wrap}.seating-row .seating-tables{flex-basis:100%}.seating-row-label{width:44px;font-size:11px}.seating-tables{gap:6px}.seat{width:22px;height:30px}.seat strong{font-size:12px}}
 
 /* Sets: positions, who counts first and how the set is split */
 .set-fields.set-order{padding-top:0}

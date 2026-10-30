@@ -42,7 +42,7 @@ import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedul
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { finalRoundIds, acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
-import { normalizeSeating, seatingStations, stationOrder, type Seating } from "@/lib/seating";
+import { normalizeSeating, seatingStations, stationOrder, tablesInRow, type Seating } from "@/lib/seating";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
@@ -709,15 +709,20 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
               {seating.order !== "center" && <small>{t("seating.default")}</small>}
               {/* Station rules that seat from the centre need the tables of a row even when the general seating is in order. */}
               {seating.order !== "center" && pro && (settings.pro?.stationRules ?? []).some(rule => !rule.off && rule.seating === "center") && <div className="seating-layout">
-                {(["tables", "seats"] as const).map(key => <label key={key}><span>{t(keyOf("seating", key))}</span><Stepper label={t(keyOf("seating", key))} value={seating[key]} min={1} onChange={value => changeZone({ seating: { ...seating, [key]: Math.min(99, value) } })} /></label>)}
+                {(["tables", "seats"] as const).map(key => <label key={key}><span>{t(keyOf("seating", key))}</span><Stepper label={t(keyOf("seating", key))} value={seating[key]} min={1} onChange={value => changeZone({ seating: { ...seating, rowTables: undefined, [key]: Math.min(99, value) } })} /></label>)}
                 <small className="seating-for-rules">{t("seating.forRules")}</small>
               </div>}
               {seating.order === "center" && <>
                 <div className="seating-layout">
-                  {(["rows", "tables", "seats"] as const).map(key => <label key={key}><span>{t(keyOf("seating", key))}</span><Stepper label={t(keyOf("seating", key))} value={seating[key]} min={1} onChange={value => changeZone({ seating: { ...seating, [key]: Math.min(99, value) } })} /></label>)}
+                  <label><span>{t("seating.rows")}</span><Stepper label={t("seating.rows")} value={seating.rows} min={1} onChange={value => {
+                    // A new row copies the last one.
+                    const rows = Math.min(99, value);
+                    changeZone({ seating: normalizeSeating({ ...seating, rows, rowTables: Array.from({ length: rows }, (_, row) => tablesInRow(seating, row)) }) });
+                  }} /></label>
+                  <label><span>{t("seating.seats")}</span><Stepper label={t("seating.seats")} value={seating.seats} min={1} onChange={value => changeZone({ seating: { ...seating, seats: Math.min(99, value) } })} /></label>
                   <span className="seating-total">= {t("seating.total", { count: seatingStations(seating) })}</span>
                 </div>
-                <SeatingPreview seating={seating} />
+                <SeatingPreview seating={seating} onTables={(row, count) => changeZone({ seating: normalizeSeating({ ...seating, rowTables: Array.from({ length: seating.rows }, (_, index) => index === row ? Math.min(99, count) : tablesInRow(seating, index)) }) })} />
               </>}
             </div>
             {pro && <>
@@ -883,21 +888,28 @@ function layoutFor(stations: number, seating: Seating): Seating {
   return { ...seating, rows: 1, seats: 2, tables: Math.max(1, Math.ceil(stations / 2)) };
 }
 
-/** The room seen from the front: each table with the place in the group (1 = the best) of each station. */
-function SeatingPreview({ seating }: { seating: Seating }) {
+/**
+ * The room seen from the front, with the tables of each row: each table shows the place in the
+ * group (1 = the best) of each station.
+ */
+function SeatingPreview({ seating, onTables }: { seating: Seating; onTables: (row: number, tables: number) => void }) {
   const { t } = useI18n();
   const order = stationOrder(seatingStations(seating), seating);
   const place = new Map(order.map((station, index) => [station, index + 1]));
-  const perRow = seating.tables * seating.seats;
+  const firstOf = (row: number) => Array.from({ length: row }, (_, index) => tablesInRow(seating, index) * seating.seats).reduce((sum, count) => sum + count, 0);
   return <figure className="seating-preview">
-    <div className="seating-rows">{Array.from({ length: seating.rows }, (_, row) => <div key={row} className="seating-row">
-      <span className="seating-row-label">{row === 0 ? t("seating.front") : t("seating.row", { row: row + 1 })}</span>
-      <div className="seating-tables">{Array.from({ length: seating.tables }, (_, table) => <div key={table} className="seating-table">{Array.from({ length: seating.seats }, (_, seat) => {
-        const station = row * perRow + table * seating.seats + seat + 1;
+    <div className="seating-rows">{Array.from({ length: seating.rows }, (_, row) => {
+      const name = row === 0 ? t("seating.front") : t("seating.row", { row: row + 1 });
+      return <div key={row} className="seating-row">
+      <span className="seating-row-label">{name}</span>
+      <span className="seating-row-tables"><Stepper label={t("seating.tablesIn", { row: name })} value={tablesInRow(seating, row)} min={1} onChange={count => onTables(row, count)} /><small>{t("seating.tablesShort")}</small></span>
+      <div className="seating-tables">{Array.from({ length: tablesInRow(seating, row) }, (_, table) => <div key={table} className="seating-table">{Array.from({ length: seating.seats }, (_, seat) => {
+        const station = firstOf(row) + table * seating.seats + seat + 1;
         const rank = place.get(station)!;
         return <span key={seat} className={rank === 1 ? "seat best" : "seat"} title={t("seating.seatTitle", { rank, station })}><strong>{rank}</strong><small>{station}</small></span>;
       })}</div>)}</div>
-    </div>)}</div>
+    </div>;
+    })}</div>
     <figcaption>{t("seating.caption")}</figcaption>
   </figure>;
 }

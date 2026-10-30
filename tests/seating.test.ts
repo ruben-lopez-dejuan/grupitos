@@ -4,7 +4,7 @@ import { demoCompetition } from "@/lib/demo-competition";
 import { DEFAULT_OPTIONS, generateAssignments } from "@/lib/group-generator";
 import { peopleFromWcif } from "@/lib/people";
 import { initialRounds } from "@/lib/rounds";
-import { DEFAULT_SEATING, normalizeSeating, stationOrder } from "@/lib/seating";
+import { DEFAULT_SEATING, normalizeSeating, seatingStations, stationOrder, tablesInRow } from "@/lib/seating";
 
 /** Place in the group (1 = the best) seated at each station, left to right. */
 const places = (order: number[]) => {
@@ -27,6 +27,17 @@ describe("seating at fixed stations", () => {
   it("fills a shorter last row and an odd row from their own middle", () => {
     expect(places(stationOrder(12, { order: "center", rows: 2, tables: 4, seats: 2 }))).toEqual([7, 5, 3, 1, 2, 4, 6, 8, 11, 9, 10, 12]);
     expect(places(stationOrder(5, { order: "center", rows: 1, tables: 5, seats: 1 }))).toEqual([4, 2, 1, 3, 5]);
+  });
+
+  it("lets each row have its own tables, each filled from its own middle", () => {
+    const seating = normalizeSeating({ order: "center", rows: 2, tables: 4, seats: 2, rowTables: [3, 4] });
+    expect(seatingStations(seating)).toBe(14);
+    // Front: | 5 3 | 1 2 | 4 6 |; behind, 4 tables: | 13 11 | 9 7 | 8 10 | 12 14 |.
+    expect(places(stationOrder(14, seating))).toEqual([5, 3, 1, 2, 4, 6, 13, 11, 9, 7, 8, 10, 12, 14]);
+    // A third row repeats the last one; the same tables everywhere need no list.
+    expect(tablesInRow(seating, 2)).toBe(4);
+    expect(normalizeSeating({ ...seating, rowTables: [4, 4] })).toEqual({ order: "center", rows: 2, tables: 4, seats: 2 });
+    expect(normalizeSeating({ ...seating, rows: 3 }).rowTables).toEqual([3, 4, 4]);
   });
 
   it("reads missing or broken values as the defaults", () => {

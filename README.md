@@ -48,7 +48,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
 ### Grupos
 
 - Número de grupos sugerido por ronda según las estaciones y el modo de entrada, ajustable con un contador.
-- **Colocación en puestos fijos:** por defecto, por seed (el mejor del grupo en la estación 1). Marcando «Sentar a los mejores desde el centro de la fila» se eligen filas, mesas por fila y estaciones por mesa, con una vista previa: los mejores se sientan en el centro de la fila de delante, alternando a izquierda y derecha (con 4 mesas de 2: | 7 5 | 3 1 | 2 4 | 6 8 |), y luego la siguiente fila igual.
+- **Colocación en puestos fijos:** por defecto, por seed (el mejor del grupo en la estación 1). Marcando «Sentar a los mejores desde el centro de la fila» se eligen filas, estaciones por mesa y las mesas de cada fila (cada fila puede tener las suyas), con una vista previa: los mejores se sientan en el centro de la fila de delante, alternando a izquierda y derecha (con 4 mesas de 2: | 7 5 | 3 1 | 2 4 | 6 8 |), y luego la siguiente fila igual.
 - Tres formas de repartir a los competidores:
   - **Mezcladores garantizados** (recomendada): reparte a los mejores y garantiza que haya gente rápida libre para mezclar.
   - **Simétrico:** los mejores, repartidos uno por grupo.
