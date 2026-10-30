@@ -143,7 +143,11 @@ export type WcifPatch = {
   formatVersion: string;
   id: string;
   schedule?: StoredCompetition["schedule"];
-  /** `registration` only for people new to the WCIF: the WCA then registers them as non-competing staff. */
+  /**
+   * `registration` only for people new to the WCIF, or listed without a registration (organizers,
+   * delegates) and given tasks: the WCA then registers them as non-competing staff. Without a
+   * registration the WCA drops their assignments.
+   */
   persons?: Array<{ wcaUserId: number; assignments: NonNullable<StoredCompetition["persons"]>[number]["assignments"]; extensions: WcifExtension[]; registration?: { isCompeting: false } }>;
   extensions: WcifExtension[];
 };
@@ -193,6 +197,7 @@ export function buildPatch({ fresh, assignments, rounds, slots, schedule, people
 
   const { wcif, report } = exportWcif({ competition: fresh, assignments, rounds, slots, schedule, people });
   const before = new Map((fresh.persons ?? []).map(person => [person.wcaUserId, new Set((person.assignments ?? []).map(assignmentKey))]));
+  const unregistered = new Set((fresh.persons ?? []).filter(person => !person.registration).map(person => person.wcaUserId));
   const summary: PatchSummary = { ...report, changedPeople: 0, added: 0, removed: 0, withGroups: true };
   patch.schedule = wcif.schedule;
   patch.persons = (wcif.persons ?? []).filter(person => person.wcaUserId !== undefined).map(person => {
@@ -203,7 +208,9 @@ export function buildPatch({ fresh, assignments, rounds, slots, schedule, people
     summary.added += added;
     summary.removed += removed;
     if (added || removed) summary.changedPeople += 1;
-    return { wcaUserId: person.wcaUserId!, assignments: person.assignments ?? [], extensions: publicPersonExtensions(person.extensions ?? []), ...(before.has(person.wcaUserId) ? {} : { registration: { isCompeting: false as const } }) };
+    const register = !before.has(person.wcaUserId) || (unregistered.has(person.wcaUserId) && now.size > 0);
+    if (register && before.has(person.wcaUserId)) summary.newStaff += 1;
+    return { wcaUserId: person.wcaUserId!, assignments: person.assignments ?? [], extensions: publicPersonExtensions(person.extensions ?? []), ...(register ? { registration: { isCompeting: false as const } } : {}) };
   });
   withSpecUrls(patch);
   return { patch, summary };
@@ -215,7 +222,6 @@ export function checkPublished(patch: WcifPatch, reread: StoredCompetition) {
   let missing = 0;
   for (const person of patch.persons ?? []) {
     const now = byUser.get(person.wcaUserId);
-    // People without a registration are skipped by the WCA (registration-less organizers).
     if (!now) continue;
     for (const item of person.assignments ?? []) if (!now.has(assignmentKey(item))) missing += 1;
   }

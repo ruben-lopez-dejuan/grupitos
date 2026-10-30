@@ -174,7 +174,7 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
 
 ### 6.3b. Personal en salas auxiliares y equipos (23/10/2026)
 
-- **Staff que no compite**: las personas con rol WCA sin inscripción (`nonCompetingStaff()`, como dos organizadores del Nacional) aparecen como no competidoras.
+- **Staff que no compite**: las personas con rol WCA sin inscripción (`nonCompetingStaff()`, como dos organizadores del Nacional) aparecen como no competidoras. Si tienen tareas, `buildPatch` les manda `registration: { isCompeting: false }` para que la WCA las inscriba como staff: sin inscripción, la WCA descarta sus asignaciones (pasó en BasauriOpen2026: 568 de 580).
 - **Delegados por escasez**: la tarea de delegado se planifica para toda la competición antes que el resto, empezando por los grupos con menos delegados libres (antes, las rondas de la sala principal se los llevaban y la sala auxiliar se quedaba sin ninguno).
 - **Mezcladores de reserva**: si un grupo no se cubre con el grupo habitual (rondas de un solo grupo en sala auxiliar, escenarios en paralelo), entra gente que no compite en la ronda pero tiene marca en la prueba que se mezcla (`SCRAMBLE_EVENT`: 4BLD → 4x4, 5BLD → 5x5, BLD/OH/multi → 3x3).
 - **Equipo por sala o escenario** (Zona, PRO, `LaneStaffing.team`): un cluster (o equipo) dedicado a esa sala; sus miembros van primero allí y no trabajan en ningún otro sitio. Para equipos de la propiedad `team` es mejor la sala del propio equipo (6.6).

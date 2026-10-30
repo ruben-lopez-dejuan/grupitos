@@ -97,6 +97,20 @@ describe("publishing to the WCA", () => {
     expect(again.patch.persons!.some(person => person.registration)).toBe(false);
   });
 
+  it("registers staff listed without a registration when they get tasks, so the WCA keeps them", async () => {
+    const organizer = { name: "Olga Organiza", wcaUserId: 555001, wcaId: null, registrantId: null, roles: ["organizer"], assignments: [], extensions: [] };
+    const delegate = { ...organizer, name: "Dani Delega", wcaUserId: 555002, roles: ["delegate"] };
+    const fresh = { ...competition, persons: [...competition.persons!, organizer, delegate] };
+    const round = rounds[0];
+    const row = { id: `${round.id}:${organizer.name}`, roundId: round.id, eventId: round.eventId, personId: organizer.name, name: organizer.name, inRound: false, tasks: [{ group: 1, role: "judge" as const }] };
+    const { patch, summary } = buildPatch({ fresh, assignments: [...assignments, row], rounds, slots, schedule, settings: await settingsExtension(saved) });
+    expect(summary.newStaff).toBe(1);
+    expect(patch.persons!.find(person => person.wcaUserId === 555001)).toMatchObject({ registration: { isCompeting: false } });
+    expect(patch.persons!.find(person => person.wcaUserId === 555001)!.assignments).toHaveLength(1);
+    // Without tasks nobody is registered.
+    expect(patch.persons!.find(person => person.wcaUserId === 555002)?.registration).toBeUndefined();
+  });
+
   it("publishes nothing personal, and loading from the WCA keeps this browser's personal data", async () => {
     const [first, second] = competition.persons!;
     const key = String(first.registrantId);
