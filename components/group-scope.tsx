@@ -2,7 +2,10 @@
 
 import { EventIcon } from "@/components/event-icon";
 import { useEventName, useI18n } from "@/components/i18n";
-import { appliesToRound, formatGroupNumbers, parseGroupNumbers, type SetGroups, type SetRounds } from "@/lib/pro/assignment-sets";
+import { appliesToRound, formatGroupNumbers, parseGroupNumbers, ROUND_SCOPES, type SetGroups, type SetRounds } from "@/lib/pro/assignment-sets";
+
+/** Name of each kind of rounds a set or rule can cover. */
+export const ROUND_SCOPE_KEYS = { first: "sets.firstRounds", later: "sets.laterRounds", middle: "sets.middleRounds", final: "sets.finalRounds", all: "sets.allRounds" } as const;
 
 export type ScopeLane = { key: string; name: string; color: string };
 export type ScopeRound = { id: string; eventId: string; roundNumber: number; final?: boolean };
@@ -14,8 +17,8 @@ export function ScopeFields({ value, onChange, rounds }: { value: Scope; onChang
   const covered = rounds.filter(round => appliesToRound({ rounds: value.rounds }, round));
   return <>
     <label><span>{t("sets.rounds")}</span>
-      <select value={Array.isArray(value.rounds) ? "pick" : value.rounds} onChange={event => onChange({ rounds: event.target.value === "pick" ? covered.map(round => round.id) : event.target.value as "first" | "final" | "all" })}>
-        <option value="first">{t("sets.firstRounds")}</option><option value="final">{t("sets.finalRounds")}</option><option value="all">{t("sets.allRounds")}</option><option value="pick">{t("sets.pickRounds")}</option>
+      <select value={Array.isArray(value.rounds) ? "pick" : value.rounds} onChange={event => onChange({ rounds: event.target.value === "pick" ? covered.map(round => round.id) : event.target.value as typeof ROUND_SCOPES[number] })}>
+        {ROUND_SCOPES.map(scope => <option key={scope} value={scope}>{t(ROUND_SCOPE_KEYS[scope])}</option>)}<option value="pick">{t("sets.pickRounds")}</option>
       </select>
       <small>{tp("sets.roundCount", covered.length)}</small>
     </label>

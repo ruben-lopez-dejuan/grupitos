@@ -467,6 +467,8 @@ export const en: Messages = {
     previewRow: "{round}: {wanted} for {seats} seats",
     rounds: "Rounds",
     firstRounds: "First rounds",
+    laterRounds: "Later rounds",
+    middleRounds: "Later rounds except finals",
     finalRounds: "Finals",
     positions: "Positions",
     allPositions: "All",

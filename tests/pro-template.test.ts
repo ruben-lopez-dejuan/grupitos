@@ -11,6 +11,9 @@ import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 
 const NATIONAL_EVENTS = ["333", "222", "444", "555", "666", "777", "333bf", "333oh", "clock", "minx", "pyram", "skewb", "sq1", "444bf", "555bf", "333mbf"];
 const competition = buildDemoCompetition({ id: "Tpl", name: "Tpl", people: 30, events: NATIONAL_EVENTS, newcomerShare: 0, seed: 5 });
+// 3x3 has four rounds, as at the championship.
+const rounds333 = competition.events!.find(event => event.id === "333")!.rounds!;
+rounds333.push(...[3, 4].map(round => ({ ...rounds333[1], id: `333-r${round}` })));
 
 /** Rooms like the national championship's; ids differ on purpose. */
 function schedule(names = ["Araba", "Bizkaia", "Gipuzkoa"], days = ["2026-12-05", "2026-12-06", "2026-12-07"]): ProSchedule {
@@ -36,9 +39,18 @@ describe("PRO templates", () => {
     const { settings: after, warnings } = applyTemplate(before, schedule(), SPANISH_CHAMPIONSHIP_2026);
     expect(warnings).toEqual({ lanes: [], rounds: [], days: [] });
     const pro = after.pro!;
-    expect(pro.sets!.map(set => set.id)).toEqual(["sc26-featured", "sc26-top", "sc26-core", "sc26-delegates-12-sábado", "sc26-delegates-3-sábado", "sc26-delegates-4-sábado", "sc26-delegates-12-domingo", "sc26-delegates-3-domingo", "sc26-delegates-4-domingo", "sc26-aes", "sc26-data", "sc26-streaming", "sc26-everyone"]);
-    expect(pro.sets![0].lanes).toEqual(["7:11"]);
-    expect(pro.staffing).toEqual({ "8:room": { stations: 20, scramblers: 2, runners: 2 } });
+    expect(pro.sets!.map(set => set.id)).toEqual([
+      "sc26-final333-odd", "sc26-final333-even", "sc26-final333-rest", "sc26-semi333-bizkaia", "sc26-semi333-gipuzkoa", "sc26-semi333-araba", "sc26-finals-odd", "sc26-finals-even",
+      "sc26-featured", "sc26-top", "sc26-later-featured", "sc26-core",
+      "sc26-delegates-12-sábado", "sc26-delegates-3-sábado", "sc26-delegates-4-sábado", "sc26-delegates-12-domingo", "sc26-delegates-3-domingo", "sc26-delegates-4-domingo", "sc26-delegates-12-lunes", "sc26-delegates-3-lunes", "sc26-delegates-4-lunes",
+      "sc26-aes", "sc26-data", "sc26-streaming", "sc26-everyone", "sc26-later-everyone",
+    ]);
+    expect(pro.sets!.find(set => set.id === "sc26-featured")!.lanes).toEqual(["7:11"]);
+    expect(pro.sets!.find(set => set.id === "sc26-finals-even")).toMatchObject({ rounds: "final", positions: "even", first: "sc26-spaniards", lanes: ["7:12"] });
+    expect(pro.staffing).toEqual({
+      "7:10": { stations: 14, maxPerGroup: 28 }, "7:11": { stations: 14, maxPerGroup: 22 }, "7:12": { stations: 14, maxPerGroup: 28 },
+      "8:room": { stations: 20, scramblers: 2, runners: 2 },
+    });
     expect(pro.people!.teams!.setup["Side room"]).toEqual({ kind: "volunteer", lane: "8:room", busy: [{ day: "2026-12-06", start: "08:45", end: "09:15" }, { day: "2026-12-06", start: "12:15", end: "12:25" }] });
     expect(after.rounds.find(round => round.id === "333mbf-r1")).toMatchObject({ scramblers: 0, runners: 0, staffSetByHand: true });
     expect(after.options).toMatchObject({ tasksForOwnEventsOnly: true, noTasksForNewcomers: true });

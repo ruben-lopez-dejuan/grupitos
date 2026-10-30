@@ -2,7 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { EventIcon } from "@/components/event-icon";
-import { ScopeFields, ScopeRows, type ScopeLane, type ScopeRound } from "@/components/group-scope";
+import { ROUND_SCOPE_KEYS, ScopeFields, ScopeRows, type ScopeLane, type ScopeRound } from "@/components/group-scope";
 import { useEventName, useI18n } from "@/components/i18n";
 import type { SetPreview } from "@/lib/pro/sets-preview";
 import { keyOf } from "@/lib/i18n";
@@ -77,7 +77,7 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
     const segment = segments.find(item => item.id === set.segment);
     const who = set.segment ? segment?.name ?? (set.segment.startsWith("team:") ? t("sets.missingTeam", { team: set.segment.slice(5) }) : t("sets.missingCluster")) : t("sets.anyone");
     const top = set.top !== undefined ? t("sets.summaryTop", { count: set.top, unit: set.perGroup === "round" ? t("sets.perRoundGroup") : set.perGroup ? t("sets.perGroup") : t("sets.perRound") }) : "";
-    const which = set.rounds === "first" ? t("sets.firstRounds") : set.rounds === "final" ? t("sets.finalRounds") : set.rounds === "all" ? t("sets.allRounds") : tp("sets.roundCount", set.rounds.length);
+    const which = Array.isArray(set.rounds) ? tp("sets.roundCount", set.rounds.length) : t(ROUND_SCOPE_KEYS[set.rounds]);
     const where = set.lanes.length ? set.lanes.map(key => lanes.find(lane => lane.key === key)?.name ?? key).join(", ") : t("sets.summaryAnywhere");
     const groups = set.groups === "any" ? "" : set.groups === "first" ? t("sets.firstGroup") : set.groups === "last" ? t("sets.lastGroup") : `G${set.groups.join(", ")}`;
     const firstName = set.first ? t("sets.summaryFirst", { name: segments.find(item => item.id === set.first)?.name ?? t("sets.missingCluster") }) : "";

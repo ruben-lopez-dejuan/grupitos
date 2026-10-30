@@ -192,7 +192,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
 - **Conjuntos de asignación,** como el `AssignmentSet` de CompScript. Se ven como una lista de tarjetas con una línea de resumen (quién, cuántos, rondas y dónde): se abren con un clic para editarlas y se reordenan arrastrando, con el ratón o el dedo, o con ↑ y ↓. Una lista ordenada en la que cada conjunto dice:
   - **quién:** un cluster y/o «solo los mejores N», con un N distinto por prueba si hace falta; también solo las posiciones impares o pares, contando primero a un cluster (los españoles y luego los extranjeros);
-  - **en qué rondas:** primeras rondas, finales, todas o elegidas;
+  - **en qué rondas:** primeras rondas, rondas siguientes (con o sin las finales), finales, todas o elegidas;
   - **dónde:** sala, escenario y números de grupo;
   - **cómo:** repartidos entre sus grupos, o por ranking (los mejores en el último grupo).
 

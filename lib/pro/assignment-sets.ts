@@ -10,8 +10,12 @@
  */
 import { targetKey, type GroupSlot } from "@/lib/pro/schedule";
 
-/** First rounds, finals (each event's last round), every round, or the chosen round ids. */
-export type SetRounds = "first" | "final" | "all" | string[];
+/**
+ * First rounds, later rounds (every round after the first), later rounds except finals, finals
+ * (each event's last round), every round, or the chosen round ids.
+ */
+export type SetRounds = "first" | "later" | "middle" | "final" | "all" | string[];
+export const ROUND_SCOPES = ["first", "later", "middle", "final", "all"] as const;
 /** Group numbers as people see them; "first" and "last" are the round's first and last number. */
 export type SetGroups = "any" | "first" | "last" | number[];
 
@@ -59,6 +63,8 @@ export function appliesToRound(set: Pick<AssignmentSetConfig, "rounds" | "off">,
   if (set.off) return false;
   if (set.rounds === "all") return true;
   if (set.rounds === "first") return round.roundNumber === 1;
+  if (set.rounds === "later") return round.roundNumber > 1;
+  if (set.rounds === "middle") return round.roundNumber > 1 && !round.final;
   if (set.rounds === "final") return !!round.final;
   return set.rounds.includes(round.id);
 }

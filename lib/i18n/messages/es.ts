@@ -469,6 +469,8 @@ export const es = {
     previewRow: "{round}: {wanted} para {seats} plazas",
     rounds: "Rondas",
     firstRounds: "Primeras rondas",
+    laterRounds: "Rondas siguientes",
+    middleRounds: "Rondas siguientes sin finales",
     finalRounds: "Finales",
     positions: "Posiciones",
     allPositions: "Todas",

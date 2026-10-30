@@ -15,6 +15,7 @@ En **Zona → Plantillas** elige «Campeonato de España 2026» y pulsa **Aplica
 8 de esta guía de una vez (`lib/pro/templates/spanish-championship-2026.ts`) y avisa de las salas,
 rondas o días que no encuentre. Después solo queda:
 
+- Revisar en **Zona** las estaciones y el máximo por grupo de cada escenario: Araba y Gipuzkoa 14 estaciones y 28 como máximo, Bizkaia 14 y 22, Sala Auxiliar 20 estaciones.
 - Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (18) por grupo de Bizkaia, que son de partida; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
 - Rellenar `delegate-cluster` si queréis los conjuntos de delegados.
 - Marcar los delegados de turno y, si lo queréis, activar «Delegado de turno».
@@ -108,7 +109,27 @@ Del domingo 6: Pyraminx, 4×4, 2×2, Skewb, 3×3 y OH.
 | Sábado 5 | Bizkaia | Gipuzkoa | Araba |
 | Domingo 6 | Gipuzkoa | Araba | Bizkaia |
 
-(El lunes solo hay rondas siguientes, que el script no reparte por conjuntos.)
+## 4 bis. Rondas siguientes (provisional, copiado de 2025)
+
+Los scripts de rondas siguientes de 2026 aún no existen, así que la plantilla copia los de 2025
+(`Scripts-Compscript/SpanishChampionship2025`) con los escenarios de 2026. Van antes que los de
+primeras rondas, cada uno con sus rondas, así que no se pisan:
+
+| Conjunto | Rondas | Quién | Dónde |
+| --- | --- | --- | --- |
+| Final 3x3: impares / pares | 333-r4 | top 14, contando primero a los españoles, impares / pares, por ranking | Bizkaia / Gipuzkoa, grupos 2 a 8 (cara a cara, el mejor en el 8) |
+| Final 3x3: grupo 1 | 333-r4 | el resto | grupo 1 (Gipuzkoa) |
+| Semifinal 3x3 | 333-r3 | hasta el 14.º / hasta el 29.º / el resto | Bizkaia / Gipuzkoa / Araba |
+| Finales: impares / pares | Finales | impares / pares, contando primero a los españoles | Bizkaia / Gipuzkoa |
+| Destacados (rondas siguientes) | Rondas siguientes sin finales | top 4 por grupo, destacados | Bizkaia |
+| Organización, AES, Data, Streaming | Todas | el equipo | como en primeras rondas |
+| Delegados | 3BLD r2 (sábado), Pyraminx r2 (domingo); 3x3 r2, 4x4 r2, 2x2 r2, OH r2 y Skewb r2 (lunes) | por grupo de delegados | lunes: 1 y 2 Araba, 3 Bizkaia, 4 Gipuzkoa |
+| Resto (rondas siguientes) | Rondas siguientes sin finales | el resto | cualquier escenario |
+
+Y una regla de estación para las finales: por posición, de menor a mayor, primero los españoles
+(`FinalsStations`). En 2025 la final de 3x3 tenía 8 pares (top 16, grupos 2 a 9); en 2026 hay 7
+grupos en las finales, así que son 14. Las posiciones son las de la ronda anterior. Revisa estos
+números cuando estén los scripts de 2026.
 
 Las rondas de la sala auxiliar (4BLD, 5BLD, multi) no tienen grupos en esos escenarios, así que
 esos conjuntos no se aplican allí y todo el mundo va a su único grupo, como
@@ -132,9 +153,10 @@ esos conjuntos no se aplican allí y todo el mundo va a su único grupo, como
 - **Puntuación con pesos**: los scorers del script aún son de relleno; deja la puntuación apagada
   o usa el perfil «Amore Open 2026», que es el de 2025.
 
-## 7. Zona → personal de la Sala Auxiliar (`4_assign_side.cs`: `AssignStaff`)
+## 7. Zona → personal por escenario (`4_assign_side.cs`: `AssignStaff`)
 
-En la tabla de personal por sala y escenario, Sala Auxiliar: **20 estaciones, 2 mezcladores,
+En la tabla de personal por sala y escenario: Araba y Gipuzkoa **14 estaciones y 28 por grupo como
+máximo**, Bizkaia **14 y 22**. Sala Auxiliar: **20 estaciones, 2 mezcladores,
 2 runners** (`JudgeJob(20), RunnerJob(2), ScramblerJob(2)`). Para el multi el script pide 10 jueces
 y ni mezcladores ni runners: en **Grupos**, ronda 333mbf, pon 0 mezcladores y 0 runners.
 

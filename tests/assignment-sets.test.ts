@@ -74,6 +74,17 @@ describe("splitWithSets", () => {
     expect(resolveSets([set], { id: "333-r2", eventId: "333", roundNumber: 2, groups: 2 }, undefined, () => undefined)).toEqual([]);
   });
 
+  it("applies \"later\" sets after the first round and \"middle\" ones also leaving finals out", () => {
+    const rounds = [
+      { id: "333-r1", eventId: "333", roundNumber: 1, groups: 2 },
+      { id: "333-r2", eventId: "333", roundNumber: 2, groups: 2 },
+      { id: "333-r3", eventId: "333", roundNumber: 3, groups: 2, final: true },
+    ];
+    const covered = (scope: "later" | "middle") => rounds.filter(round => resolveSets([{ id: "s", name: "S", rounds: scope, lanes: [], groups: "any" }], round, undefined, () => undefined).length).map(round => round.id);
+    expect(covered("later")).toEqual(["333-r2", "333-r3"]);
+    expect(covered("middle")).toEqual(["333-r2"]);
+  });
+
   it("falls back to the plain split when no set places anyone", () => {
     const people = bestFirst.slice(0, 10);
     const result = splitWithSets(people, 2, [{ id: "none", name: "None", members: new Set(), groups: [1], featured: true }], "ranks", "333");
