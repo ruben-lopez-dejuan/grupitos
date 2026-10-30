@@ -6,7 +6,7 @@ import { peopleFromWcif } from "@/lib/people";
 import { groupSlots, importSchedule, withScheduledGroups } from "@/lib/pro/schedule";
 import { criterionValues, DEFAULT_SCORING, matchingProfile, normalizeScoring, PROFILE_WEIGHTS, scoreBreakdown, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff } from "@/lib/pro/staff-ilp";
-import { initialRounds, judgesNeeded } from "@/lib/rounds";
+import { initialRounds, judgesNeeded, personKey } from "@/lib/rounds";
 import { validateTimes } from "@/lib/validation";
 
 const facts = (change: Partial<ScoringFacts> = {}): ScoringFacts => ({ load: 0, hoursToday: 0, sameJobStreak: 0, staffStreak: 20, competesRightAfter: false, competesInEvent: false, eliminated: false, canScramble: false, isStaff: false, wcaJob: false, isTrusted: false, speed: 0, preference: 0, youngerThan10: false, ...change });
@@ -84,6 +84,17 @@ describe("weighted engine on a two-stage schedule", () => {
     const values = [...loads.values()];
     expect(Math.max(...values)).toBeLessThanOrEqual(Math.ceil(values.reduce((a, b) => a + b, 0) / values.length) * 3);
     expect(run()).toEqual(assignments);
+  });
+
+  it("gives scrambling to people competing in the event, in turns", () => {
+    const own = generateAssignments({ competition, rounds, stations: 14, zoneMode: "fixed", people: peopleFromWcif(competition), options: { ...DEFAULT_OPTIONS, tasksForOwnEventsOnly: true }, slots, scoring: { enabled: true, weights: PROFILE_WEIGHTS.balanced } });
+    const eventsOf = new Map((competition.persons ?? []).map(person => [personKey(person), person.registration?.eventIds ?? []]));
+    const scrambles = own.flatMap(item => item.tasks.filter(task => task.role === "scrambler").map(() => item));
+    expect(scrambles.length).toBeGreaterThan(0);
+    expect(scrambles.filter(item => !eventsOf.get(item.personId)?.includes(item.eventId))).toEqual([]);
+    const times = new Map<string, number>();
+    for (const item of scrambles) times.set(item.personId, (times.get(item.personId) ?? 0) + 1);
+    expect(times.size).toBeGreaterThan(scrambles.length / 3);
   });
 
   it("keeps the order of rounds and runs in reasonable time", () => {

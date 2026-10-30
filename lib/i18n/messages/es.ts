@@ -367,7 +367,7 @@ export const es = {
       assignDelegateDuties: { label: "Delegado de turno", help: "Un delegado de turno por grupo, entre los marcados en Personas y roles." },
       assignDataEntry: { label: "Data entry por grupo", help: "Una persona de data entry por grupo, entre quienes tienen ese rol." },
       noTasksForNewcomers: { label: "Evitar tareas a newcomers", help: "Solo se asignan tareas a quien no tiene WCA ID si no queda nadie más." },
-      tasksForOwnEventsOnly: { label: "Tareas solo en sus pruebas", help: "Jueces y runners: solo otras pruebas si no queda nadie más." },
+      tasksForOwnEventsOnly: { label: "Tareas solo en sus pruebas", help: "Nadie mezcla una prueba en la que no compite, salvo si toda la ronda compite a la vez (4BLD). Jueces y runners: otras pruebas solo si no queda nadie más." },
       balanceMinutes: { label: "Repartir también por minutos", help: "Con horario (PRO): además del número de tareas, cuenta los minutos trabajados al repartir, para que un grupo de 35 minutos pese más que uno de 10 (20 minutos cuentan como una tarea)." },
       tasksOnCompetingDaysOnly: { label: "Tareas solo los días que compite", help: "Con horario (PRO): quien compite solo recibe tareas los días que compite, cuando está en el recinto. Staff, voluntarios, delegados, organizadores y data entry trabajan cualquier día." },
       noRunningForForeigners: { label: "Evitar runners extranjeros", help: "Solo si no queda nadie más. Se compara el país de la persona con el del recinto." },

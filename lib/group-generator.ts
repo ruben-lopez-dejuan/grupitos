@@ -53,6 +53,8 @@ export type AssignmentOptions = {
 
 /** How many of the best go together in the last group when nobody chose another number. */
 export const TOP_TOGETHER_COUNT = 4;
+/** Weighted engine: score lost per earlier scrambling task, so that scrambling goes round. */
+const SCRAMBLE_REPEAT = 15;
 
 export function topTogetherCountOf(value: unknown) {
   const count = Number(value);
@@ -652,9 +654,15 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
       .map((person, index) => [personKey(person), index]));
     const canScrambleHere = (person: WcifPerson) => seedResult(person, scrambleEvent) !== undefined;
     const fastEnough = Math.max(Math.ceil(competitors.length / 2), round.scramblers * groups.length);
+    // Own events only: nobody scrambles an event they do not compete in, even if a seat stays
+    // empty. Only when the whole round competes at once (4BLD in the side room) must it be others.
+    const starts = groups.map((_, index) => windowsOf(index + 1)[0]?.start);
+    const allAtOnce = groups.length <= 1 || (starts[0] !== undefined && new Set(starts).size === 1);
+    const outsidersScramble = !options.tasksForOwnEventsOnly || allAtOnce;
     const scramblerPool = accepted.filter(person => {
       const key = personKey(person);
       if (!normalTasksAllowed(key)) return false;
+      if (!outsidersScramble && !registeredForEvent(person)) return false;
       // A scrambler segment (PRO) replaces the built-in speed rule.
       if (allowed("scrambler")) return allowed("scrambler")!.has(key);
       if (!inRoundKeys.has(key) && !staff.has(key) && !trusted.has(key) && !hasWcaJob(person, "scrambler")) return false;
@@ -665,7 +673,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
     const poolKeys = new Set(scramblerPool.map(personKey));
     const reserve = allowed("scrambler") ? [] : accepted.filter(person => {
       const key = personKey(person);
-      return !poolKeys.has(key) && normalTasksAllowed(key) && Number.isFinite(bestAverageAndSingle(person, scrambleEvent)[0]);
+      return !poolKeys.has(key) && normalTasksAllowed(key) && (outsidersScramble || registeredForEvent(person)) && Number.isFinite(bestAverageAndSingle(person, scrambleEvent)[0]);
     });
     const reserveKeys = new Set(reserve.map(personKey));
     const scramblersNeeded = (group: number) => staffing?.(round.id, group)?.scramblers ?? round.scramblers;
@@ -778,7 +786,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
           isStaff: staff.has(key),
           wcaJob: hasWcaJob(person, job),
           isTrusted: trusted.has(key),
-          speed: hasResult(person) && seedIndex.has(key) ? 1 - seedIndex.get(key)! / Math.max(1, competitors.length) : 0,
+          // Ranked in the event scrambled: 3x3 for 3BLD and OH.
+          speed: canScrambleHere(person) && scrambleRank.has(key) ? 1 - scrambleRank.get(key)! / Math.max(1, competitors.length) : 0,
           preference: Number.isFinite(preference) ? preference : 0,
           youngerThan10: !!youngerThan10(person),
         };
@@ -793,24 +802,33 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
         if (job === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country) value -= 5000;
         return value;
       };
-      const groupOrder = groups.map((_, index) => index + 1).sort((a, b) => startOf(a) - startOf(b) || a - b);
+      const groupOrder = groups.map((_, index) => index + 1).sort((a, b) => startOf(a) - startOf(b) || a - b).filter(group => groups[group - 1].length);
+      const doneGroups = new Set<number>();
       for (const group of groupOrder) {
         const size = groups[group - 1].length;
-        if (!size) continue;
         const needs: Partial<Record<TaskRole, number>> = { scrambler: scramblersNeeded(group), ...(options.assignJudges ? { runner: runnersNeeded(group), judge: judgesNeeded(size, stationsIn(group)) } : {}) };
         const candidates: Array<IlpCandidate & { person: WcifPerson; breakdown: Partial<Record<string, number>> }> = [];
         const counts: Partial<Record<TaskRole, number>> = {};
+        let keptForScrambling = new Set<string>();
         for (const [job, need] of Object.entries(needs) as Array<[TaskRole, number]>) {
           if (!need) continue;
-          const pool = (job === "scrambler" ? [...scramblerPool, ...reserve] : poolFor(job as "runner" | "judge")).filter(person => freeIn(personKey(person), group, job));
+          const pool = (job === "scrambler" ? [...scramblerPool, ...reserve] : poolFor(job as "runner" | "judge")).filter(person => freeIn(personKey(person), group, job) && !keptForScrambling.has(personKey(person)));
           counts[job] = pool.length;
+          // Too few scramblers for the stages working at this time: shared out, not one stage empty.
+          const stagesLeft = groupOrder.filter(other => startOf(other) === startOf(group) && !doneGroups.has(other)).length;
+          if (job === "scrambler") needs.scrambler = Math.min(need, Math.ceil(pool.length / stagesLeft));
           const scored = pool.map(person => {
             const breakdown = scoreBreakdown(factsFor(person, group, job), job, scoring!.weights);
             const key = personKey(person);
             // Reserve scramblers only when the usual pool runs short; a room's own team first.
-            const score = Object.values(breakdown).reduce((sum, value) => sum + (value ?? 0), 0) + penalty(person, job) + (job === "scrambler" && reserveKeys.has(key) ? -300 : 0) + (teamHere(round.id, group, key) ? 200 : 0);
+            // Scrambling goes round: each earlier time counts against it, so everyone who can
+            // scrambles before the fastest repeat.
+            const repeats = job === "scrambler" ? (staffLog.get(key) ?? []).filter(entry => entry.role === "scrambler").length : 0;
+            const score = Object.values(breakdown).reduce((sum, value) => sum + (value ?? 0), 0) + penalty(person, job) + (job === "scrambler" && reserveKeys.has(key) ? -300 : 0) + (teamHere(round.id, group, key) ? 200 : 0) - repeats * SCRAMBLE_REPEAT;
             return { key, job, score, person, breakdown };
           }).sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+          // The scramblers of this time do not go judging or running here: the stages to come need them.
+          if (job === "scrambler") keptForScrambling = new Set(stagesLeft > 1 ? scored.slice(0, need * stagesLeft).map(item => item.key) : []);
           // The best few per seat keep the program small without changing its answer in practice.
           candidates.push(...scored.slice(0, Math.max(need * 6, 40)));
         }
@@ -820,6 +838,7 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
           assign(chosen.person, group, job);
           rowFor(chosen.person).why.push(why);
         }
+        doneGroups.add(group);
       }
     };
 

@@ -365,7 +365,7 @@ export const en: Messages = {
       assignDelegateDuties: { label: "Delegate on duty", help: "One delegate on duty per group, among those marked in People and roles." },
       assignDataEntry: { label: "Data entry per group", help: "One data entry person per group, among those with that role." },
       noTasksForNewcomers: { label: "Avoid tasks for newcomers", help: "People without a WCA ID only get tasks when nobody else is left." },
-      tasksForOwnEventsOnly: { label: "Tasks only in own events", help: "Judges and runners: other events only when nobody else is left." },
+      tasksForOwnEventsOnly: { label: "Tasks only in own events", help: "Nobody scrambles an event they do not compete in, unless the whole round competes at once (4BLD). Judges and runners: other events only when nobody else is left." },
       balanceMinutes: { label: "Balance by minutes too", help: "With a schedule (PRO): besides the number of tasks, count the minutes worked when sharing the work out, so a 35-minute group weighs more than a 10-minute one (20 minutes count as one task)." },
       tasksOnCompetingDaysOnly: { label: "Tasks only on the days they compete", help: "With a schedule (PRO): people who compete only get tasks on the days they compete, when they are at the venue. Staff, volunteers, delegates, organizers and data entry work any day." },
       noRunningForForeigners: { label: "Avoid foreign runners", help: "Only when nobody else is left. Compares the person's country with the venue's." },

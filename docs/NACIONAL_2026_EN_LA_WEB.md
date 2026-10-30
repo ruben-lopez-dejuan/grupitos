@@ -173,7 +173,7 @@ A4, orden **Apilado**, **Portada por grupo** y hoja de mezclas para **Los mejore
   de turno de la sala auxiliar no se limita al cluster 1.
 - **Montaje y mezcla del multi** quedan como horas ocupadas del equipo; no se publican como tareas
   (`CreateCompetitionGroupsAssignments`).
-- **Reglas de CanVolunteer**: «solo sus pruebas» y «sin newcomers» evitan, pero no prohíben del todo.
+- **Reglas de CanVolunteer**: «sin newcomers» y «solo sus pruebas» para jueces y runners evitan, pero no prohíben del todo. Para mezclar sí es una regla firme: nadie mezcla una prueba en la que no compite, salvo si toda la ronda compite a la vez (4BLD, 5BLD), aunque quede una plaza vacía.
 - **Conflicto real del horario**: con destacados y top en Bizkaia, los del top que hacen multi no
   caben todos en el único grupo de 4×4 de Bizkaia antes del segundo intento; la revisión lo marca.
   En 2025 se resolvía con un conjunto «multi» antes del top (`MultiSet`): Quién = un cluster
