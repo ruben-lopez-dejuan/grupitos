@@ -29,7 +29,7 @@ Importas la competición desde la WCA, la app reparte a los competidores en grup
 
 | Paso | Qué se decide |
 | --- | --- |
-| Zona | Estaciones y modo de entrada (puestos fijos, sala de espera o mixto). En PRO, además, el personal por sala y escenario y las plantillas. |
+| Zona | Estaciones, modo de entrada (puestos fijos, sala de espera o mixto) y colocación en puestos fijos. En PRO, además, el personal por sala y escenario y las plantillas. |
 | Horario *(PRO)* | Salas, escenarios y la hora de cada grupo. |
 | Reglas | Cómo se reparten los competidores y quién puede hacer cada tarea. |
 | Personas | Roles, personal de confianza y fotos. En PRO, además, voluntarios, equipos, propiedades e importación de hojas. |
@@ -48,6 +48,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
 ### Grupos
 
 - Número de grupos sugerido por ronda según las estaciones y el modo de entrada, ajustable con un contador.
+- **Colocación en puestos fijos:** por defecto, por seed (el mejor del grupo en la estación 1). Marcando «Sentar a los mejores desde el centro de la fila» se eligen filas, mesas por fila y estaciones por mesa, con una vista previa: los mejores se sientan en el centro de la fila de delante, alternando a izquierda y derecha (con 4 mesas de 2: | 7 5 | 3 1 | 2 4 | 6 8 |), y luego la siguiente fila igual.
 - Tres formas de repartir a los competidores:
   - **Mezcladores garantizados** (recomendada): reparte a los mejores y garantiza que haya gente rápida libre para mezclar.
   - **Simétrico:** los mejores, repartidos uno por grupo.
@@ -195,7 +196,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
   El tope es duro: un conjunto nunca llena un grupo por encima del reparto par. Una vista previa avisa de las rondas donde no cabe la gente. Si hay un choque de horario real, gana evitar el choque.
 - **Destacados:** una estrella en la revisión, en la hoja de tiempos y en el WCIF (`featuredCompetitorWcaUserIds` de Groupifier).
-- **Reglas de estación,** como `StationAssignmentRule`. Ordenan las estaciones por posición, inscripción, nombre o una propiedad, y pueden apartar a un cluster de ciertas estaciones (por ejemplo, las del streaming).
+- **Reglas de estación,** como `StationAssignmentRule`. Ordenan las estaciones por posición, inscripción, nombre o una propiedad, y pueden apartar a un cluster de ciertas estaciones (por ejemplo, las del streaming). Además, pueden poner primero a un cluster (en las finales del Campeonato de España 2025, los españoles antes que los extranjeros) y sentar desde el centro de la fila.
 
 ### Plantillas
 

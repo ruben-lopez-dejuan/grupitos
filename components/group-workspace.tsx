@@ -41,6 +41,7 @@ import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedul
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
 import { acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { normalizeSeating, seatingStations, stationOrder, type Seating } from "@/lib/seating";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
 
@@ -342,10 +343,13 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     return { ...current, pro: { ...current.pro, enabled: true, ...change(current.pro) } };
   });
   const setOption = (key: OptionKey, value: boolean) => update({ options: { ...options, [key]: value } });
-  const changeZone = (next: { stations?: number; zoneMode?: ZoneMode }) => {
-    const nextStations = next.stations ?? stations;
+  const seating = normalizeSeating(settings.seating);
+  const changeZone = (next: { stations?: number; zoneMode?: ZoneMode; seating?: Seating }) => {
+    const nextSeating = next.seating ?? settings.seating;
+    // Seating from the middle sets the stations: rows × tables × stations per table.
+    const nextStations = nextSeating?.order === "center" ? seatingStations(nextSeating) : next.stations ?? stations;
     const nextMode = next.zoneMode ?? zoneMode;
-    update({ stations: nextStations, zoneMode: nextMode, rounds: resuggestRounds(settings.rounds, nextStations, nextMode) });
+    update({ stations: nextStations, zoneMode: nextMode, ...(nextSeating ? { seating: nextSeating } : {}), rounds: resuggestRounds(settings.rounds, nextStations, nextMode) });
   };
   const updateRound = (id: string, change: Partial<RoundConfig>) => update({ rounds: settings.rounds.map(round => round.id === id ? { ...round, ...change } : round) });
   const freshSchedule = (): ProSchedule => importSchedule(competition, roundId => settings.rounds.find(round => round.id === roundId)?.groups ?? 1);
@@ -552,7 +556,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const delegatesWithoutDuties = options.assignDelegateDuties && !peopleInUse.delegateDutyIds.some(key => isDelegate(peopleInUse, key));
 
   /** Everything the generator needs except the rounds to generate. */
-  const generationInput = { competition, stations, zoneMode, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
+  const generationInput = { competition, stations, zoneMode, seating, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: pro ? [...proPeople.unavailable, ...(teamState?.unavailable ?? [])] : [], eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
   // Mid-competition: enabled rounds with known competitors that the proposal does not have yet.
   const newRounds = proposal.length ? activeRounds.filter(round => round.competitorsKnown && !pastRoundIds.has(round.id) && !generatedRoundIds.has(round.id)) : [];
   const roundName = (round: { eventId: string; roundNumber: number }) => `${eventName(round.eventId)} R${round.roundNumber}`;
@@ -668,8 +672,24 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           <section className="setup-panel">
             <div className="setup-heading"><h2>{t("zone.title")} <Hint align="start" text={t("zone.hint")} /></h2></div>
             <div className="setup-grid">
-              <label><span>{t("zone.stations")}</span><div className="number-field"><button aria-label={t("zone.removeStation")} onClick={() => changeZone({ stations: Math.max(1, stations - 1) })}>−</button><strong>{stations}</strong><button aria-label={t("zone.addStation")} onClick={() => changeZone({ stations: stations + 1 })}>+</button></div></label>
+              <label><span>{t("zone.stations")}</span><div className="number-field" title={seating.order === "center" ? t("seating.fromLayout") : undefined}><button disabled={seating.order === "center"} aria-label={t("zone.removeStation")} onClick={() => changeZone({ stations: Math.max(1, stations - 1) })}>−</button><strong>{stations}</strong><button disabled={seating.order === "center"} aria-label={t("zone.addStation")} onClick={() => changeZone({ stations: stations + 1 })}>+</button></div></label>
               <div className="preset-field"><span>{t("zone.entry")}</span><div className="segmented three">{ZONE_MODES.map(mode => <button key={mode} className={zoneMode === mode ? "selected" : ""} title={t(keyOf("zone.modes", `${mode}.help`))} onClick={() => changeZone({ zoneMode: mode })}>{t(keyOf("zone.modes", `${mode}.label`))}</button>)}</div><small>{t(keyOf("zone.modes", `${zoneMode}.help`))}</small></div>
+            </div>
+            <div className="seating">
+              <label className="seating-toggle"><input type="checkbox" checked={seating.order === "center"} onChange={event => changeZone({ seating: event.target.checked ? { ...layoutFor(stations, seating), order: "center" } : { ...seating, order: "ranked" } })} /><strong>{t("seating.center")}</strong><Hint text={t("seating.hint")} /></label>
+              {seating.order !== "center" && <small>{t("seating.default")}</small>}
+              {/* Station rules that seat from the centre need the tables of a row even when the general seating is in order. */}
+              {seating.order !== "center" && pro && (settings.pro?.stationRules ?? []).some(rule => !rule.off && rule.seating === "center") && <div className="seating-layout">
+                {(["tables", "seats"] as const).map(key => <label key={key}><span>{t(keyOf("seating", key))}</span><Stepper label={t(keyOf("seating", key))} value={seating[key]} min={1} onChange={value => changeZone({ seating: { ...seating, [key]: Math.min(99, value) } })} /></label>)}
+                <small className="seating-for-rules">{t("seating.forRules")}</small>
+              </div>}
+              {seating.order === "center" && <>
+                <div className="seating-layout">
+                  {(["rows", "tables", "seats"] as const).map(key => <label key={key}><span>{t(keyOf("seating", key))}</span><Stepper label={t(keyOf("seating", key))} value={seating[key]} min={1} onChange={value => changeZone({ seating: { ...seating, [key]: Math.min(99, value) } })} /></label>)}
+                  <span className="seating-total">= {t("seating.total", { count: seatingStations(seating) })}</span>
+                </div>
+                <SeatingPreview seating={seating} />
+              </>}
             </div>
             {pro && <>
               <h3 className="panel-subheading">{t("templates.title")} <Hint align="start" text={t("templates.hint")} /></h3>
@@ -732,7 +752,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
             <h3 className="panel-subheading">{t("sets.title")} <Hint align="start" text={t("sets.hint")} /></h3>
             <AssignmentSetsPanel sets={sets} onChange={setSets} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} onCluster={clusterFor} preview={sets.length ? previewSets({ competition, sets, rounds, slots, membersOf, maxPerGroup: (roundId, group) => staffingFor?.(roundId, group)?.maxPerGroup }) : undefined} />
             <h3 className="panel-subheading">{t("stationRules.title")} <Hint align="start" text={t("stationRules.hint")} /></h3>
-            <StationRulesPanel rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} propertyKeys={proPeople.propertyKeys} />
+            <StationRulesPanel seating={seating} rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} propertyKeys={proPeople.propertyKeys} />
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
             <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
               <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}{teamClusters.length > 0 && <optgroup label={t("proPeople.teams")}>{teamClusters.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</optgroup>}</select>
@@ -827,6 +847,31 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
 }
 
 /** `auto`: the value is a suggestion nobody has set yet, shown muted. */
+/** Rows, tables and stations per table for the current stations: two per table, one row. */
+function layoutFor(stations: number, seating: Seating): Seating {
+  if (seatingStations(seating) === stations) return seating;
+  return { ...seating, rows: 1, seats: 2, tables: Math.max(1, Math.ceil(stations / 2)) };
+}
+
+/** The room seen from the front: each table with the place in the group (1 = the best) of each station. */
+function SeatingPreview({ seating }: { seating: Seating }) {
+  const { t } = useI18n();
+  const order = stationOrder(seatingStations(seating), seating);
+  const place = new Map(order.map((station, index) => [station, index + 1]));
+  const perRow = seating.tables * seating.seats;
+  return <figure className="seating-preview">
+    <div className="seating-rows">{Array.from({ length: seating.rows }, (_, row) => <div key={row} className="seating-row">
+      <span className="seating-row-label">{row === 0 ? t("seating.front") : t("seating.row", { row: row + 1 })}</span>
+      <div className="seating-tables">{Array.from({ length: seating.tables }, (_, table) => <div key={table} className="seating-table">{Array.from({ length: seating.seats }, (_, seat) => {
+        const station = row * perRow + table * seating.seats + seat + 1;
+        const rank = place.get(station)!;
+        return <span key={seat} className={rank === 1 ? "seat best" : "seat"} title={t("seating.seatTitle", { rank, station })}><strong>{rank}</strong><small>{station}</small></span>;
+      })}</div>)}</div>
+    </div>)}</div>
+    <figcaption>{t("seating.caption")}</figcaption>
+  </figure>;
+}
+
 function Stepper({ label, value, min, disabled = false, big = false, auto = false, variant, onChange }: { label: string; value: number; min: number; disabled?: boolean; big?: boolean; auto?: boolean; variant?: "scrambler" | "runner"; onChange: (value: number) => void }) {
   const { t } = useI18n();
   return <div className={["mini-stepper", big && "big", auto && "auto", variant].filter(Boolean).join(" ")} title={auto ? t("staffing.auto") : undefined} data-label={label}><button disabled={disabled || value <= min} aria-label={t("rounds.remove", { thing: label })} onClick={() => onChange(value - 1)}>−</button><strong aria-label={`${value} ${label}`}>{value}</strong><button disabled={disabled} aria-label={t("rounds.add", { thing: label })} onClick={() => onChange(value + 1)}>+</button></div>;

@@ -8,6 +8,7 @@ import type { StoredCompetition, WcifPerson } from "@/lib/competition-store";
 import { sortTasks, type GeneratedAssignment, type PickReason, type Task, type TaskRole, type Why } from "@/lib/assignments";
 import type { ResolvedSet } from "@/lib/pro/assignment-sets";
 import { assignStations, type ResolvedStationRule } from "@/lib/pro/station-rules";
+import { stationOrder, type Seating } from "@/lib/seating";
 import { unavailableWindows, type Unavailability } from "@/lib/pro/people";
 import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro/scoring";
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
@@ -256,11 +257,13 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
+export function generateAssignments({ competition, rounds, stations, zoneMode, seating, people, options, slots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
   zoneMode: ZoneMode;
+  /** How competitors sit at fixed stations (in order when absent); a station rule wins over it. */
+  seating?: Seating;
   people: PeopleSettings;
   options: AssignmentOptions;
   /** PRO mode: times of every group of every round. */
@@ -514,14 +517,15 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, p
     const stationRule = fixed ? stationRules?.(round) : undefined;
     groups.forEach((members, groupIndex) => {
       const rule = stationRule?.get(groupIndex + 1);
-      const ruled = rule && assignStations(members.map(person => ({ key: personKey(person), seed: seedIndex.get(personKey(person))!, registrantId: person.registrantId, name: person.name, property: rule.property ? personProperties[personKey(person)]?.[rule.property] : undefined })), stationsIn(groupIndex + 1), rule);
+      const seats = stationOrder(stationsIn(groupIndex + 1), seating);
+      const ruled = rule && assignStations(members.map(person => ({ key: personKey(person), seed: seedIndex.get(personKey(person))!, registrantId: person.registrantId, name: person.name, property: rule.property ? personProperties[personKey(person)]?.[rule.property] : undefined })), stationsIn(groupIndex + 1), rule, seating);
       [...members].sort((a, b) => seedIndex.get(personKey(a))! - seedIndex.get(personKey(b))!).forEach((person, index) => {
         const key = personKey(person);
         const attempt = attemptOfColumn.get(groupIndex + 1);
         const task: Task = { group: groupIndex + 1, role: "competitor", ...(attempt ? { attempt } : {}) };
         const existing = rows.get(key);
         if (existing) { existing.tasks = sortTasks([...existing.tasks, task]); return; }
-        const station = ruled ? ruled.get(key) : fixed && index < stationsIn(groupIndex + 1) ? index + 1 : undefined;
+        const station = ruled ? ruled.get(key) : fixed ? seats[index] : undefined;
         rows.set(key, { person, key, inRound: true, seedIndex: seedIndex.get(key)!, tasks: [task], station, why: [] });
       });
     });

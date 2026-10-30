@@ -5,14 +5,17 @@ import { useI18n } from "@/components/i18n";
 import { keyOf } from "@/lib/i18n";
 import { formatGroupNumbers, parseGroupNumbers } from "@/lib/pro/assignment-sets";
 import { newStationRuleId, STATION_SORTS, type StationExclusion, type StationRuleConfig } from "@/lib/pro/station-rules";
+import { SEATING_ORDERS, type Seating } from "@/lib/seating";
 
 /**
  * PRO: station rules (CompScript's StationAssignmentRule). In the groups a rule covers, stations
  * follow an order, and exclusions keep a cluster away from some stations. The first rule that
  * covers a group is the one used.
  */
-export function StationRulesPanel({ rules, onChange, segments, lanes, rounds, propertyKeys }: {
+export function StationRulesPanel({ rules, onChange, segments, lanes, rounds, propertyKeys, seating }: {
   rules: StationRuleConfig[];
+  /** The general seating: new rules start with its order; from the centre uses its tables. */
+  seating: Seating;
   onChange: (rules: StationRuleConfig[]) => void;
   segments: Array<{ id: string; name: string; size: number }>;
   lanes: ScopeLane[];
@@ -26,7 +29,7 @@ export function StationRulesPanel({ rules, onChange, segments, lanes, rounds, pr
     [next[index], next[index + step]] = [next[index + step], next[index]];
     onChange(next);
   };
-  const add = () => onChange([...rules, { id: newStationRuleId(rules), rounds: "all", lanes: [], groups: "any", mode: "ascending", sortBy: "seed", exclusions: [] }]);
+  const add = () => onChange([...rules, { id: newStationRuleId(rules), rounds: "all", lanes: [], groups: "any", mode: "ascending", sortBy: "seed", ...(seating.order === "center" ? { seating: "center" as const } : {}), exclusions: [] }]);
   const setExclusion = (rule: StationRuleConfig, index: number, change: Partial<StationExclusion>) => save({ ...rule, exclusions: rule.exclusions.map((item, position) => position === index ? { ...item, ...change } : item) });
 
   return <div className="assignment-sets station-rules">
@@ -43,6 +46,15 @@ export function StationRulesPanel({ rules, onChange, segments, lanes, rounds, pr
           <select value={rule.mode} onChange={event => save({ ...rule, mode: event.target.value as StationRuleConfig["mode"] })} aria-label={t("stationRules.mode")}>
             <option value="ascending">{t(rule.sortBy === "name" ? "stationRules.ascendingName" : "stationRules.ascending")}</option>
             <option value="descending">{t(rule.sortBy === "name" ? "stationRules.descendingName" : "stationRules.descending")}</option>
+          </select>
+          <span>{t("stationRules.first")}</span>
+          <select value={rule.first ?? ""} onChange={event => save({ ...rule, first: event.target.value || undefined })} aria-label={t("stationRules.firstCluster")}>
+            <option value="">{t("stationRules.nobodyFirst")}</option>
+            {segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name} ({segment.size})</option>)}
+            {rule.first && !segments.some(segment => segment.id === rule.first) && <option value={rule.first}>{t("sets.missingCluster")}</option>}
+          </select>
+          <select value={rule.seating ?? "ranked"} onChange={event => save({ ...rule, seating: event.target.value === "center" ? "center" : undefined })} aria-label={t("stationRules.seating")} title={rule.seating === "center" ? t("stationRules.centerLayout", { tables: seating.tables, seats: seating.seats }) : undefined}>
+            {SEATING_ORDERS.map(order => <option key={order} value={order}>{t(keyOf("stationRules.seatings", order))}</option>)}
           </select>
         </div>
         <label className="set-on"><input type="checkbox" checked={!rule.off} onChange={event => save({ ...rule, off: !event.target.checked })} />{t("sets.active")}</label>

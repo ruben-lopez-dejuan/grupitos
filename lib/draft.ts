@@ -7,6 +7,7 @@ import { normalizeJobs, normalizeSegments, type Segment } from "@/lib/pro/segmen
 import { normalizeProSchedule, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
 import type { PrintingOptions } from "@/lib/scorecards/options";
+import type { Seating } from "@/lib/seating";
 
 export type WorkspaceSettings = {
   stations: number;
@@ -15,6 +16,8 @@ export type WorkspaceSettings = {
   options: AssignmentOptions;
   people: PeopleSettings;
   printing: PrintingOptions;
+  /** How competitors sit at fixed stations; absent in drafts older than the option (in order). */
+  seating?: Seating;
   /** PRO mode for large competitions; absent until it is first switched on. */
   pro?: ProConfig;
 };
@@ -36,7 +39,7 @@ export function draftStorageKey(competitionId: string) {
 
 function usesSegments(settings: WorkspaceSettings) {
   const pro = settings.pro;
-  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && set.segment) || (pro.stationRules ?? []).some(rule => !rule.off && rule.exclusions.some(item => item.segment)));
+  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && set.segment) || (pro.stationRules ?? []).some(rule => !rule.off && (rule.first || rule.exclusions.some(item => item.segment))));
 }
 
 /** Only the settings that change what the generator produces. */
@@ -44,6 +47,8 @@ export function generationSignature(settings: WorkspaceSettings) {
   return JSON.stringify({
     stations: settings.stations,
     zoneMode: settings.zoneMode,
+    // Seating from the middle depends on how many stations a row has; in order, on nothing.
+    ...(settings.seating?.order === "center" || settings.pro?.stationRules?.some(rule => !rule.off && rule.seating === "center") ? { seating: { tables: settings.seating?.tables, seats: settings.seating?.seats } } : {}),
     rounds: settings.rounds.filter(round => round.enabled).map(({ id, groups, scramblers, runners }) => ({ id, groups, scramblers, runners })),
     options: settings.options,
     people: settings.people,

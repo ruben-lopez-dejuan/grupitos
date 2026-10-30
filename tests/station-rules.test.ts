@@ -28,6 +28,25 @@ describe("assignStations", () => {
     expect(order(assignStations(people, 4, rule({ sortBy: "property", property: "x", mode: "descending" })))).toBe("dacb");
   });
 
+  it("puts a cluster first, then the rest, each part in the rule's order (Spanish Championship 2025 finals)", () => {
+    // b and d are Spaniards: they take stations 1 and 2 by position, the foreigners a and c follow.
+    const spaniards = new Set(["b", "d"]);
+    expect(order(assignStations(people, 4, rule({ first: spaniards })))).toBe("bdac");
+    expect(order(assignStations(people, 4, rule({ first: spaniards, mode: "descending" })))).toBe("dbca");
+  });
+
+  it("seats from the centre with the tables of a row, also around exclusions", () => {
+    const layout = { order: "ranked" as const, rows: 1, tables: 2, seats: 2 };
+    // One row of four: | 3 1 | 2 4 |, i.e. stations 1..4 hold c, a, b, d.
+    expect(order(assignStations(people, 4, rule({ seating: "center" }), layout))).toBe("cabd");
+    // Without a layout, or in order, nothing changes.
+    expect(order(assignStations(people, 4, rule({ seating: "center" })))).toBe("abcd");
+    // a may not sit at station 2 (the centre left): it takes the nearest place, station 3.
+    const kept = assignStations(people, 4, rule({ seating: "center", exclusions: [{ members: new Set(["a"]), stations: [2] }] }), layout);
+    expect(kept.get("a")).toBe(3);
+    expect(new Set(kept.values()).size).toBe(4);
+  });
+
   it("gives stations only up to the number of stations", () => {
     const stations = assignStations(people, 3, rule());
     expect(stations.size).toBe(3);
