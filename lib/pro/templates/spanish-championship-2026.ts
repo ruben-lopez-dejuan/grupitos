@@ -43,7 +43,7 @@ const segments: Segment[] = [
   {
     id: "s7", name: "Mezcladores por prueba", match: "all", rules: [{
       kind: "roundPb",
-      limits: { "222": 600, "333": 1500, "444": 5000, "555": 9000, "666": 18000, "777": 24000, pyram: 600, skewb: 600, clock: 1500, minx: 9000, sq1: 3000 },
+      limits: { "222": 600, "333": 1500, "444": 5000, "555": 10000, "666": 18000, "777": 30000, pyram: 600, skewb: 600, clock: 1500, minx: 9000, sq1: 3000 },
       mapping: { "333bf": "333", "333oh": "333", "333ft": "333", "333mbf": "333", "444bf": "444", "555bf": "555" },
     }],
   },
@@ -62,7 +62,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
   format: TEMPLATE_FORMAT,
   version: 1,
   name: "Campeonato de España 2026",
-  note: "Destacados 4 y top 16 por grupo de Bizkaia (23 por grupo como máximo); ajústalos en Reglas, también por prueba, y la vista previa avisa si no caben. Las rondas siguientes son provisionales, copiadas de 2025: finales impares a Bizkaia y pares a Gipuzkoa contando primero a los españoles; final de 3x3 cara a cara (top 12, grupos 2-7) y el resto al grupo 1; semifinal de 3x3 por posición (Bizkaia, Gipuzkoa y el resto Araba); en las demás, 4 destacados por grupo de Bizkaia. Los conjuntos de delegados usan la propiedad delegate-cluster.",
+  note: "Destacados 4 y top 21 por grupo de Bizkaia (23 por grupo como máximo); ajústalos en Reglas, también por prueba, y la vista previa avisa si no caben. Las rondas siguientes son provisionales, copiadas de 2025: finales impares a Bizkaia y pares a Gipuzkoa contando primero a los españoles; final de 3x3 cara a cara (top 12, grupos 2-7) y el resto al grupo 1; semifinal de 3x3 por posición (Bizkaia, Gipuzkoa y el resto Araba); en las demás, 4 destacados por grupo de Bizkaia. Los conjuntos de delegados usan la propiedad delegate-cluster.",
   // CanVolunteer: without a team, only in one's own events and with a WCA ID. The rest is the
   // setup prepared for the championship.
   options: {
@@ -109,7 +109,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
       // FeaturedSet and TopSet. The scripts count per group of the whole round
       // (NumberPerGroupToPerRound); here it is per group of Bizkaia, which is how the numbers read.
       set("sc26-featured", "Destacados", { top: 4, perGroup: true, lanes: [BIZKAIA], featured: true }),
-      set("sc26-top", "Top", { top: 16, perGroup: true, lanes: [BIZKAIA] }),
+      set("sc26-top", "Top", { top: 21, perGroup: true, lanes: [BIZKAIA] }),
       // Other later rounds (2025's TopCompetitorsSet): 4 per group of the main stage, featured.
       set("sc26-later-featured", "Destacados (rondas siguientes)", { rounds: "middle", top: 4, perGroup: true, lanes: [BIZKAIA], featured: true }),
       // Teams and delegates keep their stage in every round (in finals nobody is left by now).

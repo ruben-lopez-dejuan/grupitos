@@ -16,7 +16,7 @@ En **Zona → Plantillas** elige «Campeonato de España 2026» y pulsa **Aplica
 rondas o días que no encuentre. Después solo queda:
 
 - Revisar en **Zona** las estaciones y el máximo por grupo de cada escenario: Araba y Gipuzkoa 14 estaciones y 28 como máximo, Bizkaia 14 y 23, Sala Auxiliar 20 estaciones.
-- Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (16) por grupo de Bizkaia; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
+- Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (21) por grupo de Bizkaia; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
 - Rellenar `delegate-cluster` si queréis los conjuntos de delegados.
 - Marcar los delegados de turno y, si lo queréis, activar «Delegado de turno».
 
