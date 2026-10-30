@@ -737,7 +737,7 @@ export const en: Messages = {
     unmatched_other: "{count} rows without a match",
     errors: {
       unauthorized: "Reading Google Sheets needs a WCA sign-in (not available in the demo). Use CSV.",
-      "not-configured": "Reading Google Sheets is not set up on the server yet (see docs/GOOGLE_SHEETS.md). Use CSV meanwhile.",
+      "not-configured": "The server is not connected to Google yet: it needs a service account and its two environment variables (see docs/GOOGLE_SHEETS.md). Use CSV meanwhile.",
       forbidden: "No access: share the sheet with {email}.",
       "not-found": "That sheet or range does not exist.",
       "invalid-id": "That is not a Google Sheets link.",

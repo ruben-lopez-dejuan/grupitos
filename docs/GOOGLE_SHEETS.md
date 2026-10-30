@@ -4,6 +4,8 @@ El modo PRO puede leer el formulario de voluntarios directamente de Google Sheet
 
 Mientras no esté configurado, la app lo indica y se puede importar igual pegando o subiendo un **CSV** exportado del formulario.
 
+El código ya está hecho (`lib/google-sheets.ts`, `app/api/sheets/route.ts`, Personas → «Importar de hoja de cálculo» → Google Sheets). Lo único que falta es la configuración de abajo: si la app dice «Falta conectar el servidor con Google», es que las dos variables no están puestas en ese entorno.
+
 ## Configuración (una sola vez)
 
 1. Entra en <https://console.cloud.google.com/> con la cuenta de Google que quieras usar y crea un proyecto (por ejemplo «grupitos»).

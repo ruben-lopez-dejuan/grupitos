@@ -16,7 +16,7 @@ export class SheetError extends Error {
 export function sheetsAccount() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   // Vercel and .env files often store the PEM key with literal "\n".
-  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\n/g, "\n").trim();
+  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
   return email && key ? { email, key } : undefined;
 }
 

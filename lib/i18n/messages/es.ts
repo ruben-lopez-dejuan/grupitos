@@ -739,7 +739,7 @@ export const es = {
     unmatched_other: "{count} filas sin coincidencia",
     errors: {
       unauthorized: "Para leer Google Sheets hay que entrar con la cuenta WCA (no funciona en la demo). Usa CSV.",
-      "not-configured": "La lectura de Google Sheets aún no está configurada en el servidor (ver docs/GOOGLE_SHEETS.md). Mientras, usa CSV.",
+      "not-configured": "Falta conectar el servidor con Google: hay que crear una cuenta de servicio y poner sus dos variables de entorno (ver docs/GOOGLE_SHEETS.md). Mientras, usa CSV.",
       forbidden: "Sin acceso: comparte la hoja con {email}.",
       "not-found": "No existe esa hoja o ese rango.",
       "invalid-id": "No es un enlace de Google Sheets.",
