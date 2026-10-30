@@ -48,12 +48,15 @@ describe("PRO templates", () => {
     expect(pro.sets!.find(set => set.id === "sc26-featured")!.lanes).toEqual(["7:11"]);
     expect(pro.sets!.find(set => set.id === "sc26-finals-even")).toMatchObject({ rounds: "final", positions: "even", first: "sc26-spaniards", lanes: ["7:12"] });
     expect(pro.staffing).toEqual({
-      "7:10": { stations: 14, maxPerGroup: 28 }, "7:11": { stations: 14, maxPerGroup: 22 }, "7:12": { stations: 14, maxPerGroup: 28 },
+      "7:10": { stations: 14, maxPerGroup: 28 }, "7:11": { stations: 14, maxPerGroup: 23 }, "7:12": { stations: 14, maxPerGroup: 28 },
       "8:room": { stations: 20, scramblers: 2, runners: 2 },
     });
     expect(pro.people!.teams!.setup["Side room"]).toEqual({ kind: "volunteer", lane: "8:room", busy: [{ day: "2026-12-06", start: "08:45", end: "09:15" }, { day: "2026-12-06", start: "12:15", end: "12:25" }] });
     expect(after.rounds.find(round => round.id === "333mbf-r1")).toMatchObject({ scramblers: 0, runners: 0, staffSetByHand: true });
-    expect(after.options).toMatchObject({ tasksForOwnEventsOnly: true, noTasksForNewcomers: true });
+    expect(after.options).toMatchObject({ tasksForOwnEventsOnly: true, noTasksForNewcomers: true, sortingRule: "scrambler-safe", assignDataEntry: true });
+    expect(pro.jobs).toEqual({ scrambler: "s7" });
+    expect(pro.segments!.map(segment => segment.id)).toContain("s7");
+    expect(pro.scoring?.enabled).toBe(true);
     expect(after.printing).toMatchObject({ coverSheets: true, order: "stacked" });
     // Personal data and the schedule stay.
     expect(pro.people!.properties).toEqual(before.pro!.people!.properties);

@@ -467,6 +467,7 @@ export const es = {
     previewShort_one: "No caben en {count} ronda",
     previewShort_other: "No caben en {count} rondas",
     previewRow: "{round}: {wanted} para {seats} plazas",
+    previewOverflow: "Nadie se queda fuera: quien no cabe pasa a los conjuntos siguientes o a los huecos de otros grupos.",
     rounds: "Rondas",
     firstRounds: "Primeras rondas",
     laterRounds: "Rondas siguientes",

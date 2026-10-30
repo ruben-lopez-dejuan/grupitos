@@ -465,6 +465,7 @@ export const en: Messages = {
     previewShort_one: "Does not fit in {count} round",
     previewShort_other: "Does not fit in {count} rounds",
     previewRow: "{round}: {wanted} for {seats} seats",
+    previewOverflow: "Nobody is left out: whoever does not fit goes to the next sets or to free seats in other groups.",
     rounds: "Rounds",
     firstRounds: "First rounds",
     laterRounds: "Later rounds",

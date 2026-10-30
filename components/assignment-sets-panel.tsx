@@ -190,7 +190,7 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
           if (!rows.length) return null;
           const placed = rows.reduce((sum, row) => sum + row.placed, 0);
           return short.length
-            ? <p className="set-preview short">{tp("sets.previewShort", short.length)}: {short.slice(0, 4).map(row => t("sets.previewRow", { round: roundName(row.roundId), wanted: row.wanted, seats: row.seats })).join(" · ")}{short.length > 4 ? " …" : ""}</p>
+            ? <p className="set-preview short">{tp("sets.previewShort", short.length)}: {short.slice(0, 4).map(row => t("sets.previewRow", { round: roundName(row.roundId), wanted: row.wanted, seats: row.seats })).join(" · ")}{short.length > 4 ? " …" : ""}. {t("sets.previewOverflow")}</p>
             : <p className="set-preview">{t("sets.previewOk", { people: placed, rounds: rows.length })}</p>;
         })()}
         </div>}

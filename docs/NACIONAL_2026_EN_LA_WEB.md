@@ -15,8 +15,8 @@ En **Zona → Plantillas** elige «Campeonato de España 2026» y pulsa **Aplica
 8 de esta guía de una vez (`lib/pro/templates/spanish-championship-2026.ts`) y avisa de las salas,
 rondas o días que no encuentre. Después solo queda:
 
-- Revisar en **Zona** las estaciones y el máximo por grupo de cada escenario: Araba y Gipuzkoa 14 estaciones y 28 como máximo, Bizkaia 14 y 22, Sala Auxiliar 20 estaciones.
-- Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (18) por grupo de Bizkaia, que son de partida; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
+- Revisar en **Zona** las estaciones y el máximo por grupo de cada escenario: Araba y Gipuzkoa 14 estaciones y 28 como máximo, Bizkaia 14 y 23, Sala Auxiliar 20 estaciones.
+- Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (16) por grupo de Bizkaia; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
 - Rellenar `delegate-cluster` si queréis los conjuntos de delegados.
 - Marcar los delegados de turno y, si lo queréis, activar «Delegado de turno».
 
@@ -39,7 +39,7 @@ El resto de la guía explica qué hace cada parte, por si quieres hacerlo a mano
 
 Viene del WCIF: sala Pabellón con Araba, Bizkaia y Gipuzkoa, y Sala Auxiliar sin escenarios.
 Comprueba en **Horario** que cada ronda tiene los grupos del script (por ejemplo clock 3 por
-escenario, 333-r4 con 1 en Gipuzkoa y 7 en las finales) y que el multi tiene sus dos intentos.
+escenario, 333-r4 con 7 en Gipuzkoa y 6 en Bizkaia) y que el multi tiene sus dos intentos.
 Nada más que hacer.
 
 ## 2. Equipos (`_constants.cs`, `_helpers.cs`: `InTeam`, `CanVolunteer`)
@@ -117,9 +117,9 @@ primeras rondas, cada uno con sus rondas, así que no se pisan:
 
 | Conjunto | Rondas | Quién | Dónde |
 | --- | --- | --- | --- |
-| Final 3x3: impares / pares | 333-r4 | top 14, contando primero a los españoles, impares / pares, por ranking | Bizkaia / Gipuzkoa, grupos 2 a 8 (cara a cara, el mejor en el 8) |
+| Final 3x3: impares / pares | 333-r4 | top 12, contando primero a los españoles, impares / pares, por ranking | Bizkaia / Gipuzkoa, grupos 2 a 7 (cara a cara, el mejor en el 7) |
 | Final 3x3: grupo 1 | 333-r4 | el resto | grupo 1 (Gipuzkoa) |
-| Semifinal 3x3 | 333-r3 | hasta el 14.º / hasta el 29.º / el resto | Bizkaia / Gipuzkoa / Araba |
+| Semifinal 3x3 | 333-r3 | top 22 / top 28 / el resto; cada escenario se llena hasta el reparto par (con 42: 14 en cada uno) | Bizkaia / Gipuzkoa / Araba |
 | Finales: impares / pares | Finales | impares / pares, contando primero a los españoles | Bizkaia / Gipuzkoa |
 | Destacados (rondas siguientes) | Rondas siguientes sin finales | top 4 por grupo, destacados | Bizkaia |
 | Organización, AES, Data, Streaming | Todas | el equipo | como en primeras rondas |
@@ -127,9 +127,9 @@ primeras rondas, cada uno con sus rondas, así que no se pisan:
 | Resto (rondas siguientes) | Rondas siguientes sin finales | el resto | cualquier escenario |
 
 Y una regla de estación para las finales: por posición, de menor a mayor, primero los españoles
-(`FinalsStations`). En 2025 la final de 3x3 tenía 8 pares (top 16, grupos 2 a 9); en 2026 hay 7
-grupos en las finales, así que son 14. Las posiciones son las de la ronda anterior. Revisa estos
-números cuando estén los scripts de 2026.
+(`FinalsStations`). En 2025 la final de 3x3 tenía 8 pares (top 16, grupos 2 a 9); en el horario de
+2026 hay 6 grupos a la vez, así que son 12, y los 4 restantes van al grupo 1, que dura 20 minutos.
+Las posiciones son las de la ronda anterior. Revisa estos números cuando estén los scripts de 2026.
 
 Las rondas de la sala auxiliar (4BLD, 5BLD, multi) no tienen grupos en esos escenarios, así que
 esos conjuntos no se aplican allí y todo el mundo va a su único grupo, como
@@ -156,7 +156,7 @@ esos conjuntos no se aplican allí y todo el mundo va a su único grupo, como
 ## 7. Zona → personal por escenario (`4_assign_side.cs`: `AssignStaff`)
 
 En la tabla de personal por sala y escenario: Araba y Gipuzkoa **14 estaciones y 28 por grupo como
-máximo**, Bizkaia **14 y 22**. Sala Auxiliar: **20 estaciones, 2 mezcladores,
+máximo**, Bizkaia **14 y 23**. Sala Auxiliar: **20 estaciones, 2 mezcladores,
 2 runners** (`JudgeJob(20), RunnerJob(2), ScramblerJob(2)`). Para el multi el script pide 10 jueces
 y ni mezcladores ni runners: en **Grupos**, ronda 333mbf, pon 0 mezcladores y 0 runners.
 
