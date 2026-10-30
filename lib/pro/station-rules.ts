@@ -43,7 +43,7 @@ export function newStationRuleId(rules: StationRuleConfig[]) {
 }
 
 /** The rule of each group of a round: the first one in the list that covers it. */
-export function resolveStationRules(rules: StationRuleConfig[] | undefined, round: { id: string; eventId: string; roundNumber: number; groups: number }, slots: GroupSlot[] | undefined, membersOf: (segmentId: string, eventId: string) => Set<string> | undefined) {
+export function resolveStationRules(rules: StationRuleConfig[] | undefined, round: { id: string; eventId: string; roundNumber: number; groups: number; final?: boolean }, slots: GroupSlot[] | undefined, membersOf: (segmentId: string, eventId: string) => Set<string> | undefined) {
   const byGroup = new Map<number, ResolvedStationRule>();
   for (const rule of rules ?? []) {
     if (!appliesToRound(rule, round)) continue;

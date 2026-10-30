@@ -36,6 +36,44 @@ describe("splitWithSets", () => {
     expect(groups.map(members => members.length)).toEqual([4, 4, 4]);
   });
 
+  it("splits a final by odd and even positions, counting a cluster first (Spanish Championship 2025)", () => {
+    const people = bestFirst.slice(0, 12);
+    // Every third finalist is a foreigner: the Spaniards come first, each part by position.
+    const spaniards = new Set(keys(people.filter((_, index) => index % 3 !== 2)));
+    const order = [...people.filter(person => spaniards.has(keys([person])[0])), ...people.filter(person => !spaniards.has(keys([person])[0]))];
+    const { groups } = splitWithSets(people, 2, [
+      { id: "odd", name: "Odd", groups: [1], featured: false, first: spaniards, positions: "odd" },
+      { id: "even", name: "Even", groups: [2], featured: false, first: spaniards, positions: "even" },
+    ], "ranks", "333");
+    expect(keys(groups[0]).sort()).toEqual(keys(order.filter((_, index) => index % 2 === 0)).sort());
+    expect(keys(groups[1]).sort()).toEqual(keys(order.filter((_, index) => index % 2 === 1)).sort());
+  });
+
+  it("seats the 3x3 final head to head: foreigners in group 1, then one Spaniard per stage and group, the best last", () => {
+    const people = bestFirst.slice(0, 20);
+    const foreigners = new Set(keys([people[0], people[5], people[11], people[19]]));
+    const spaniards = new Set(keys(people).filter(key => !foreigners.has(key)));
+    const spanish = people.filter(person => spaniards.has(keys([person])[0]));
+    // Columns 1-9: Red groups 1-9; columns 10-18: Yellow groups 1-9.
+    const red = [2, 3, 4, 5, 6, 7, 8, 9];
+    const yellow = red.map(group => group + 9);
+    const { groups } = splitWithSets(people, 18, [
+      { id: "foreigners", name: "Foreigners", members: foreigners, groups: [1, 10], featured: false },
+      { id: "odd", name: "Odd", top: 16, groups: red, featured: false, first: spaniards, positions: "odd", ranked: true },
+      { id: "even", name: "Even", top: 16, groups: yellow, featured: false, first: spaniards, positions: "even", ranked: true },
+    ], "ranks", "333");
+    expect(keys([...groups[0], ...groups[9]]).sort()).toEqual([...foreigners].sort());
+    // Red: 15th in group 2 … 1st in group 9; Yellow: 16th in group 2 … 2nd in group 9.
+    expect(red.map(group => keys(groups[group - 1]))).toEqual([14, 12, 10, 8, 6, 4, 2, 0].map(index => keys([spanish[index]])));
+    expect(yellow.map(group => keys(groups[group - 1]))).toEqual([15, 13, 11, 9, 7, 5, 3, 1].map(index => keys([spanish[index]])));
+  });
+
+  it("applies \"finals\" sets to each event's last round only", () => {
+    const set: AssignmentSetConfig = { id: "f", name: "F", rounds: "final", lanes: [], groups: "any" };
+    expect(resolveSets([set], { id: "333-r3", eventId: "333", roundNumber: 3, groups: 2, final: true }, undefined, () => undefined)).toHaveLength(1);
+    expect(resolveSets([set], { id: "333-r2", eventId: "333", roundNumber: 2, groups: 2 }, undefined, () => undefined)).toEqual([]);
+  });
+
   it("falls back to the plain split when no set places anyone", () => {
     const people = bestFirst.slice(0, 10);
     const result = splitWithSets(people, 2, [{ id: "none", name: "None", members: new Set(), groups: [1], featured: true }], "ranks", "333");

@@ -190,9 +190,12 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 ### Orden de asignación, destacados y estaciones
 
 - **Conjuntos de asignación,** como el `AssignmentSet` de CompScript. Se ven como una lista de tarjetas con una línea de resumen (quién, cuántos, rondas y dónde): se abren con un clic para editarlas y se reordenan arrastrando, con el ratón o el dedo, o con ↑ y ↓. Una lista ordenada en la que cada conjunto dice:
-  - **quién:** un cluster y/o «solo los mejores N», con un N distinto por prueba si hace falta;
-  - **en qué rondas;**
-  - **dónde:** sala, escenario y números de grupo.
+  - **quién:** un cluster y/o «solo los mejores N», con un N distinto por prueba si hace falta; también solo las posiciones impares o pares, contando primero a un cluster (los españoles y luego los extranjeros);
+  - **en qué rondas:** primeras rondas, finales, todas o elegidas;
+  - **dónde:** sala, escenario y números de grupo;
+  - **cómo:** repartidos entre sus grupos, o por ranking (los mejores en el último grupo).
+
+  La plantilla «Finales: impares y pares» crea los dos conjuntos de las finales del Campeonato de España 2025: impares a un escenario y pares al otro.
 
   El tope es duro: un conjunto nunca llena un grupo por encima del reparto par. Una vista previa avisa de las rondas donde no cabe la gente. Si hay un choque de horario real, gana evitar el choque.
 - **Destacados:** una estrella en la revisión, en la hoja de tiempos y en el WCIF (`featuredCompetitorWcaUserIds` de Groupifier).

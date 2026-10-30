@@ -39,7 +39,7 @@ export function draftStorageKey(competitionId: string) {
 
 function usesSegments(settings: WorkspaceSettings) {
   const pro = settings.pro;
-  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && set.segment) || (pro.stationRules ?? []).some(rule => !rule.off && (rule.first || rule.exclusions.some(item => item.segment))));
+  return !!pro && (Object.keys(pro.jobs ?? {}).length > 0 || Object.values(pro.staffing ?? {}).some(lane => lane.team) || (pro.sets ?? []).some(set => !set.off && (set.segment || set.first)) || (pro.stationRules ?? []).some(rule => !rule.off && (rule.first || rule.exclusions.some(item => item.segment))));
 }
 
 /** Only the settings that change what the generator produces. */

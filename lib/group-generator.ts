@@ -952,10 +952,34 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
     const eligible = set.groups.filter(group => group >= 1 && group <= groupCount);
     // A set with no group in this round (its stage is not used) does not apply here.
     if (!eligible.length) continue;
-    const queue = bestFirst.filter((person, index) => !allowed.has(personKey(person)) && (set.top === undefined || index < set.top) && (!set.members || set.members.has(personKey(person))));
+    // Positions count the `first` cluster ahead of everyone else (finals: Spaniards, then foreigners).
+    const order = set.first ? [...bestFirst.filter(person => set.first!.has(personKey(person))), ...bestFirst.filter(person => !set.first!.has(personKey(person)))] : bestFirst;
+    const queue = order.filter((person, index) => !allowed.has(personKey(person)) && (set.top === undefined || index < set.top) && (!set.positions || (index % 2 === 0) === (set.positions === "odd")) && (!set.members || set.members.has(personKey(person))));
     const seats = eligible.reduce((sum, group) => sum + Math.max(0, seatsOf(group) - groups[group - 1].length), 0);
     let placed = 0;
-    for (let pass = 0; queue.length; pass += 1) {
+    const place = (person: WcifPerson, group: number) => {
+      groups[group - 1].push(person);
+      allowed.set(personKey(person), new Set(eligible));
+      setOf.set(personKey(person), set.id);
+      if (set.featured) featured.add(personKey(person));
+      placed += 1;
+    };
+    if (set.ranked) {
+      // By ranking: as even a share per group as the seats allow, the extra ones in the last groups,
+      // and the worst in the first group up to the best in the last (one per group in the 3x3 final).
+      const free = eligible.map(group => Math.max(0, seatsOf(group) - groups[group - 1].length));
+      const sizes = eligible.map(() => 0);
+      const total = Math.min(queue.length, free.reduce((sum, value) => sum + value, 0));
+      for (let left = total; left > 0; left -= 1) {
+        let pick = -1;
+        sizes.forEach((size, index) => { if (size < free[index] && (pick < 0 || size <= sizes[pick])) pick = index; });
+        sizes[pick] += 1;
+      }
+      const worstFirst = queue.splice(0, total).reverse();
+      let at = 0;
+      eligible.forEach((group, index) => { for (const person of worstFirst.slice(at, at + sizes[index])) place(person, group); at += sizes[index]; });
+    }
+    for (let pass = 0; queue.length && !set.ranked; pass += 1) {
       const open = eligible.filter(group => groups[group - 1].length < seatsOf(group));
       if (!open.length) break;
       // Alternating the tie order snakes the best people over the groups.
@@ -963,11 +987,7 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
       for (const group of open) {
         const person = queue.shift();
         if (!person) break;
-        groups[group - 1].push(person);
-        allowed.set(personKey(person), new Set(eligible));
-        setOf.set(personKey(person), set.id);
-        if (set.featured) featured.add(personKey(person));
-        placed += 1;
+        place(person, group);
       }
     }
     stats.push({ id: set.id, name: set.name, wanted: placed + queue.length, seats, placed });

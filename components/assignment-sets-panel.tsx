@@ -77,16 +77,31 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
     const segment = segments.find(item => item.id === set.segment);
     const who = set.segment ? segment?.name ?? (set.segment.startsWith("team:") ? t("sets.missingTeam", { team: set.segment.slice(5) }) : t("sets.missingCluster")) : t("sets.anyone");
     const top = set.top !== undefined ? t("sets.summaryTop", { count: set.top, unit: set.perGroup === "round" ? t("sets.perRoundGroup") : set.perGroup ? t("sets.perGroup") : t("sets.perRound") }) : "";
-    const which = set.rounds === "first" ? t("sets.firstRounds") : set.rounds === "all" ? t("sets.allRounds") : tp("sets.roundCount", set.rounds.length);
+    const which = set.rounds === "first" ? t("sets.firstRounds") : set.rounds === "final" ? t("sets.finalRounds") : set.rounds === "all" ? t("sets.allRounds") : tp("sets.roundCount", set.rounds.length);
     const where = set.lanes.length ? set.lanes.map(key => lanes.find(lane => lane.key === key)?.name ?? key).join(", ") : t("sets.summaryAnywhere");
     const groups = set.groups === "any" ? "" : set.groups === "first" ? t("sets.firstGroup") : set.groups === "last" ? t("sets.lastGroup") : `G${set.groups.join(", ")}`;
-    return [who, top, which, where, groups].filter(Boolean).join(" · ");
+    const firstName = set.first ? t("sets.summaryFirst", { name: segments.find(item => item.id === set.first)?.name ?? t("sets.missingCluster") }) : "";
+    const positions = set.positions ? t(keyOf("sets.positionsShort", set.positions)) : "";
+    const ranked = set.fill === "ranked" ? t("sets.summaryRanked") : "";
+    return [who, top, positions, firstName, which, where, groups, ranked].filter(Boolean).join(" · ");
   };
   /** How many people the set takes: its top N, or the size of its cluster. */
   const people = (set: AssignmentSetConfig) => set.top !== undefined ? `top ${set.top}` : set.segment ? String(segments.find(item => item.id === set.segment)?.size ?? 0) : t("sets.everyone");
   const mainLane = lanes[0]?.key;
 
   function add(template: SetTemplate) {
+    if (template === "finals") {
+      // The Spanish Championship 2025 finals: odd positions to one stage, even to the other
+      // (the first two stages of a room, or the first two lanes).
+      const stages = lanes.filter(lane => !lane.key.endsWith(":room"));
+      const room = stages.find(lane => stages.filter(other => other.key.split(":")[0] === lane.key.split(":")[0]).length > 1)?.key.split(":")[0];
+      const [left, right] = room ? stages.filter(lane => lane.key.split(":")[0] === room) : lanes;
+      const odd: AssignmentSetConfig = { id: newSetId(sets), name: t("sets.finalsOdd"), rounds: "final", groups: "any", positions: "odd", lanes: left ? [left.key] : [] };
+      const even: AssignmentSetConfig = { id: newSetId([...sets, odd]), name: t("sets.finalsEven"), rounds: "final", groups: "any", positions: "even", lanes: right ? [right.key] : [] };
+      onChange([...sets, odd, even]);
+      setOpen(odd.id);
+      return;
+    }
     const base = { id: newSetId(sets), name: t(keyOf("sets.templates", template)), rounds: "first" as const, groups: "any" as const };
     const set: AssignmentSetConfig = template === "featured"
       ? { ...base, top: 4, perGroup: true, lanes: mainLane ? [mainLane] : [], featured: true }
@@ -138,6 +153,25 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
             </>}
           </label>
           <ScopeFields value={set} onChange={change => save({ ...set, ...change })} rounds={rounds} />
+        </div>
+        <div className="set-fields set-order">
+          <label><span>{t("sets.positions")}</span>
+            <select value={set.positions ?? ""} onChange={event => save({ ...set, positions: (event.target.value || undefined) as AssignmentSetConfig["positions"] })}>
+              <option value="">{t("sets.allPositions")}</option><option value="odd">{t("sets.oddPositions")}</option><option value="even">{t("sets.evenPositions")}</option>
+            </select>
+          </label>
+          <label title={t("sets.firstHelp")}><span>{t("sets.countFirst")}</span>
+            <select value={set.first ?? ""} onChange={event => save({ ...set, first: event.target.value || undefined })}>
+              <option value="">{t("sets.nobodyFirst")}</option>
+              {segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name} ({segment.size})</option>)}
+              {set.first && !segments.some(segment => segment.id === set.first) && <option value={set.first}>{t("sets.missingCluster")}</option>}
+            </select>
+          </label>
+          <label title={t("sets.fillHelp")}><span>{t("sets.fill")}</span>
+            <select value={set.fill ?? ""} onChange={event => save({ ...set, fill: event.target.value === "ranked" ? "ranked" : undefined })}>
+              <option value="">{t("sets.fillSpread")}</option><option value="ranked">{t("sets.fillRanked")}</option>
+            </select>
+          </label>
         </div>
         <ScopeRows value={set} onChange={change => save({ ...set, ...change })} lanes={lanes} rounds={rounds} />
         {set.top !== undefined && byEventOpen === set.id && <div className="set-events" role="group" aria-label={t("sets.byEvent")}>

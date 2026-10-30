@@ -4,11 +4,14 @@
  * both) and spreads them over the groups it allows; people placed by an earlier set are not moved
  * by later ones, and whoever is left is split by the sorting rule. "Featured" marks the people on
  * their scorecard (Groupifier's star), as in the Amore Open and US Nationals scripts.
+ * For finals (the Spanish Championship 2025, lib/_finals.cs): positions can be counted with a
+ * cluster first (Spaniards, then foreigners), a set can take the odd or even positions (odd to one
+ * stage, even to the other), and it can go by ranking, the best in the last group.
  */
 import { targetKey, type GroupSlot } from "@/lib/pro/schedule";
 
-/** First rounds, every round, or the chosen round ids. */
-export type SetRounds = "first" | "all" | string[];
+/** First rounds, finals (each event's last round), every round, or the chosen round ids. */
+export type SetRounds = "first" | "final" | "all" | string[];
 /** Group numbers as people see them; "first" and "last" are the round's first and last number. */
 export type SetGroups = "any" | "first" | "last" | number[];
 
@@ -26,6 +29,12 @@ export type AssignmentSetConfig = {
    * round with "round" (the Spanish Championship 2026: per group of the round, all stages).
    */
   perGroup?: boolean | "round";
+  /** Positions (for `top` and `positions`) count this cluster's people first, then the rest. */
+  first?: string;
+  /** Only the people at odd or even positions of the round (1st, 3rd… or 2nd, 4th…). */
+  positions?: "odd" | "even";
+  /** "ranked": the set's best in its last group and its worst in its first; otherwise spread. */
+  fill?: "ranked";
   rounds: SetRounds;
   /** Rooms or stages (lane keys); empty: any. A room's key includes its stages. */
   lanes: string[];
@@ -35,9 +44,9 @@ export type AssignmentSetConfig = {
 };
 
 /** A set as it applies to one round. */
-export type ResolvedSet = { id: string; name: string; members?: Set<string>; top?: number; groups: number[]; featured: boolean };
+export type ResolvedSet = { id: string; name: string; members?: Set<string>; top?: number; groups: number[]; featured: boolean; first?: Set<string>; positions?: "odd" | "even"; ranked?: boolean };
 
-export const SET_TEMPLATES = ["featured", "organizers", "delegating", "cluster"] as const;
+export const SET_TEMPLATES = ["featured", "organizers", "delegating", "cluster", "finals"] as const;
 export type SetTemplate = typeof SET_TEMPLATES[number];
 
 export function newSetId(sets: AssignmentSetConfig[]) {
@@ -46,10 +55,11 @@ export function newSetId(sets: AssignmentSetConfig[]) {
   return `set-${index}`;
 }
 
-export function appliesToRound(set: Pick<AssignmentSetConfig, "rounds" | "off">, round: { id: string; roundNumber: number }) {
+export function appliesToRound(set: Pick<AssignmentSetConfig, "rounds" | "off">, round: { id: string; roundNumber: number; final?: boolean }) {
   if (set.off) return false;
   if (set.rounds === "all") return true;
   if (set.rounds === "first") return round.roundNumber === 1;
+  if (set.rounds === "final") return !!round.final;
   return set.rounds.includes(round.id);
 }
 
@@ -76,14 +86,15 @@ export function allowedGroups(set: Pick<AssignmentSetConfig, "lanes" | "groups">
 }
 
 /** The sets of one round, in order, with their people and groups. */
-export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id: string; eventId: string; roundNumber: number; groups: number }, slots: GroupSlot[] | undefined, membersOf: (segmentId: string, eventId: string) => Set<string> | undefined): ResolvedSet[] {
+export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id: string; eventId: string; roundNumber: number; groups: number; final?: boolean }, slots: GroupSlot[] | undefined, membersOf: (segmentId: string, eventId: string) => Set<string> | undefined): ResolvedSet[] {
   return (sets ?? []).filter(set => appliesToRound(set, round)).map(set => {
     const groups = allowedGroups(set, round.groups, slots);
     // A cluster that no longer exists takes nobody rather than everyone.
     const members = set.segment ? membersOf(set.segment, round.eventId) ?? new Set<string>() : undefined;
     const count = set.top === undefined ? undefined : set.topByEvent?.[round.eventId] ?? set.top;
     const top = count === undefined ? undefined : set.perGroup === "round" ? count * round.groups : set.perGroup ? count * groups.length : count;
-    return { id: set.id, name: set.name, members, top, groups, featured: !!set.featured };
+    const first = set.first ? membersOf(set.first, round.eventId) ?? new Set<string>() : undefined;
+    return { id: set.id, name: set.name, members, top, groups, featured: !!set.featured, ...(first ? { first } : {}), ...(set.positions ? { positions: set.positions } : {}), ...(set.fill === "ranked" ? { ranked: true } : {}) };
   });
 }
 

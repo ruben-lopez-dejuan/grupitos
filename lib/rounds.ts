@@ -29,7 +29,14 @@ export type GenerationRound = {
   scramblers: number;
   runners: number;
   enabled: boolean;
+  /** The event's last round (stamped from the WCIF where rounds are used; absent in stored drafts). */
+  final?: boolean;
 };
+
+/** Ids of the last round of each event. */
+export function finalRoundIds(competition: StoredCompetition) {
+  return new Set((competition.events ?? []).flatMap(event => event.rounds?.length ? [event.rounds[event.rounds.length - 1].id] : []));
+}
 
 export type RoundConfig = GenerationRound & {
   label: string;

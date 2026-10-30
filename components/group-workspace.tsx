@@ -40,7 +40,7 @@ import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEli
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { finalRoundIds, acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { normalizeSeating, seatingStations, stationOrder, type Seating } from "@/lib/seating";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
@@ -304,7 +304,12 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const pro = settings?.pro?.enabled ? settings.pro : undefined;
   const slots = useMemo(() => pro ? groupSlots(pro.schedule) : undefined, [pro]);
   /** Rounds as generated: in PRO mode, scheduled rounds take their groups from the schedule. */
-  const effectiveRounds = useMemo(() => settings ? slots ? withScheduledGroups(settings.rounds, slots) : settings.rounds : [], [settings, slots]);
+  const effectiveRounds = useMemo(() => {
+    if (!settings || !competition) return [];
+    // Sets and station rules for "finals" need to know each event's last round.
+    const finals = finalRoundIds(competition);
+    return (slots ? withScheduledGroups(settings.rounds, slots) : settings.rounds).map(round => ({ ...round, final: finals.has(round.id) }));
+  }, [settings, slots, competition]);
   const roundRules = useMemo(() => {
     if (!settings) return {};
     const { options, stations, zoneMode } = settings;
@@ -750,9 +755,9 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           <div className="option-list">{MAIN_OPTIONS.map(({ key, codes }) => <label key={key}><input type="checkbox" checked={options[key]} onChange={event => setOption(key, event.target.checked)} /><span><strong>{t(keyOf("rules.options", `${key}.label`))}{codes?.map(code => <i key={code} className={`cell-chip mini ${code}`} aria-hidden="true">{TASK_CODES[code]}</i>)}<Hint text={t(keyOf("rules.options", `${key}.help`))} /></strong></span></label>)}</div>
           {pro && <>
             <h3 className="panel-subheading">{t("sets.title")} <Hint align="start" text={t("sets.hint")} /></h3>
-            <AssignmentSetsPanel sets={sets} onChange={setSets} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} onCluster={clusterFor} preview={sets.length ? previewSets({ competition, sets, rounds, slots, membersOf, maxPerGroup: (roundId, group) => staffingFor?.(roundId, group)?.maxPerGroup }) : undefined} />
+            <AssignmentSetsPanel sets={sets} onChange={setSets} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={rounds} onCluster={clusterFor} preview={sets.length ? previewSets({ competition, sets, rounds, slots, membersOf, maxPerGroup: (roundId, group) => staffingFor?.(roundId, group)?.maxPerGroup }) : undefined} />
             <h3 className="panel-subheading">{t("stationRules.title")} <Hint align="start" text={t("stationRules.hint")} /></h3>
-            <StationRulesPanel seating={seating} rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={settings.rounds} propertyKeys={proPeople.propertyKeys} />
+            <StationRulesPanel seating={seating} rules={stationRuleList} onChange={setStationRules} segments={(segmentFilters ?? []).map(segment => ({ id: segment.id, name: segment.name, size: segment.members.size }))} lanes={scheduleLanes(pro.schedule)} rounds={rounds} propertyKeys={proPeople.propertyKeys} />
             <h3 className="panel-subheading">{t("jobs.title")} <Hint align="start" text={t("jobs.hint")} /></h3>
             <div className="job-eligibility">{JOB_ROLES.map(role => <label key={role}><span><i className={`cell-chip mini ${role}`} aria-hidden="true">{TASK_CODES[role]}</i>{t(keyOf("tasks", role))}</span>
               <select value={jobs[role] ?? ""} onChange={event => setJob(role, event.target.value)}><option value="">{t("jobs.anyone")}</option>{segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}{teamClusters.length > 0 && <optgroup label={t("proPeople.teams")}>{teamClusters.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</optgroup>}</select>
