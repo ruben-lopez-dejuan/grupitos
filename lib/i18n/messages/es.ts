@@ -398,6 +398,8 @@ export const es = {
     columnScramblers: "Mezcladores",
     columnRunners: "Runners",
     roundNumber: "Ronda {number}",
+    dual: "dual",
+    dualHelp: "Rondas duales (9v): las dos son de todos los inscritos, así que puedes generar sus grupos desde el principio. La siguiente ronda clasifica por el mejor resultado de las dos.",
     fixed: "Fijos",
     waiting: "Espera",
     perGroup: "{size} por grupo",

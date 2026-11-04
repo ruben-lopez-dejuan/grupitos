@@ -9,6 +9,7 @@
  * stage, even to the other), and it can go by ranking, the best in the last group.
  */
 import { targetKey, type GroupSlot } from "@/lib/pro/schedule";
+import { isFirstRound } from "@/lib/rounds";
 
 /**
  * First rounds, later rounds (every round after the first), later rounds except finals, finals
@@ -59,12 +60,13 @@ export function newSetId(sets: AssignmentSetConfig[]) {
   return `set-${index}`;
 }
 
-export function appliesToRound(set: Pick<AssignmentSetConfig, "rounds" | "off">, round: { id: string; roundNumber: number; final?: boolean }) {
+export function appliesToRound(set: Pick<AssignmentSetConfig, "rounds" | "off">, round: { id: string; roundNumber: number; final?: boolean; fromRegistrations?: boolean }) {
   if (set.off) return false;
   if (set.rounds === "all") return true;
-  if (set.rounds === "first") return round.roundNumber === 1;
-  if (set.rounds === "later") return round.roundNumber > 1;
-  if (set.rounds === "middle") return round.roundNumber > 1 && !round.final;
+  // The second of two dual rounds counts as a first round.
+  if (set.rounds === "first") return isFirstRound(round);
+  if (set.rounds === "later") return !isFirstRound(round);
+  if (set.rounds === "middle") return !isFirstRound(round) && !round.final;
   if (set.rounds === "final") return !!round.final;
   return set.rounds.includes(round.id);
 }
@@ -92,7 +94,7 @@ export function allowedGroups(set: Pick<AssignmentSetConfig, "lanes" | "groups">
 }
 
 /** The sets of one round, in order, with their people and groups. */
-export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id: string; eventId: string; roundNumber: number; groups: number; final?: boolean }, slots: GroupSlot[] | undefined, membersOf: (segmentId: string, eventId: string) => Set<string> | undefined): ResolvedSet[] {
+export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id: string; eventId: string; roundNumber: number; groups: number; final?: boolean; fromRegistrations?: boolean }, slots: GroupSlot[] | undefined, membersOf: (segmentId: string, eventId: string) => Set<string> | undefined): ResolvedSet[] {
   return (sets ?? []).filter(set => appliesToRound(set, round)).map(set => {
     const groups = allowedGroups(set, round.groups, slots);
     // A cluster that no longer exists takes nobody rather than everyone.

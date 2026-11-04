@@ -19,7 +19,7 @@ const byRound = (assignments: GeneratedAssignment[], roundId: string) => assignm
 
 function rulesFor(round: RoundConfig, rows: GeneratedAssignment[], stations: number, zoneMode: ZoneMode, people: PeopleSettings): RoundRules {
   const noNormalTasks = new Set([...(people.roles.dataentry ?? []), ...(people.roles.delegate ?? []), ...(people.roles["trainee-delegate"] ?? []), ...(people.roles.organizer ?? [])]);
-  return { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations, fixedStations: usesFixedStations(round.roundNumber, rows.filter(row => row.inRound).length, stations, zoneMode), checkJudges: true, checkDelegates: false, checkDataEntry: false, noNormalTasks };
+  return { groups: round.groups, scramblers: round.scramblers, runners: round.runners, stations, fixedStations: usesFixedStations(round.roundNumber === 1, rows.filter(row => row.inRound).length, stations, zoneMode), checkJudges: true, checkDelegates: false, checkDataEntry: false, noNormalTasks };
 }
 
 const scenarios = [

@@ -57,6 +57,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
 - **Los mejores juntos**: en las primeras rondas de las pruebas que elijas (por defecto 2x2, 3x3, Skewb y Pyraminx), los mejores compiten juntos en el último grupo, y eliges cuántos en cada prueba (4 por defecto); el resto se reparte con la regla.
 - Los delegados se reparten entre los grupos.
 - Primeras rondas y rondas siguientes por separado. En las siguientes se calcula cuánta gente pasa. Cualquier ronda se puede excluir o reactivar.
+- **Rondas duales** (Reglamento 9v): si la WCA enlaza las rondas 1 y 2 de una prueba, las dos son de todos los inscritos y se generan desde el principio, como primeras rondas, con la etiqueta «dual». La ronda siguiente clasifica por el mejor resultado de las dos.
 
 ### Personal
 

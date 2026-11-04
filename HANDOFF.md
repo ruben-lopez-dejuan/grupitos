@@ -111,6 +111,7 @@ Parte de Groupifier, con mejoras propias:
 - El staff tiene prioridad mientras no supere el doble de la carga media de los demás (`STAFF_LOAD_FACTOR`).
 - La carga cuenta en bloques (`floor(load/4)`) antes que estar en la ronda, para que quien está en muchas pruebas no cargue con la mayor parte del trabajo.
 - En PRO no asigna tareas a nadie que esté ocupado a la misma hora (sección 6).
+- **Rondas duales** (Reglamento 9v, WCIF 2): la WCA escribe `linkedRounds: ["333-r1", "333-r2"]` en las dos rondas, ambas con `participationSource` de inscripciones, y la ronda siguiente con fuente `linkedRounds`. En `lib/rounds.ts`, `registrationRoundIds()` las detecta y la ronda 2 lleva `fromRegistrations` (se estampa como `final`); `isFirstRound()` la trata como primera ronda en el generador, los conjuntos («Primeras rondas»), las estaciones, la impresión y la forma sugerida. `withRegistrationRounds()` abre o cierra la ronda en borradores guardados antes de enlazarlas. `previousRoundResults()` clasifica la ronda siguiente por el mejor resultado de las dos (media y luego single, empates comparten puesto).
 
 Es un algoritmo voraz y determinista. El diseño PRO prevé sustituir la selección de personal por un ILP con `javascript-lp-solver`, como hace CompScript (fase 3).
 

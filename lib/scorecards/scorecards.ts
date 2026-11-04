@@ -13,7 +13,7 @@ import { competingGroup, type GeneratedAssignment } from "@/lib/assignments";
 import type { StoredCompetition, WcifPerson, WcifRound } from "@/lib/competition-store";
 import { groupSizes } from "@/lib/group-generator";
 import { scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
-import { bestAverageAndSingle, personKey, previousRoundResults, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
+import { bestAverageAndSingle, isFirstRound, personKey, previousRoundResults, usesFixedStations, type RoundConfig, type ZoneMode } from "@/lib/rounds";
 import type { PaperSize, PrintingOptions } from "@/lib/scorecards/options";
 import { translation, type ScorecardTexts } from "@/lib/scorecards/translations";
 
@@ -420,7 +420,7 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
       const [b1, b2] = bestAverageAndSingle(persons.get(b.personId) ?? { name: b.name }, wcifRound.id.split("-")[0]);
       return worstFirst(a1, b1) || worstFirst(a2, b2);
     };
-    const fixed = usesFixedStations(config.roundNumber, rows.length || config.competitors, stations, zoneMode);
+    const fixed = usesFixedStations(isFirstRound(config), rows.length || config.competitors, stations, zoneMode);
 
     // Later multi-blind attempts are columns of their own with the same people: cards come from attempt 1.
     const attemptColumns = new Set((slots?.get(roundId) ?? []).filter(slot => slot.linkedTo).map(slot => slot.group));

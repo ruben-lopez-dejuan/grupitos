@@ -14,7 +14,7 @@ import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, windowsForTask, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, hasWcaJob, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
-import { acceptedPeople, bestAverageAndSingle, normalizeSortingRule, SCRAMBLE_EVENT, judgesNeeded, personKey, previousRoundResults, roundCompetitors, roundStanding, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { acceptedPeople, bestAverageAndSingle, isFirstRound, normalizeSortingRule, registrationRoundIds, SCRAMBLE_EVENT, judgesNeeded, personKey, previousRoundResults, roundCompetitors, roundStanding, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
   sortingRule: SortingRule;
@@ -259,7 +259,7 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
 }
 
 
-export function generateAssignments({ competition, rounds, stations, zoneMode, seating, people, options, slots, availabilitySlots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
+export function generateAssignments({ competition, rounds: requestedRounds, stations, zoneMode, seating, people, options, slots, availabilitySlots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;
@@ -304,6 +304,9 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
    */
   fixedAssignments?: GeneratedAssignment[];
 }): GeneratedAssignment[] {
+  // The second of two dual rounds is a first round, even in drafts saved before it was linked.
+  const dualRounds = registrationRoundIds(competition);
+  const rounds = requestedRounds.map(round => dualRounds.has(round.id) && !round.fromRegistrations ? { ...round, fromRegistrations: true } : round);
   const accepted = [...acceptedPeople(competition), ...nonCompetingStaff(competition), ...extraPeople];
   const country = competitionCountry(competition);
   const set = (ids?: string[]) => new Set(ids ?? []);
@@ -350,8 +353,8 @@ export function generateAssignments({ competition, rounds, stations, zoneMode, s
   const plans: CompetitorPlan[] = rounds.filter(item => item.enabled && item.groups > 0).flatMap(round => {
     const { people: competitors, known } = roundCompetitors(competition, round.id);
     if (!known || competitors.length === 0) return [];
-    const firstRound = round.roundNumber === 1;
-    const fixed = usesFixedStations(round.roundNumber, competitors.length, stations, zoneMode);
+    const firstRound = isFirstRound(round);
+    const fixed = usesFixedStations(firstRound, competitors.length, stations, zoneMode);
     const rule = firstRound ? options.sortingRule : "ranks";
     const primary = Math.max(1, round.groups - linkedColumns(round.id).length);
     // Stages with a maximum per group keep to it; the other groups take the rest.

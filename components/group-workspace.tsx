@@ -41,7 +41,7 @@ import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEli
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
-import { finalRoundIds, acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
+import { finalRoundIds, isFirstRound, registrationRoundIds, withRegistrationRounds, acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { normalizeSeating, seatingStations, stationOrder, tablesInRow, type Seating } from "@/lib/seating";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import type { RoundRules } from "@/lib/validation";
@@ -144,7 +144,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     const defaults = defaultSettings(data);
     // First time here and the WCIF already has groups: open them for review.
     if (!draft && hasWcifGroups(data)) return openWcifGroups(data, wcifGroupsNeedStages(data) ? { ...defaults, pro: { enabled: true, schedule: importSchedule(data, roundId => defaults.rounds.find(round => round.id === roundId)?.groups ?? 1) } } : defaults);
-    setSettings(draft?.settings ? { ...defaults, ...draft.settings, people: migrateWcaStaffRoles(draft.settings.people, data), options: normalizeOptions(draft.settings.options), printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
+    setSettings(draft?.settings ? { ...defaults, ...draft.settings, rounds: withRegistrationRounds(draft.settings.rounds ?? defaults.rounds, data, draft.settings.stations ?? defaults.stations, draft.settings.zoneMode ?? defaults.zoneMode), people: migrateWcaStaffRoles(draft.settings.people, data), options: normalizeOptions(draft.settings.options), printing: { ...defaults.printing, ...draft.settings.printing } } : defaults);
     setProposal(draft?.assignments ?? []);
     setGeneratedWith(draft?.generatedWith);
     setRemoteSavedAt(draft?.remoteSavedAt);
@@ -160,7 +160,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     const defaults = defaultSettings(data);
     // The WCA has no personal data (see publicSettings): keep this browser's.
     const remote = rekeyPeople(withSharedUnavailability(withPrivateSettings(saved.settings, parseDraft(localStorage.getItem(draftStorageKey(data.id)))?.settings)), staleKeys(data));
-    const base = { ...defaults, ...remote, people: migrateWcaStaffRoles(remote.people, data), options: normalizeOptions(remote.options), printing: { ...defaults.printing, ...remote.printing } };
+    const base = { ...defaults, ...remote, rounds: withRegistrationRounds(remote.rounds ?? defaults.rounds, data, remote.stations ?? defaults.stations, remote.zoneMode ?? defaults.zoneMode), people: migrateWcaStaffRoles(remote.people, data), options: normalizeOptions(remote.options), printing: { ...defaults.printing, ...remote.printing } };
     const result = hasWcifGroups(data) ? withWcifGroups(data, base) : { settings: base, proposal: [] };
     setSettings(result.settings);
     setProposal(result.proposal);
@@ -321,7 +321,8 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     if (!settings || !competition) return [];
     // Sets and station rules for "finals" need to know each event's last round.
     const finals = finalRoundIds(competition);
-    return (slots ? withScheduledGroups(settings.rounds, slots) : settings.rounds).map(round => ({ ...round, final: finals.has(round.id) }));
+    const dual = registrationRoundIds(competition);
+    return (slots ? withScheduledGroups(settings.rounds, slots) : settings.rounds).map(round => ({ ...round, final: finals.has(round.id), ...(dual.has(round.id) ? { fromRegistrations: true } : {}) }));
   }, [settings, slots, competition]);
   const roundRules = useMemo(() => {
     if (!settings) return {};
@@ -338,7 +339,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         scramblers: round.scramblers,
         runners: round.runners,
         stations,
-        fixedStations: usesFixedStations(round.roundNumber, competitors, stations, zoneMode),
+        fixedStations: usesFixedStations(isFirstRound(round), competitors, stations, zoneMode),
         checkJudges: options.assignJudges,
         checkDelegates: options.assignDelegateDuties,
         checkDataEntry: options.assignDataEntry,
@@ -626,7 +627,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           if (!now) return round;
           if (now.competitorsKnown && !round.competitorsKnown) {
             opened.push(roundName(round));
-            const known = { ...round, competitors: now.competitors, competitorsKnown: true, enabled: true };
+            const known = { ...round, competitors: now.competitors, competitorsKnown: true, enabled: true, ...(now.fromRegistrations ? { fromRegistrations: true } : {}) };
             return round.staffSetByHand ? known : { ...shapeRound(known, current.stations, current.zoneMode), enabled: true };
           }
           return { ...round, competitors: now.competitors, competitorsKnown: now.competitorsKnown };
@@ -820,7 +821,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
             {shownRounds.length === 0 ? <p className="setup-note">{t(keyOf("rounds.empty", shownTab))}</p> : <div className="round-table">
               <div className="round-table-head"><span>{t("rounds.columnRound")}</span><span>{t("rounds.columnCompetitors")}</span><span>{t("rounds.columnEntry")}</span><span>{t("rounds.columnGroups")}</span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span /></div>
               {orderedRounds.map((round, index) => {
-                const fixed = usesFixedStations(round.roundNumber, round.competitors, stations, zoneMode);
+                const fixed = usesFixedStations(isFirstRound(round), round.competitors, stations, zoneMode);
                 const canGenerate = round.competitorsKnown && round.competitors > 0;
                 const excluded = isExcluded(round);
                 const sizes = groupSizes(round.competitors, round.groups).filter(size => size > 0);
@@ -830,7 +831,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
                 return <Fragment key={round.id}>
                   {firstExcluded && <div className="round-divider">{t("rounds.excluded")}</div>}
                   <div className={`round-row ${excluded ? "excluded" : ""}`}>
-                    <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })} · {round.eventId}{generatedRoundIds.has(round.id) && <> · <span className="round-generated">{t("rounds.generated")}</span> <button type="button" className="round-clear" onClick={() => clearRound(round)} title={t("rounds.clearHelp")}>{t("rounds.clear")}</button></>}</small></div></div>
+                    <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })}{(round.fromRegistrations || (round.roundNumber === 1 && rounds.some(other => other.eventId === round.eventId && other.fromRegistrations))) && <> · <span title={t("rounds.dualHelp")}>{t("rounds.dual")}</span></>} · {round.eventId}{generatedRoundIds.has(round.id) && <> · <span className="round-generated">{t("rounds.generated")}</span> <button type="button" className="round-clear" onClick={() => clearRound(round)} title={t("rounds.clearHelp")}>{t("rounds.clear")}</button></>}</small></div></div>
                     <span className="round-number" data-label={t("rounds.columnCompetitors")}>{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
                     <span data-label={t("rounds.columnEntry")}>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
                     <div className="group-cell">{pro && slots?.has(round.id)

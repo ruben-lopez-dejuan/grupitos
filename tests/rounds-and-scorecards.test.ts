@@ -9,20 +9,20 @@ import { SCORECARD_LANGUAGES, translation } from "@/lib/scorecards/translations"
 
 describe("zone modes", () => {
   it("uses fixed stations for small rounds whatever the mode", () => {
-    expect(usesFixedStations(1, 12, 12, "waiting")).toBe(true);
-    expect(usesFixedStations(1, 13, 12, "waiting")).toBe(false);
+    expect(usesFixedStations(true, 12, 12, "waiting")).toBe(true);
+    expect(usesFixedStations(true, 13, 12, "waiting")).toBe(false);
   });
 
   it("mixed: waiting room in first rounds, stations afterwards", () => {
-    expect(usesFixedStations(1, 100, 12, "mixed")).toBe(false);
-    expect(usesFixedStations(2, 100, 12, "mixed")).toBe(true);
+    expect(usesFixedStations(true, 100, 12, "mixed")).toBe(false);
+    expect(usesFixedStations(false, 100, 12, "mixed")).toBe(true);
   });
 
   it("suggests groups like Groupifier, with at least two in first rounds", () => {
-    expect(suggestGroups(100, 12, false, 1)).toBe(Math.round(100 / (12 * 1.7) + 0.4));
-    expect(suggestGroups(10, 12, true, 1)).toBe(2);
-    expect(suggestGroups(10, 12, true, 2)).toBe(1);
-    expect(suggestGroups(30, 12, true, 2)).toBe(3);
+    expect(suggestGroups(100, 12, false, true)).toBe(Math.round(100 / (12 * 1.7) + 0.4));
+    expect(suggestGroups(10, 12, true, true)).toBe(2);
+    expect(suggestGroups(10, 12, true, false)).toBe(1);
+    expect(suggestGroups(30, 12, true, false)).toBe(3);
   });
 });
 

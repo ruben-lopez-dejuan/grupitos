@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { roundHasResults } from "@/lib/rounds";
+import { isFirstRound, roundHasResults } from "@/lib/rounds";
 import { EventIcon } from "@/components/event-icon";
 import { Hint } from "@/components/hint";
 import { useEventName, useI18n } from "@/components/i18n";
@@ -36,7 +36,7 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   const eventName = useEventName();
   const withAssignments = new Set(assignments.map(item => item.roundId));
   // Rounds with a proposal, plus later rounds whose groups are planned but whose competitors are unknown.
-  const printable = rounds.filter(round => withAssignments.has(round.id) || (round.roundNumber > 1 && !round.competitorsKnown && round.competitors > 0));
+  const printable = rounds.filter(round => withAssignments.has(round.id) || (!isFirstRound(round) && !round.competitorsKnown && round.competitors > 0));
   const generatedIds = printable.filter(round => withAssignments.has(round.id)).map(round => round.id);
   /** Rounds already held (with results): their cards are only reprinted. */
   const held = new Set(printable.filter(round => roundHasResults(competition, round.id)).map(round => round.id));
@@ -76,8 +76,8 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     { id: "generated", label: t("printing.presets.generated"), help: t("printing.presets.generatedHelp"), ids: generatedIds },
     { id: "held", label: t("printing.presets.held"), help: t("printing.presets.heldHelp"), ids: generatedIds.filter(id => held.has(id)) },
     { id: "planned", label: t("printing.presets.planned"), help: t("printing.presets.plannedHelp"), ids: printable.filter(round => !withAssignments.has(round.id)).map(round => round.id) },
-    { id: "first", label: t("printing.presets.first"), help: t("printing.presets.firstHelp"), ids: printable.filter(round => round.roundNumber === 1).map(round => round.id) },
-    { id: "later", label: t("printing.presets.later"), help: t("printing.presets.laterHelp"), ids: printable.filter(round => round.roundNumber > 1).map(round => round.id) },
+    { id: "first", label: t("printing.presets.first"), help: t("printing.presets.firstHelp"), ids: printable.filter(isFirstRound).map(round => round.id) },
+    { id: "later", label: t("printing.presets.later"), help: t("printing.presets.laterHelp"), ids: printable.filter(round => !isFirstRound(round)).map(round => round.id) },
     ...(schedule?.days ?? []).map((day, index) => ({ id: `day-${index}`, label: dayName(day), help: t("printing.presets.dayHelp"), ids: printable.filter(round => dayOf(round.id) === index).map(round => round.id) })),
   ].filter(preset => preset.ids.length > 0);
   const sameSet = (ids: string[]) => ids.length === selectedIds.length && ids.every(id => selectedIds.includes(id));

@@ -131,6 +131,11 @@ Y una regla de estación para las finales: por posición, de menor a mayor, prim
 2026 hay 6 grupos a la vez, así que son 12, y los 4 restantes van al grupo 1, que dura 20 minutos.
 Las posiciones son las de la ronda anterior. Revisa estos números cuando estén los scripts de 2026.
 
+Si en la WCA se enlazan rondas como duales (por ejemplo 3x3 r1 y r2), la r2 cuenta como primera
+ronda: le aplican los conjuntos de primeras rondas y no los de «Rondas siguientes», y se genera desde
+el principio. La r3 clasifica por el mejor resultado de las dos. Ahora mismo el WCIF no tiene
+ninguna ronda dual.
+
 Las rondas de la sala auxiliar (4BLD, 5BLD, multi) no tienen grupos en esos escenarios, así que
 esos conjuntos no se aplican allí y todo el mundo va a su único grupo, como
 `AssignGroups(…, [EveryoneSet()])` en `4_assign_side.cs`.

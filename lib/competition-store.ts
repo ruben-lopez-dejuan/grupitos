@@ -48,6 +48,8 @@ export type WcifRound = {
   cutoff?: { numberOfAttempts: number; attemptResult?: number; resultValue?: number } | null;
   advancementCondition?: WcifAdvancementCondition | null;
   participationRuleset?: { participationSource: WcifParticipationSource } | null;
+  /** Dual rounds (WCIF 2): the ids of the linked rounds, the same on both, or null. */
+  linkedRounds?: string[] | null;
   results?: Array<{ personId: number; ranking?: number | null; best?: number; average?: number }>;
 };
 export type WcifEvent = { id: string; rounds?: WcifRound[] };

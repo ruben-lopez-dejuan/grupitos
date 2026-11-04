@@ -8,7 +8,7 @@ import { appliesToRound, formatGroupNumbers, parseGroupNumbers, ROUND_SCOPES, ty
 export const ROUND_SCOPE_KEYS = { first: "sets.firstRounds", later: "sets.laterRounds", middle: "sets.middleRounds", final: "sets.finalRounds", all: "sets.allRounds" } as const;
 
 export type ScopeLane = { key: string; name: string; color: string };
-export type ScopeRound = { id: string; eventId: string; roundNumber: number; final?: boolean };
+export type ScopeRound = { id: string; eventId: string; roundNumber: number; final?: boolean; fromRegistrations?: boolean };
 type Scope = { rounds: SetRounds; lanes: string[]; groups: SetGroups };
 
 /** Which rounds and group numbers an assignment set or station rule covers (inline fields). */

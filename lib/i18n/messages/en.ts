@@ -396,6 +396,8 @@ export const en: Messages = {
     columnScramblers: "Scramblers",
     columnRunners: "Runners",
     roundNumber: "Round {number}",
+    dual: "dual",
+    dualHelp: "Dual rounds (9v): both are open to everyone registered, so their groups can be generated from the start. The next round ranks by the better result of the two.",
     fixed: "Stations",
     waiting: "Waiting",
     perGroup: "{size} per group",

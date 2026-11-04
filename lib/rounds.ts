@@ -31,11 +31,35 @@ export type GenerationRound = {
   enabled: boolean;
   /** The event's last round (stamped from the WCIF where rounds are used; absent in stored drafts). */
   final?: boolean;
+  /**
+   * A later round people enter from their registration, like a first round: the second of two dual
+   * rounds (Regulation 9v). Stamped from the WCIF, like `final`.
+   */
+  fromRegistrations?: boolean;
 };
 
 /** Ids of the last round of each event. */
 export function finalRoundIds(competition: StoredCompetition) {
   return new Set((competition.events ?? []).flatMap(event => event.rounds?.length ? [event.rounds[event.rounds.length - 1].id] : []));
+}
+
+/** Ids of the rounds after round 1 that people enter from their registration (dual rounds). */
+export function registrationRoundIds(competition: StoredCompetition) {
+  return new Set((competition.events ?? []).flatMap(event => (event.rounds ?? []).filter(round => parseRoundNumber(round.id) > 1 && entersFromRegistrations(round)).map(round => round.id)));
+}
+
+/** First rounds and the second of two dual rounds: competitors are the registered people. */
+export function isFirstRound(round: { roundNumber: number; fromRegistrations?: boolean }) {
+  return round.roundNumber === 1 || !!round.fromRegistrations;
+}
+
+/**
+ * Dual rounds (Regulation 9v): the WCA links rounds 1 and 2 (`linkedRounds`), and both take
+ * their competitors from the registrations; the next round advances people from both.
+ */
+function entersFromRegistrations(round: WcifRound) {
+  const eventId = round.id.split("-")[0];
+  return parseRoundNumber(round.id) === 1 || round.participationRuleset?.participationSource?.type === "registrations" || !!round.linkedRounds?.includes(`${eventId}-r1`);
 }
 
 export type RoundConfig = GenerationRound & {
@@ -59,17 +83,17 @@ export function parseRoundNumber(roundId: string) {
   return Number(roundId.match(/-r(\d+)/)?.[1] ?? 1);
 }
 
-export function usesFixedStations(roundNumber: number, competitors: number, stations: number, mode: ZoneMode) {
+export function usesFixedStations(firstRound: boolean, competitors: number, stations: number, mode: ZoneMode) {
   if (competitors > 0 && competitors <= stations) return true;
-  return mode === "fixed" || (mode === "mixed" && roundNumber > 1);
+  return mode === "fixed" || (mode === "mixed" && !firstRound);
 }
 
 /** Groupifier's suggestion for waiting rooms (≈1.7 people per station), and a full station set per group otherwise. */
-export function suggestGroups(competitors: number, stations: number, fixedStations: boolean, roundNumber: number) {
+export function suggestGroups(competitors: number, stations: number, fixedStations: boolean, firstRound: boolean) {
   if (stations <= 0 || competitors <= 0) return 1;
   const groups = fixedStations ? Math.ceil(competitors / stations) : Math.round(competitors / (stations * 1.7) + 0.4);
   // At least two groups in first rounds, so there are people to scramble.
-  return Math.max(groups, roundNumber === 1 && competitors > 1 ? 2 : 1);
+  return Math.max(groups, firstRound && competitors > 1 ? 2 : 1);
 }
 
 /** One scrambler per five stations in use (Groupifier). */
@@ -132,21 +156,21 @@ function sourceOf(round: WcifRound, previousRoundId: string | undefined) {
 }
 
 /**
- * People in a round, best first. First rounds use registrations; later rounds use the
- * results already present in the WCIF (people who advanced), or nothing when unknown.
+ * People in a round, best first. First rounds (and the second of two dual rounds) use
+ * registrations; later rounds use the results already present in the WCIF (people who
+ * advanced), or nothing when unknown.
  */
 export function roundCompetitors(competition: StoredCompetition, roundId: string): { people: WcifPerson[]; known: boolean } {
   const eventId = roundId.split("-")[0];
   const round = findRound(competition, roundId);
   const accepted = acceptedPeople(competition);
-  if (parseRoundNumber(roundId) === 1) {
+  if (parseRoundNumber(roundId) === 1 || (round && entersFromRegistrations(round))) {
     return { people: accepted.filter(person => person.registration?.eventIds?.includes(eventId)).sort(compareBySeed(eventId)), known: true };
   }
   const results = round?.results ?? [];
   if (!results.length) return { people: [], known: false };
   const byRegistrant = new Map(accepted.map(person => [person.registrantId, person]));
-  const previous = findRound(competition, `${eventId}-r${parseRoundNumber(roundId) - 1}`);
-  const previousRanking = new Map((previous?.results ?? []).map(result => [result.personId, result.ranking ?? Number.MAX_SAFE_INTEGER]));
+  const previousRanking = new Map([...previousRoundResults(competition, roundId)].map(([personId, item]) => [personId, item.ranking]));
   const people = results.map(result => byRegistrant.get(result.personId)).filter((person): person is WcifPerson => !!person);
   return {
     people: people.sort((a, b) => (previousRanking.get(a.registrantId ?? -1) ?? Number.MAX_SAFE_INTEGER) - (previousRanking.get(b.registrantId ?? -1) ?? Number.MAX_SAFE_INTEGER) || compareBySeed(eventId)(a, b)),
@@ -157,6 +181,7 @@ export function roundCompetitors(competition: StoredCompetition, roundId: string
 /**
  * Later rounds: each person's place and result in the round they advanced from (by registrant id),
  * the order Groupifier uses. The result is the average in average formats, else the single.
+ * After dual rounds, people rank by the better of their two results (Regulation 9v).
  */
 export function previousRoundResults(competition: StoredCompetition, roundId: string) {
   const result = new Map<number, { ranking: number; value?: number }>();
@@ -166,15 +191,32 @@ export function previousRoundResults(competition: StoredCompetition, roundId: st
   const eventId = roundId.split("-")[0];
   const source = sourceOf(round, `${eventId}-r${roundNumber - 1}`);
   const sources = source.type === "round" ? [source.roundId] : source.type === "linkedRounds" ? source.roundIds : [];
+  const score = (value: number | undefined) => value !== undefined && value > 0 ? value : Number.POSITIVE_INFINITY;
+  const best = new Map<number, { ranking: number; average: number; single: number; value?: number }>();
   for (const sourceId of sources) {
     const previous = findRound(competition, sourceId);
     const byAverage = previous?.format === "a" || previous?.format === "m";
     for (const item of previous?.results ?? []) {
-      if (result.has(item.personId) || !item.ranking) continue;
+      if (!item.ranking) continue;
       const value = byAverage && (item.average ?? 0) > 0 ? item.average : (item.best ?? 0) > 0 ? item.best : undefined;
-      result.set(item.personId, { ranking: item.ranking, ...(value !== undefined ? { value } : {}) });
+      const entry = { ranking: item.ranking, average: byAverage ? score(item.average) : Number.POSITIVE_INFINITY, single: score(item.best), ...(value !== undefined ? { value } : {}) };
+      const kept = best.get(item.personId);
+      if (!kept || entry.average < kept.average || (entry.average === kept.average && entry.single < kept.single)) best.set(item.personId, entry);
     }
   }
+  if (sources.length <= 1) {
+    for (const [personId, { ranking, value }] of best) result.set(personId, { ranking, ...(value !== undefined ? { value } : {}) });
+    return result;
+  }
+  // Linked rounds: one ranking over everyone's better result; ties share a place.
+  const beats = (a: { average: number; single: number }, b: { average: number; single: number }) => a.average < b.average || (a.average === b.average && a.single < b.single);
+  const order = [...best].sort(([, a], [, b]) => beats(a, b) ? -1 : beats(b, a) ? 1 : a.ranking - b.ranking);
+  order.forEach(([personId, entry], index) => {
+    const before = order[index - 1];
+    const tied = before && !beats(before[1], entry) && Number.isFinite(entry.single);
+    const ranking = tied ? result.get(before[0])!.ranking : index + 1;
+    result.set(personId, { ranking, ...(entry.value !== undefined ? { value: entry.value } : {}) });
+  });
   return result;
 }
 
@@ -239,17 +281,36 @@ export function initialRounds(competition: StoredCompetition, stations: number, 
       scramblers: 1,
       runners: 1,
       enabled: roundNumber === 1 || competitorsKnown,
+      ...(roundNumber > 1 && entersFromRegistrations(round) ? { fromRegistrations: true } : {}),
     }, stations, mode);
   }));
 }
 
 export function shapeRound(round: RoundConfig, stations: number, mode: ZoneMode): RoundConfig {
-  const fixed = usesFixedStations(round.roundNumber, round.competitors, stations, mode);
-  const groups = suggestGroups(round.competitors, stations, fixed, round.roundNumber);
+  const fixed = usesFixedStations(isFirstRound(round), round.competitors, stations, mode);
+  const groups = suggestGroups(round.competitors, stations, fixed, isFirstRound(round));
   return { ...round, groups, scramblers: suggestScramblers(round.competitors, groups, stations), runners: suggestRunners(round.competitors, groups, stations) };
 }
 
 /** Recomputes the suggested shape of every round, keeping which rounds are enabled. */
 export function resuggestRounds(rounds: RoundConfig[], stations: number, mode: ZoneMode): RoundConfig[] {
   return rounds.map(round => shapeRound(round, stations, mode));
+}
+
+/**
+ * Rounds saved before the WCIF linked them as dual rounds (or after it unlinked them): a second
+ * dual round opens like a first round, with the registered people, and gets a suggested shape
+ * again unless its staff was set by hand.
+ */
+export function withRegistrationRounds(rounds: RoundConfig[], competition: StoredCompetition, stations: number, mode: ZoneMode): RoundConfig[] {
+  const linked = registrationRoundIds(competition);
+  if (!linked.size && !rounds.some(round => round.fromRegistrations)) return rounds;
+  const fresh = initialRounds(competition, stations, mode);
+  return rounds.map(round => {
+    const now = fresh.find(item => item.id === round.id);
+    if (!now || linked.has(round.id) === !!round.fromRegistrations) return round;
+    const changed: RoundConfig = { ...round, competitors: now.competitors, competitorsKnown: now.competitorsKnown, ...(now.fromRegistrations ? { fromRegistrations: true, enabled: true } : {}) };
+    if (!now.fromRegistrations) delete changed.fromRegistrations;
+    return round.staffSetByHand ? changed : { ...shapeRound(changed, stations, mode), enabled: changed.enabled };
+  });
 }
