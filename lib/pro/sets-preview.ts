@@ -31,7 +31,7 @@ export function previewSets({ competition, sets, rounds, slots, membersOf, maxPe
     if (!resolved.length) continue;
     const caps = Array.from({ length: primary }, (_, index) => maxPerGroup?.(round.id, index + 1));
     const targets = caps.some(cap => cap !== undefined) ? groupTargets(people.length, caps) : undefined;
-    for (const stats of splitWithSets(people, primary, resolved, "ranks", round.eventId, targets).stats) {
+    for (const stats of splitWithSets(people, primary, resolved, "ranks", round.eventId, targets, caps).stats) {
       result.set(stats.id, [...(result.get(stats.id) ?? []), { roundId: round.id, wanted: stats.wanted, seats: stats.seats, placed: stats.placed }]);
     }
   }

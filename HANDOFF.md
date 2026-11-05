@@ -46,7 +46,7 @@ Preferencias firmes del usuario:
 - Comandos:
   - `npm run dev`. El usuario suele tenerlo ya abierto en el puerto 3000, y un segundo `next dev` en la misma carpeta no arranca.
   - `npm run typecheck`.
-  - `npm test`: Vitest, con 325 tests en verde a 05/11/2026 (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
+  - `npm test`: Vitest, con 328 tests en verde a 05/11/2026 (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
   - `npm run build`.
 - Demo sin login, solo en desarrollo:
   - `/demo?size=small`: 34 personas y una sala.
@@ -67,7 +67,7 @@ Preferencias firmes del usuario:
 
 ## 4. Estado actual
 
-Último commit de código al actualizar este documento: `6c3e423 Keep the same tasks in both dual rounds`. Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 43.
+Último trabajo: finales y 3BLD r2 de la plantilla según los scripts de 2026 (6.7, tanda 44). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 44.
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 
@@ -220,6 +220,7 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 
 - `lib/pro/template.ts`: `exportTemplate`, `parseTemplate`, `applyTemplate`. Formato `grupitos/pro-template` v1: clusters, conjuntos, reglas de estación, personal por sala, equipos, puntuación, opciones de reglas e impresión y mezcladores/runners por ronda. Salas y escenarios por **nombre** (sin tildes ni mayúsculas), horas ocupadas por **número de día**. Sin datos personales ni horario. Al aplicar, cada sección presente sustituye la actual y se avisa de salas, rondas y días que no existen.
 - Plantilla incluida «Campeonato de España 2026» (`lib/pro/templates/spanish-championship-2026.ts`), con la configuración preparada por el usuario: destacados 4 y top 21 por grupo de Bizkaia, 14 estaciones por escenario (máximo 28 en Araba y Gipuzkoa, 23 en Bizkaia), opciones, impresión, puntuación y clusters de mezcladores y rondas siguientes provisionales copiadas de 2025 (finales impares/pares, final y semifinal de 3x3, destacados y delegados del lunes; ver docs/NACIONAL_2026_EN_LA_WEB.md, 4 bis). Pendiente: sustituirlas cuando se suban los scripts de rondas siguientes de 2026.
+- **Scripts de 2026 ya recogidos** (05/11/2026; los scripts siguen a medias, solo hay `1_saturday/0_after_333bf-r1.cs`): finales de reloj, 7x7, Square-1 y 6x6 (top 14 con los españoles primero en Bizkaia, sentados desde el centro; el resto en Gipuzkoa) y 3BLD r2 (top 25 en Bizkaia, el resto en Gipuzkoa). El top 14 de 20 pasa del reparto par: lo permite la opción de conjunto **Plazas** (`overfill`), limitada solo por el máximo del escenario (`caps` en `splitWithSets`). Falta recoger la final de 5x5, 3x3, domingo y lunes, y comparar las primeras rondas con `6_assign_main.cs`. No hay tarea de checker (`CheckerJob`) ni número de delegados por ronda.
 - Ámbitos de rondas de conjuntos y reglas de estación: primeras, siguientes (`later`), siguientes sin finales (`middle`), finales, todas o elegidas.
 - Interfaz: Zona → Plantillas (`components/pro-template-panel.tsx`). Comprobado con el WCIF del Nacional: todo se encuentra.
 
@@ -327,7 +328,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 
 ## 7. Siguientes fases
 
-**Lo más urgente:** el Campeonato de España es del 5 al 7 de diciembre de 2026. Hay que sustituir las rondas siguientes provisionales de la plantilla por las de 2026 (6.7 y `docs/NACIONAL_2026_EN_LA_WEB.md`, 4 bis).
+**Lo más urgente:** el Campeonato de España es del 5 al 7 de diciembre de 2026. Hay que sustituir las rondas siguientes que siguen provisionales en la plantilla, a medida que se suban los scripts de 2026 (6.7 y `docs/NACIONAL_2026_EN_LA_WEB.md`, 4 bis).
 
 1. **Fase 4, reparto avanzado en grupos:** hechos los conjuntos ordenados, los destacados y las reglas de estación (6.5). Queda, si se quiere, añadir scorers por grupo (mismo país, «ha competido hace poco»).
 2. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.

@@ -403,7 +403,7 @@ function generateRounds({ competition, rounds: requestedRounds, stations, zoneMo
     const topCount = firstRound && options.topTogether ? options.topTogetherCounts[round.eventId] : undefined;
     const topSet = topCount ? [{ id: `top-${round.eventId}`, name: "top", top: topCount, groups: lastGroups.length ? lastGroups : [primary], featured: false }] : [];
     const sets = [...topSet, ...(assignmentSets?.({ ...round, groups: primary }) ?? [])];
-    const { groups, allowed, featured, setOf } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets)
+    const { groups, allowed, featured, setOf } = sets.length ? splitWithSets(competitors, primary, sets, rule, round.eventId, targets, caps)
       : { groups: targets ? fillByRule(competitors, targets, rule, round.eventId) : splitIntoGroups(competitors, primary, rule, round.eventId), allowed: undefined, featured: undefined, setOf: undefined };
     if (options.spreadDelegates) spreadRole(groups, person => delegates.has(personKey(person)), (person, group) => allowedIn({ allowed }, person, group), (a, b) => sameSet({ setOf }, a, b));
     if (options.separateNames) separateFirstNames(groups, (person, group) => allowedIn({ allowed }, person, group), (a, b) => sameSet({ setOf }, a, b));
@@ -1012,19 +1012,20 @@ export type SetStats = { id: string; name: string; wanted: number; seats: number
  * not placed yet (best first) and deals them over its groups one per group and pass, emptiest
  * first. A group never takes more than the even size of the round (people / groups): unlike
  * CompScript, which raises that limit when a set's groups are full, the people who do not fit
- * are left to the next sets and to the sorting rule, and the stats say how many. Whoever is left
- * fills the remaining seats so that groups stay even, following the sorting rule.
+ * are left to the next sets and to the sorting rule, and the stats say how many. A set marked
+ * `overfill` is limited only by its stage's maximum (`caps`). Whoever is left fills the remaining
+ * seats so that groups stay even, following the sorting rule.
  */
-export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets: ResolvedSet[], rule: SortingRule, eventId: string, targets?: number[]) {
+export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets: ResolvedSet[], rule: SortingRule, eventId: string, targets?: number[], caps?: Array<number | undefined>) {
   const groups: WcifPerson[][] = Array.from({ length: groupCount }, () => []);
   const allowed = new Map<string, Set<number>>();
   const featured = new Set<string>();
   const setOf = new Map<string, string>();
   const stats: SetStats[] = [];
   const even = Math.ceil(bestFirst.length / Math.max(1, groupCount));
-  /** Seats of each group: its target size when stages have a maximum, else the even size. */
-  const seatsOf = (group: number) => targets?.[group - 1] ?? even;
   for (const set of sets) {
+    /** Seats of each group: its target size when stages have a maximum, else the even size. */
+    const seatsOf = (group: number) => set.overfill ? caps?.[group - 1] ?? bestFirst.length : targets?.[group - 1] ?? even;
     const eligible = set.groups.filter(group => group >= 1 && group <= groupCount);
     // A set with no group in this round (its stage is not used) does not apply here.
     if (!eligible.length) continue;

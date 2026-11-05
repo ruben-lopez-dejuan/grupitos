@@ -164,6 +164,23 @@ describe("sets never overfill a group", () => {
     expect(keys([...groups[0], ...groups[1]]).sort()).toEqual(keys(people.slice(0, 12)).sort());
   });
 
+  it("may pass the even split up to the stage's maximum when marked, as the 2026 finals do", () => {
+    const people = bestFirst.slice(0, 20);
+    const sets = (overfill?: boolean) => [
+      { id: "main", name: "Main", top: 14, groups: [1], featured: false, overfill },
+      { id: "rest", name: "Rest", groups: [2], featured: false },
+    ];
+    const sizes = (overfill: boolean | undefined, caps?: number[]) => splitWithSets(people, 2, sets(overfill), "ranks", "333", caps ? groupTargets(20, caps) : undefined, caps).groups.map(members => members.length);
+    expect(sizes(undefined)).toEqual([10, 10]);
+    expect(sizes(undefined, [23, 28])).toEqual([10, 10]);
+    expect(sizes(true)).toEqual([14, 6]);
+    expect(sizes(true, [23, 28])).toEqual([14, 6]);
+    // The stage's maximum still holds.
+    expect(sizes(true, [12, 28])).toEqual([12, 8]);
+    const { groups } = splitWithSets(people, 2, sets(true), "ranks", "333");
+    expect(keys(groups[0]).sort()).toEqual(keys(people.slice(0, 14)).sort());
+  });
+
   it("take a number per event", () => {
     const set: AssignmentSetConfig = { id: "t", name: "Top", top: 4, topByEvent: { "555": 2 }, perGroup: true, rounds: "first", lanes: [], groups: "any" };
     expect(resolveSets([set], { id: "333-r1", eventId: "333", roundNumber: 1, groups: 3 }, undefined, () => undefined)[0].top).toBe(12);

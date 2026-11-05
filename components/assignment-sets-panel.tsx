@@ -83,7 +83,8 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
     const firstName = set.first ? t("sets.summaryFirst", { name: segments.find(item => item.id === set.first)?.name ?? t("sets.missingCluster") }) : "";
     const positions = set.positions ? t(keyOf("sets.positionsShort", set.positions)) : "";
     const ranked = set.fill === "ranked" ? t("sets.summaryRanked") : "";
-    return [who, top, positions, firstName, which, where, groups, ranked].filter(Boolean).join(" · ");
+    const overfill = set.overfill ? t("sets.summaryOverfill") : "";
+    return [who, top, positions, firstName, which, where, groups, ranked, overfill].filter(Boolean).join(" · ");
   };
   /** How many people the set takes: its top N, or the size of its cluster. */
   const people = (set: AssignmentSetConfig) => set.top !== undefined ? `top ${set.top}` : set.segment ? String(segments.find(item => item.id === set.segment)?.size ?? 0) : t("sets.everyone");
@@ -170,6 +171,11 @@ export function AssignmentSetsPanel({ sets, onChange, segments, lanes, rounds, o
           <label title={t("sets.fillHelp")}><span>{t("sets.fill")}</span>
             <select value={set.fill ?? ""} onChange={event => save({ ...set, fill: event.target.value === "ranked" ? "ranked" : undefined })}>
               <option value="">{t("sets.fillSpread")}</option><option value="ranked">{t("sets.fillRanked")}</option>
+            </select>
+          </label>
+          <label title={t("sets.seatsHelp")}><span>{t("sets.seats")}</span>
+            <select value={set.overfill ? "stage" : ""} onChange={event => save({ ...set, overfill: event.target.value === "stage" || undefined })}>
+              <option value="">{t("sets.seatsEven")}</option><option value="stage">{t("sets.seatsStage")}</option>
             </select>
           </label>
         </div>

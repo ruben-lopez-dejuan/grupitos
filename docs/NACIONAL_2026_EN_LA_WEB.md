@@ -109,11 +109,39 @@ Del domingo 6: Pyraminx, 4×4, 2×2, Skewb, 3×3 y OH.
 | Sábado 5 | Bizkaia | Gipuzkoa | Araba |
 | Domingo 6 | Gipuzkoa | Araba | Bizkaia |
 
-## 4 bis. Rondas siguientes (provisional, copiado de 2025)
+## 4 bis. Rondas siguientes
 
-Los scripts de rondas siguientes de 2026 aún no existen, así que la plantilla copia los de 2025
+### Según los scripts de 2026
+
+Los scripts de rondas siguientes de 2026 están a medias: a 05/11/2026 solo existe
+`1_saturday/0_after_333bf-r1.cs`. Lo que ya definen va en la plantilla, antes que todo lo demás:
+
+| Conjunto | Rondas | Quién | Dónde |
+| --- | --- | --- | --- |
+| Finales 2026: Bizkaia | Reloj, 7x7, Square-1 y 6x6 r2 | top 14, contando primero a los españoles; **Plazas:** hasta el máximo del escenario | Bizkaia |
+| Finales 2026: Gipuzkoa | Las mismas | el resto | Gipuzkoa |
+| 3BLD ronda 2: Bizkaia | 3BLD r2 | top 25, sin destacados | Bizkaia |
+| 3BLD ronda 2: Gipuzkoa | 3BLD r2 | el resto | Gipuzkoa |
+
+Con 20 finalistas quedan 14 y 6, no 10 y 10; por eso la opción **Plazas**. En Bizkaia, una regla de
+estación por posición, primero los españoles y **desde el centro**: con 2 filas de 4 mesas de 2 y 14
+estaciones da exactamente el `SeedToStation` del script (filas de 8 y 6). En Gipuzkoa, por posición,
+primero los españoles. Las estaciones solo se aplican con la zona en puestos fijos o mixto.
+
+Personal por ronda: 3BLD r2 con 4 mezcladores y 3 runners; esas finales con 3 y 3. Diferencias con
+`FinalAssignStaff`, porque la app no lo permite o el script no lo define:
+
+- Gipuzkoa lleva 3 mezcladores y no 2, porque una ronda tiene un número para todos sus escenarios.
+- No hay checkers (`CheckerJob`, 2 en Bizkaia y 1 en Gipuzkoa): no es una tarea de la app.
+- Los jueces salen de las estaciones (el script pide 15 en Bizkaia y aún no da número para Gipuzkoa).
+- Los delegados por escenario (3 y 2 en finales) no se configuran por ronda.
+
+### Provisional, copiado de 2025
+
+El resto de rondas siguientes aún no tiene script de 2026, así que la plantilla copia los de 2025
 (`Scripts-Compscript/SpanishChampionship2025`) con los escenarios de 2026. Van antes que los de
-primeras rondas, cada uno con sus rondas, así que no se pisan:
+primeras rondas, cada uno con sus rondas, así que no se pisan. «Finales» son aquí las que no están
+arriba (5x5, Megaminx y las del domingo y el lunes):
 
 | Conjunto | Rondas | Quién | Dónde |
 | --- | --- | --- | --- |
@@ -123,7 +151,7 @@ primeras rondas, cada uno con sus rondas, así que no se pisan:
 | Finales: impares / pares | Finales | impares / pares, contando primero a los españoles | Bizkaia / Gipuzkoa |
 | Destacados (rondas siguientes) | Rondas siguientes sin finales | top 4 por grupo, destacados | Bizkaia |
 | Organización, AES, Data, Streaming | Todas | el equipo | como en primeras rondas |
-| Delegados | 3BLD r2 (sábado), Pyraminx r2 (domingo); 3x3 r2, 4x4 r2, 2x2 r2, OH r2 y Skewb r2 (lunes) | por grupo de delegados | lunes: 1 y 2 Araba, 3 Bizkaia, 4 Gipuzkoa |
+| Delegados | Pyraminx r2 (domingo); 3x3 r2, 4x4 r2, 2x2 r2, OH r2 y Skewb r2 (lunes) | por grupo de delegados | lunes: 1 y 2 Araba, 3 Bizkaia, 4 Gipuzkoa |
 | Resto (rondas siguientes) | Rondas siguientes sin finales | el resto | cualquier escenario |
 
 Y una regla de estación para las finales: por posición, de menor a mayor, primero los españoles

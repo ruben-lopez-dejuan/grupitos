@@ -199,6 +199,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - **dónde:** sala, escenario y números de grupo;
   - **cómo:** repartidos entre sus grupos, o por ranking (los mejores en el último grupo).
 
+  Un conjunto no llena un grupo por encima del reparto par de la ronda, salvo que en **Plazas** se elija «Hasta el máximo del escenario» (14 de 20 en un escenario y 6 en el otro).
   La plantilla «Finales: impares y pares» crea los dos conjuntos de las finales del Campeonato de España 2025: impares a un escenario y pares al otro.
 
   El tope es duro: un conjunto nunca llena un grupo por encima del reparto par. Una vista previa avisa de las rondas donde no cabe la gente. Si hay un choque de horario real, gana evitar el choque.

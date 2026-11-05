@@ -4,8 +4,10 @@
  * first-round assignment sets (FirstRoundAssignmentSets), delegates by cluster and day
  * (DelegateStage), side room staff (4_assign_side.cs) and Groupifier print options
  * (0_groupifier_config.cs). See docs/NACIONAL_2026_EN_LA_WEB.md.
- * Later rounds are provisional, from the Spanish Championship 2025 scripts (the 2026 ones are not
- * written yet): finals split odd and even with Spaniards first (lib/_finals.cs), the 3x3 final
+ * Later rounds from the 2026 scripts (1_saturday/0_after_333bf-r1.cs, lib/_assign.cs and
+ * lib/_volunteers.cs, which are still being written): the clock, 7x7, Square-1 and 6x6 finals and
+ * 3BLD round 2. The other later rounds are provisional, from the Spanish Championship 2025 scripts
+ * (the 2026 ones are not written yet): finals split odd and even with Spaniards first (lib/_finals.cs), the 3x3 final
  * head to head (3_monday/3_assign_333-r4.cs), the 3x3 semifinal by position per stage
  * (2_sunday/5_assign_333-r3.cs) and the top featured on the main stage elsewhere
  * (NormalRoundAssignmentSets).
@@ -23,8 +25,9 @@ const SIDE = "Sala Auxiliar";
 /** First rounds of each day with assignment sets (the side room rounds have their own). */
 const SATURDAY = ["clock-r1", "777-r1", "sq1-r1", "666-r1", "333bf-r1", "555-r1", "minx-r1"];
 const SUNDAY = ["pyram-r1", "444-r1", "222-r1", "skewb-r1", "333-r1", "333oh-r1"];
-/** Later rounds that are not finals, by day (3x3 round 3 has its own sets). */
-const SATURDAY_LATER = ["333bf-r2"];
+/** FinalAssignGroups in the 2026 scripts. The other finals are not in them yet. */
+const FINALS_2026 = ["clock-r2", "777-r2", "sq1-r2", "666-r2"];
+/** Later rounds that are not finals, by day (3x3 round 3 and 3BLD round 2 have their own sets). */
 const SUNDAY_LATER = ["pyram-r2"];
 const MONDAY_LATER = ["333-r2", "444-r2", "222-r2", "333oh-r2", "skewb-r2"];
 /** 3x3 final: group 1 on Gipuzkoa alone, then 6 on Bizkaia and Gipuzkoa at once. */
@@ -62,7 +65,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
   format: TEMPLATE_FORMAT,
   version: 1,
   name: "Campeonato de España 2026",
-  note: "Destacados 4 y top 21 por grupo de Bizkaia (23 por grupo como máximo); ajústalos en Reglas, también por prueba, y la vista previa avisa si no caben. Las rondas siguientes son provisionales, copiadas de 2025: finales impares a Bizkaia y pares a Gipuzkoa contando primero a los españoles; final de 3x3 cara a cara (top 12, grupos 2-7) y el resto al grupo 1; semifinal de 3x3 por posición (Bizkaia, Gipuzkoa y el resto Araba); en las demás, 4 destacados por grupo de Bizkaia. Los conjuntos de delegados usan la propiedad delegate-cluster.",
+  note: "Destacados 4 y top 21 por grupo de Bizkaia (23 por grupo como máximo); ajústalos en Reglas, también por prueba, y la vista previa avisa si no caben. Finales de reloj, 7x7, Square-1 y 6x6 según los scripts de 2026: los 14 primeros (primero los españoles) en Bizkaia, sentados desde el centro con 2 filas de 4 mesas de 2, y el resto en Gipuzkoa; 3BLD ronda 2: los 25 primeros en Bizkaia y el resto en Gipuzkoa. Las demás rondas siguientes son provisionales, copiadas de 2025: finales impares a Bizkaia y pares a Gipuzkoa contando primero a los españoles; final de 3x3 cara a cara (top 12, grupos 2-7) y el resto al grupo 1; semifinal de 3x3 por posición (Bizkaia, Gipuzkoa y el resto Araba); en las demás, 4 destacados por grupo de Bizkaia. Los conjuntos de delegados usan la propiedad delegate-cluster.",
   // CanVolunteer: without a team, only in one's own events and with a WCA ID. The rest is the
   // setup prepared for the championship.
   options: {
@@ -75,7 +78,14 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
     scrambleCheckerBlank: false, scrambleCheckerBigCubes: false, backgroundUrl: "", language: "es", stageInGroupCell: true, registrantOnBack: true,
   },
   // Multi-blind: JudgeJob(10) and DelegateJob(1) only.
-  rounds: { "333mbf-r1": { scramblers: 0, runners: 0 } },
+  rounds: {
+    "333mbf-r1": { scramblers: 0, runners: 0 },
+    // AllStagesAssignStaff: RunnerJob(3), ScramblerJob(4).
+    "333bf-r2": { scramblers: 4, runners: 3 },
+    // FinalAssignStaff: RunnerJob(3) on both stages, ScramblerJob(3) on Bizkaia and (2) on Gipuzkoa.
+    // A round has one number for all its stages, so Gipuzkoa gets one more.
+    ...Object.fromEntries(FINALS_2026.map(id => [id, { scramblers: 3, runners: 3 }])),
+  },
   pro: {
     segments,
     jobs: { scrambler: "s7" },
@@ -92,6 +102,13 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
       [SIDE]: { stations: 20, scramblers: 2, runners: 2 },
     },
     sets: [
+      // FinalAssignGroups (2026): FinalsSeed <= 14 on Bizkaia, the rest on Gipuzkoa, so 14 and 6
+      // of 20 rather than an even split.
+      set("sc26-finals26-bizkaia", "Finales 2026: Bizkaia", { rounds: FINALS_2026, top: 14, first: "sc26-spaniards", overfill: true, lanes: [BIZKAIA] }),
+      set("sc26-finals26-gipuzkoa", "Finales 2026: Gipuzkoa", { rounds: FINALS_2026, lanes: [GIPUZKOA] }),
+      // 0_after_333bf-r1.cs: Seed <= 25 on Bizkaia, the rest on Gipuzkoa. Nobody featured.
+      set("sc26-333bf-r2-bizkaia", "3BLD ronda 2: Bizkaia", { rounds: ["333bf-r2"], top: 25, lanes: [BIZKAIA] }),
+      set("sc26-333bf-r2-gipuzkoa", "3BLD ronda 2: Gipuzkoa", { rounds: ["333bf-r2"], lanes: [GIPUZKOA] }),
       // Provisional, from 2025. 3x3 final: the top 12 (Spaniards first) head to head, odd on
       // Bizkaia and even on Gipuzkoa, the worst in group 2 up to the best in group 7; the rest in
       // group 1 (2025: foreigners in group 1).
@@ -114,7 +131,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
       set("sc26-later-featured", "Destacados (rondas siguientes)", { rounds: "middle", top: 4, perGroup: true, lanes: [BIZKAIA], featured: true }),
       // Teams and delegates keep their stage in every round (in finals nobody is left by now).
       set("sc26-core", "Organización", { rounds: "all", segment: teamClusterId("Organizador"), lanes: [GIPUZKOA] }),
-      ...delegates("sábado", [...SATURDAY, ...SATURDAY_LATER], [BIZKAIA, GIPUZKOA, ARABA]),
+      ...delegates("sábado", SATURDAY, [BIZKAIA, GIPUZKOA, ARABA]),
       ...delegates("domingo", [...SUNDAY, ...SUNDAY_LATER], [GIPUZKOA, ARABA, BIZKAIA]),
       ...delegates("lunes", MONDAY_LATER, [ARABA, BIZKAIA, GIPUZKOA]),
       set("sc26-aes", "Registro / Stand AES", { rounds: "all", segment: teamClusterId("Registro / Stand AES"), lanes: [GIPUZKOA] }),
@@ -128,6 +145,9 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
     // SideStations: ascending psych sheet in the side room.
     stationRules: [
       { id: "sc26-side", rounds: ["444bf-r1", "555bf-r1", "333mbf-r1"], lanes: [SIDE], groups: "any", mode: "ascending", sortBy: "seed", exclusions: [] },
+      // FinalAssignGroups (2026), SeedToStation on Bizkaia: from the centre of rows of 8 and 6, which
+      // is what 2 rows of 4 tables of 2 give with 14 stations. Gipuzkoa takes the rule below.
+      { id: "sc26-finals26-bizkaia", rounds: FINALS_2026, lanes: [BIZKAIA], groups: "any", mode: "ascending", sortBy: "seed", first: "sc26-spaniards", seating: "center", exclusions: [] },
       // FinalsStations (2025): by position, Spaniards first. Side room finals keep the rule above.
       { id: "sc26-finals", rounds: "final", lanes: [], groups: "any", mode: "ascending", sortBy: "seed", first: "sc26-spaniards", exclusions: [] },
     ],

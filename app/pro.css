@@ -613,3 +613,5 @@ button.plain.danger{justify-self:start;color:var(--error)}
 
 /* Sets: positions, who counts first and how the set is split */
 .set-fields.set-order{padding-top:0}
+/* Assignment set cards stay within a phone screen. */
+@media (max-width:700px){.set-cards,.assignment-sets .set-cards>li{grid-template-columns:minmax(0,1fr)}.set-body .set-head,.set-fields label.set-top{flex-wrap:wrap}.set-fields label{max-width:100%;min-width:0}.set-fields select{max-width:100%;min-width:0}}

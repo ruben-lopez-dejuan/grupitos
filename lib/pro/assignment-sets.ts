@@ -40,6 +40,11 @@ export type AssignmentSetConfig = {
   positions?: "odd" | "even";
   /** "ranked": the set's best in its last group and its worst in its first; otherwise spread. */
   fill?: "ranked";
+  /**
+   * The set may fill its groups past the round's even size, up to the stage's maximum per group
+   * (the Spanish Championship 2026 finals: the top 14 of 20 on the main stage).
+   */
+  overfill?: boolean;
   rounds: SetRounds;
   /** Rooms or stages (lane keys); empty: any. A room's key includes its stages. */
   lanes: string[];
@@ -49,7 +54,7 @@ export type AssignmentSetConfig = {
 };
 
 /** A set as it applies to one round. */
-export type ResolvedSet = { id: string; name: string; members?: Set<string>; top?: number; groups: number[]; featured: boolean; first?: Set<string>; positions?: "odd" | "even"; ranked?: boolean };
+export type ResolvedSet = { id: string; name: string; members?: Set<string>; top?: number; groups: number[]; featured: boolean; first?: Set<string>; positions?: "odd" | "even"; ranked?: boolean; overfill?: boolean };
 
 export const SET_TEMPLATES = ["featured", "organizers", "delegating", "cluster", "finals"] as const;
 export type SetTemplate = typeof SET_TEMPLATES[number];
@@ -102,7 +107,7 @@ export function resolveSets(sets: AssignmentSetConfig[] | undefined, round: { id
     const count = set.top === undefined ? undefined : set.topByEvent?.[round.eventId] ?? set.top;
     const top = count === undefined ? undefined : set.perGroup === "round" ? count * round.groups : set.perGroup ? count * groups.length : count;
     const first = set.first ? membersOf(set.first, round.eventId) ?? new Set<string>() : undefined;
-    return { id: set.id, name: set.name, members, top, groups, featured: !!set.featured, ...(first ? { first } : {}), ...(set.positions ? { positions: set.positions } : {}), ...(set.fill === "ranked" ? { ranked: true } : {}) };
+    return { id: set.id, name: set.name, members, top, groups, featured: !!set.featured, ...(first ? { first } : {}), ...(set.positions ? { positions: set.positions } : {}), ...(set.fill === "ranked" ? { ranked: true } : {}), ...(set.overfill ? { overfill: true } : {}) };
   });
 }
 
