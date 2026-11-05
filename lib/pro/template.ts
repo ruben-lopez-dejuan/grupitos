@@ -12,7 +12,7 @@ import { normalizeScoring, type ScoringConfig } from "@/lib/pro/scoring";
 import { normalizeJobs, normalizeSegments, type JobEligibility, type Segment } from "@/lib/pro/segments";
 import { scheduleLanes, type LaneStaffing, type ProSchedule } from "@/lib/pro/schedule";
 import type { StationRuleConfig } from "@/lib/pro/station-rules";
-import { normalizeTeams, type TeamBusy, type TeamSetup } from "@/lib/pro/teams";
+import { normalizeTeams, type ClusterBusy, type TeamBusy, type TeamSetup } from "@/lib/pro/teams";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 
 export const TEMPLATE_FORMAT = "grupitos/pro-template";
@@ -41,6 +41,7 @@ export type ProTemplate = {
     /** `lanes` hold room or stage names. */
     sets?: AssignmentSetConfig[];
     stationRules?: StationRuleConfig[];
+    clusterBusy?: Array<Omit<ClusterBusy, "day"> & { dayIndex: number }>;
     teams?: { property: string; setup: Record<string, Omit<TeamSetup, "busy"> & { busy?: TemplateBusy[] }> };
   };
 };
@@ -69,6 +70,7 @@ export function exportTemplate(settings: WorkspaceSettings, name: string): ProTe
       staffing: Object.fromEntries(Object.entries(pro?.staffing ?? {}).map(([key, own]) => [nameOf(key), own])),
       sets: (pro?.sets ?? []).map(set => ({ ...set, lanes: set.lanes.map(nameOf) })),
       stationRules: (pro?.stationRules ?? []).map(rule => ({ ...rule, lanes: rule.lanes.map(nameOf) })),
+      ...(pro?.clusterBusy?.length ? { clusterBusy: pro.clusterBusy.map(({ day, ...rest }) => ({ ...rest, dayIndex: Math.max(0, days.indexOf(day)) })) } : {}),
       ...(teams ? {
         teams: {
           property: teams.property,
@@ -129,6 +131,11 @@ export function applyTemplate(settings: WorkspaceSettings, schedule: ProSchedule
   }));
   if (pro.sets) next.sets = pro.sets.map(set => ({ ...set, lanes: keys(set.lanes ?? []), rounds: Array.isArray(set.rounds) ? knownRounds(set.rounds) : set.rounds }));
   if (pro.stationRules) next.stationRules = pro.stationRules.map(rule => ({ ...rule, lanes: keys(rule.lanes ?? []), exclusions: rule.exclusions ?? [], rounds: Array.isArray(rule.rounds) ? knownRounds(rule.rounds) : rule.rounds }));
+  if (pro.clusterBusy) next.clusterBusy = pro.clusterBusy.flatMap(({ dayIndex, ...rest }) => {
+    const day = schedule.days[dayIndex];
+    if (!day && !warnings.days.includes(dayIndex + 1)) warnings.days.push(dayIndex + 1);
+    return day ? [{ ...rest, day }] : [];
+  });
   if (pro.teams) {
     const setup = Object.fromEntries(Object.entries(pro.teams.setup).map(([team, item]) => {
       const lane = item.lane ? keyOf(item.lane) : undefined;

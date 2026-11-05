@@ -572,7 +572,7 @@ ${openSeverity === severity ? t("review.hideList") : t("review.showList")}`} onC
         // Needed staff per role; undefined when the rules expect none, so only the count shows.
         const needs: Partial<Record<TaskRole, number>> = extra ? {} : {
           scrambler: groupLimits(currentRules, group).scramblers,
-          ...(currentRules.checkJudges ? { judge: judgesNeeded(groupCounts.competitor, groupLimits(currentRules, group).stations), runner: groupLimits(currentRules, group).runners } : {}),
+          ...(currentRules.checkJudges ? { judge: judgesNeeded(groupCounts.competitor, groupLimits(currentRules, group).stations, groupLimits(currentRules, group).judges), runner: groupLimits(currentRules, group).runners } : {}),
           ...(currentRules.checkDelegates ? { delegate: 1 } : {}),
           ...(currentRules.checkDataEntry && !currentRules.dataEntryCovered?.has(group) ? { dataentry: 1 } : {}),
         };

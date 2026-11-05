@@ -2,9 +2,18 @@
 
 Cómo recrear en Grupitos la configuración de los scripts de CompScript del Nacional
 ([aasalobrena/Scripts-Compscript, `SpanishChampionship2026`](https://github.com/aasalobrena/Scripts-Compscript/tree/main/SpanishChampionship2026)).
-Está escrita para el estado del repo a 23/10/2026: solo tiene la preparación (`0_precomp`) y la
-biblioteca (`lib`); los scripts de primeras rondas, de rondas siguientes, de jueces por escenario
-y de indisponibilidades aún no están subidos.
+Está escrita para el estado del repo a 03/11/2026 (commit `9d6e98a`): preparación (`0_precomp`), biblioteca
+(`lib`) y un primer script del sábado (`1_saturday/0_after_333bf-r1.cs`), que aún no se puede ejecutar. Faltan las
+rondas siguientes del domingo y el lunes.
+
+**Decisiones de la organización (05/11/2026), que mandan sobre el script:**
+
+- 14 estaciones por escenario y 16 jueces por grupo (2 de reserva).
+- Como máximo 21 por grupo en Bizkaia (1,5 por estación) y 28 en Araba y Gipuzkoa (2 por estación). Pyraminx tiene 22 en el script; aquí, 21. 3BLD r2 tiene 25 en Bizkaia; aquí, 21.
+- Quien hace puzles individual no compite en Square-1, 6x6 ni 3BLD. El script lo mandaba a Square-1 grupo 1. La revisión avisa si sigue inscrito, y hay que quitarlo de esas pruebas en la WCA.
+- La final secundaria va en Gipuzkoa, a la derecha, como en el script.
+- Prepara la sala auxiliar el equipo Side room, con su delegado. Queda por decidir si hace falta montaje el sábado: el script solo lo tiene el domingo.
+- Solo los delegados tienen equipo fijo por escenario.
 
 Todo se hace con el **modo PRO** activado (interruptor arriba a la derecha). La configuración se
 guarda en tu navegador, por competición.
@@ -15,9 +24,9 @@ En **Zona → Plantillas** elige «Campeonato de España 2026» y pulsa **Aplica
 8 de esta guía de una vez (`lib/pro/templates/spanish-championship-2026.ts`) y avisa de las salas,
 rondas o días que no encuentre. Después solo queda:
 
-- Revisar en **Zona** las estaciones y el máximo por grupo de cada escenario: Araba y Gipuzkoa 14 estaciones y 28 como máximo, Bizkaia 14 y 23, Sala Auxiliar 20 estaciones.
-- Ajustar en **Reglas** los números de «Destacados» (4) y «Top» (21) por grupo de Bizkaia; con «Por prueba…» se pone un número distinto en cada prueba (5x5, Square-1…). La vista previa de cada conjunto avisa si pide más gente de la que cabe.
-- Rellenar `delegate-cluster` si queréis los conjuntos de delegados.
+- Importar de la hoja las propiedades `team`, `weight-*`, `delegate-cluster`, `delegate-cluster-extra` y `puzzles` (por ejemplo «individual, parejas»).
+- Revisar en **Horario** la hora de los puzles individual: la WCA dice 11:00 y el script 11:30. La plantilla usa las 11:00.
+- Mirar los avisos de la revisión: con 14 estaciones y estos máximos, Pyraminx y 3x3 no caben (244 y 311 inscritos para 231 y 308 plazas, a 05/11).
 - Marcar los delegados de turno y, si lo queréis, activar «Delegado de turno».
 
 Con **Exportar JSON** guardas tu versión ajustada y con **Importar JSON…** la cargas en otro
@@ -42,7 +51,7 @@ Comprueba en **Horario** que cada ronda tiene los grupos del script (por ejemplo
 escenario, 333-r4 con 7 en Gipuzkoa y 6 en Bizkaia) y que el multi tiene sus dos intentos.
 Nada más que hacer.
 
-## 2. Equipos (`_constants.cs`, `_helpers.cs`: `InTeam`, `CanVolunteer`)
+## 2. Equipos (`_constants.cs`, `_volunteers.cs`: `InTeam`, `Volunteers`)
 
 **Personas → Equipos**, propiedad `team`. Las sugerencias ya siguen `CanVolunteer`; comprueba que
 queda así:
@@ -54,15 +63,21 @@ queda así:
 | Data entry | Data entry | | `AddRole(Team([DATA_TEAM]), DATA_ROLE)` |
 | Organizador, Delegado | Mantener roles | | siguen su rol de la WCA |
 | Streaming, Registro / Stand AES, Control de Accesos, Médico | Sin tareas | | no están en `CanVolunteer` |
-| Aceptado SIN categorizar, Otro | Sin tareas | | igual que el script: tener equipo y no ser voluntario = no trabaja. Cámbialo si no es lo que queréis |
+| Otro | Sin tareas | | igual que el script: tener equipo y no ser voluntario = no trabaja |
+| Aceptado SIN categorizar | Mantener roles | | no está en `AllTeams`: trabaja como quien no tiene equipo |
 
-**Horas ocupadas** (`9_competitiongroups.cs`), en la línea «Ocupado» de Equipos, equipo Side room,
-domingo 6: 08:45–09:15 y 12:15–12:25 (montaje).
+**Horas ocupadas por cluster** (pestaña **Clusters**; `5_manual_assignments.cs` y `_unavailabilities.cs`). Quien está en el
+cluster no recibe tareas y, si puede, compite en otro grupo:
 
-**Mezcla del multi** (09:15–09:50 del domingo en el script): en **Horario**, añade en la Sala
-Auxiliar una actividad de tipo «Mezcla del multi» antes de cada intento, y en **Grupos** pon los
-mezcladores del multi. Los mezcladores de cada intento trabajan en la mezcla que acaba justo antes
-de ese intento (el mismo día), y el equipo Side room va primero.
+| Cluster | Día | Horas | Motivo |
+| --- | --- | --- | --- |
+| Equipo de sala auxiliar (Side room y `delegate-cluster` 1) | Sábado 5 | 11:40–12:35 | mezcla del multi |
+| Equipo de sala auxiliar | Domingo 6 | 08:45–09:50 | montaje y mezcla del multi |
+| Equipo de sala auxiliar | Domingo 6 | 12:15–12:25 | montaje |
+| Puzles: individual | Sábado 5 | 11:00–13:30 | |
+| Puzles: parejas | Sábado 5 | 16:30–18:30 | |
+
+La mezcla del sábado ocupa toda la prueba de 6x6: quien esté en el equipo y compita en 6x6 sale como aviso en la revisión.
 
 ## 3. Clusters (para los delegados por turnos)
 
@@ -71,9 +86,7 @@ de ese intento (el mismo día), y el equipo Side room va primero.
 - «Delegados 1 y 2»: *alguna* de las condiciones `delegate-cluster` es `1`, `delegate-cluster` es `2`.
 - «Delegados 3»: `delegate-cluster` es `3`.
 - «Delegados 4»: `delegate-cluster` es `4`.
-
-Ojo: en el WCIF actual todos tienen `delegate-cluster` = 0, así que estos clusters salen vacíos
-hasta que se rellene la propiedad.
+- «Delegados 5» y «Delegados 6»: `delegate-cluster-extra` es `5` o `6`, para las primeras rondas en dos escenarios (7x7 y 3BLD).
 
 Los equipos no hace falta crearlos como clusters: aparecen solos como «Equipo: …» en todas las
 listas de clusters.
@@ -84,24 +97,37 @@ Añade los conjuntos en este orden (todos con **Rondas: Primeras rondas** salvo 
 
 | # | Conjunto del script | Quién | Solo los mejores | Dónde | ★ |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `FeaturedSet` | Cualquiera | N **por grupo de este conjunto** | Bizkaia | sí |
-| 2 | `TopSet` | Cualquiera | M **por grupo de este conjunto** (y «Por prueba…» si cambia) | Bizkaia | no |
-| 3 | `CoreSet` | Equipo: Organizador | | Gipuzkoa | |
-| 4–9 | `DelegatesSet` | ver tabla de abajo | | | |
-| 10 | `AESSet` | Equipo: Registro / Stand AES | | Gipuzkoa | |
-| 11 | `DataSet` | Equipo: Data entry | | Gipuzkoa | |
-| 12 | `StreamingSet` | Equipo: Streaming | | Araba | |
-| 13 | `EveryoneSet` | Cualquiera | | Araba y Gipuzkoa (todo menos Bizkaia) | |
+| 1–3 | Puzles parejas (Megaminx) | Puzles: parejas | top y resto | Grupo 1: Bizkaia si son top; si no, Araba y Gipuzkoa | los 5 primeros |
+| 4 | `mbf` (Pyraminx) | Equipo de sala auxiliar | | Araba, grupo 3 | |
+| 5–28 | `TopSideSet` y `SideSet` | Inscritos en la prueba de sala auxiliar, o su equipo | top y resto | Los grupos compatibles (abajo): Bizkaia si son top; si no, Araba y Gipuzkoa | los 5 primeros |
+| 29 | `TopSet` | Cualquiera | 5 **por grupo de Bizkaia** | Bizkaia | sí |
+| 30 | `TopSet` | Cualquiera | Top **por grupo de Bizkaia**, por prueba | Bizkaia | no |
+| 31 | `CORE_SET` | Equipo: Organizador | | Gipuzkoa | |
+| 32–… | `DelegatesSet` | ver tabla de abajo | | | |
+| | `AES_SET` | Equipo: Registro / Stand AES | | Gipuzkoa | |
+| | `DATA_SET` | Equipo: Data entry | | Gipuzkoa | |
+| | `StreamingSet` | Equipo: Streaming | | Araba; sin Araba, Gipuzkoa | |
+| | `EveryoneSet` | Cualquiera | | Araba y Gipuzkoa, hasta su máximo | |
 
-N y M son el tercer y cuarto argumento de `FirstRoundAssignGroups` en los scripts de primeras
-rondas (aún no subidos). Ojo con la unidad: el script los multiplica por **todos** los grupos de la
-ronda (`NumberPerGroupToPerRound`, en la app «por grupo de toda la ronda»), así que 4 y 18 allí
-serían 48 y 216 en 3x3: más que Bizkaia. Con «por grupo de este conjunto», 4 y 18 son 22 por grupo
-de Bizkaia. Un conjunto nunca llena un grupo por encima del reparto par de la ronda: quien no cabe
-pasa a los conjuntos siguientes.
+Top por grupo de Bizkaia (`6_assign_main.cs`): reloj 18, 7x7 18, Square-1 15, 6x6 14, 3BLD 18, 5x5 20, Megaminx 19, Pyraminx 21 (22 en el script), 4x4 16, 2x2 19, Skewb 20, 3x3 21, OH 19.
+
+Grupos compatibles con la sala auxiliar:
+
+| Ronda | Sala auxiliar | Grupos |
+| --- | --- | --- |
+| Reloj | 4BLD | 1 |
+| 7x7 | 4BLD | 2 |
+| 5x5 | Multi | 1 |
+| Megaminx | Multi | 2 |
+| 4x4 | Multi | 1 y 2 |
+| 2x2 | Multi | 3 y 4 |
+| Skewb | 5BLD | 1 y 2 |
+| 3x3 | 5BLD | 4 |
+
+Los conjuntos de top y resto pueden pasar del reparto par de la ronda, hasta el máximo del escenario, para que los asientos libres de Bizkaia no se llenen con los últimos de la ronda. Dentro de un conjunto, cada persona va al grupo más vacío, así que el top de Bizkaia queda igualado aunque los de la sala auxiliar se concentren en unos grupos.
 
 **Delegados** (`DelegateStage`): con «Rondas: Elegir rondas», un conjunto por día y grupo de
-delegados. Primeras rondas del sábado 5: clock, 7×7, Square-1, 6×6, 3BLD, 5×5 y Megaminx.
+delegados. Primeras rondas del sábado 5: clock, Square-1, 6×6, 5×5 y Megaminx.
 Del domingo 6: Pyraminx, 4×4, 2×2, Skewb, 3×3 y OH.
 
 | Día | Delegados 1 y 2 | Delegados 3 | Delegados 4 |
@@ -109,18 +135,21 @@ Del domingo 6: Pyraminx, 4×4, 2×2, Skewb, 3×3 y OH.
 | Sábado 5 | Bizkaia | Gipuzkoa | Araba |
 | Domingo 6 | Gipuzkoa | Araba | Bizkaia |
 
+En 7x7 y 3BLD, sin Araba, van por `delegate-cluster-extra`: 5 a Bizkaia y 6 a Gipuzkoa.
+
 ## 4 bis. Rondas siguientes
 
 ### Según los scripts de 2026
 
 Los scripts de rondas siguientes de 2026 están a medias: a 05/11/2026 solo existe
-`1_saturday/0_after_333bf-r1.cs`. Lo que ya definen va en la plantilla, antes que todo lo demás:
+`1_saturday/0_after_333bf-r1.cs`. Lo que ya definen va en la plantilla, antes que todo lo demás.
+`SecondRoundAssignGroups`, definido en el script pero sin usar, no está recogido: pone 25 en Bizkaia.
 
 | Conjunto | Rondas | Quién | Dónde |
 | --- | --- | --- | --- |
 | Finales 2026: Bizkaia | Reloj, 7x7, Square-1 y 6x6 r2 | top 14, contando primero a los españoles; **Plazas:** hasta el máximo del escenario | Bizkaia |
 | Finales 2026: Gipuzkoa | Las mismas | el resto | Gipuzkoa |
-| 3BLD ronda 2: Bizkaia | 3BLD r2 | top 25, sin destacados | Bizkaia |
+| 3BLD ronda 2: Bizkaia | 3BLD r2 | top 21, sin destacados (25 en el script; 21 es el máximo de Bizkaia) | Bizkaia |
 | 3BLD ronda 2: Gipuzkoa | 3BLD r2 | el resto | Gipuzkoa |
 
 Con 20 finalistas quedan 14 y 6, no 10 y 10; por eso la opción **Plazas**. En Bizkaia, una regla de
@@ -133,7 +162,7 @@ Personal por ronda: 3BLD r2 con 4 mezcladores y 3 runners; esas finales con 3 y 
 
 - Gipuzkoa lleva 3 mezcladores y no 2, porque una ronda tiene un número para todos sus escenarios.
 - No hay checkers (`CheckerJob`, 2 en Bizkaia y 1 en Gipuzkoa): no es una tarea de la app.
-- Los jueces salen de las estaciones (el script pide 15 en Bizkaia y aún no da número para Gipuzkoa).
+- Los jueces salen de las estaciones y la reserva del escenario (el script pide 15 en Bizkaia y aún no da número para Gipuzkoa).
 - Los delegados por escenario (3 y 2 en finales) no se configuran por ronda.
 
 ### Provisional, copiado de 2025
@@ -150,7 +179,6 @@ arriba (5x5, Megaminx y las del domingo y el lunes):
 | Semifinal 3x3 | 333-r3 | top 22 / top 28 / el resto; cada escenario se llena hasta el reparto par (con 42: 14 en cada uno) | Bizkaia / Gipuzkoa / Araba |
 | Finales: impares / pares | Finales | impares / pares, contando primero a los españoles | Bizkaia / Gipuzkoa |
 | Destacados (rondas siguientes) | Rondas siguientes sin finales | top 4 por grupo, destacados | Bizkaia |
-| Organización, AES, Data, Streaming | Todas | el equipo | como en primeras rondas |
 | Delegados | Pyraminx r2 (domingo); 3x3 r2, 4x4 r2, 2x2 r2, OH r2 y Skewb r2 (lunes) | por grupo de delegados | lunes: 1 y 2 Araba, 3 Bizkaia, 4 Gipuzkoa |
 | Resto (rondas siguientes) | Rondas siguientes sin finales | el resto | cualquier escenario |
 
@@ -188,8 +216,8 @@ esos conjuntos no se aplican allí y todo el mundo va a su único grupo, como
 
 ## 7. Zona → personal por escenario (`4_assign_side.cs`: `AssignStaff`)
 
-En la tabla de personal por sala y escenario: Araba y Gipuzkoa **14 estaciones y 28 por grupo como
-máximo**, Bizkaia **14 y 23**. Sala Auxiliar: **20 estaciones, 2 mezcladores,
+En la tabla de personal por sala y escenario: los tres escenarios tienen **14 estaciones, 16 jueces, 4 mezcladores y 3 runners**, con **28 por grupo como
+máximo** en Araba y Gipuzkoa y **21** en Bizkaia. Las finales llevan 3 mezcladores y 3 runners. Sala Auxiliar: **20 estaciones, 2 mezcladores,
 2 runners** (`JudgeJob(20), RunnerJob(2), ScramblerJob(2)`). Para el multi el script pide 10 jueces
 y ni mezcladores ni runners: en **Grupos**, ronda 333mbf, pon 0 mezcladores y 0 runners.
 
@@ -201,13 +229,16 @@ A4, orden **Apilado**, **Portada por grupo** y hoja de mezclas para **Los mejore
 
 - **Jueces del multi**: las estaciones son por sala, no por ronda, así que el multi pide un juez
   por competidor hasta 20, no 10.
+- **Checkers, delegados por escenario en finales y mezcladores distintos por escenario en finales** (3 en Bizkaia y 2 en Gipuzkoa): la app no los tiene. Gipuzkoa lleva 3.
+- **Data entry**: el script pide 3 personas por tanda (2 en la sala y 1 en Bizkaia); la app, una por franja.
+- **Delegado de turno por escenario**: el script da preferencia al escenario del cluster; la app reparte sin mirar el escenario.
+- **Casos de una sola persona** (dos personas con grupo u horas propios en el script): no van en la plantilla, para no guardar datos personales. Se ponen a mano.
+- **Límites de mezcla**: la plantilla mantiene los que preparó la organización (7x7 5:00, 5x5 1:40…), que no coinciden con los del script (7x7 4:30, 5x5 1:30…).
 - **Quién trabaja en la sala auxiliar**: el script solo usa Voluntario normal, Side room y
   `delegate-cluster` 1. Aquí Side room va primero y luego entra cualquiera que pueda, y el delegado
   de turno de la sala auxiliar no se limita al cluster 1.
-- **Montaje y mezcla del multi** quedan como horas ocupadas del equipo; no se publican como tareas
+- **Montaje y mezcla del multi** quedan como horas ocupadas del cluster; no se publican como tareas
   (`CreateCompetitionGroupsAssignments`).
 - **Reglas de CanVolunteer**: «sin newcomers» y «solo sus pruebas» para jueces y runners evitan, pero no prohíben del todo. Para mezclar sí es una regla firme: nadie mezcla una prueba en la que no compite, salvo si toda la ronda compite a la vez (4BLD, 5BLD), aunque quede una plaza vacía.
-- **Conflicto real del horario**: con destacados y top en Bizkaia, los del top que hacen multi no
-  caben todos en el único grupo de 4×4 de Bizkaia antes del segundo intento; la revisión lo marca.
-  En 2025 se resolvía con un conjunto «multi» antes del top (`MultiSet`): Quién = un cluster
-  «inscrito en 3x3 Multi-Blind», Grupos = números concretos de 4×4/2×2 que acaben antes.
+- **Choque entre multi y 4×4**: los conjuntos de sala auxiliar llevan a quienes hacen multi a los grupos
+  1 y 2 de 4×4, para evitarlo. Falta comprobar con el WCIF que ya no queda nadie con choque.

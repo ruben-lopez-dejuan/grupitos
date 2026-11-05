@@ -19,6 +19,7 @@ import { ProTemplatePanel } from "@/components/pro-template-panel";
 import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
 import { ProScoringPanel } from "@/components/pro-scoring-panel";
+import { ClusterBusyPanel } from "@/components/cluster-busy-panel";
 import { ProSegmentsPanel } from "@/components/pro-segments-panel";
 import { SortingRuleIcon } from "@/components/rule-icons";
 import { TaskOrderPanel } from "@/components/task-order-panel";
@@ -32,7 +33,7 @@ import { TOP_TOGETHER_COUNT, topTogetherCountOf, normalizeOptions, DEFAULT_OPTIO
 import { isDelegate, migrateWcaStaffRoles, nonCompetingStaff, peopleFromWcif, rekeyPeople, staleKeys } from "@/lib/people";
 import { fetchWcaNames } from "@/lib/wca-persons";
 import { EMPTY_PRO_PEOPLE, everyone, findVolunteerCopies, linkedVolunteers, withWcaNames, importPersonProperties, mergeVolunteerCopies, orphanPropertyKeys, volunteerPerson, type ProPeople } from "@/lib/pro/people";
-import { teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
+import { clusterUnavailability, teamClusterId, teamJobExclusions, teamLanes, teamSetups, teamUnavailability, withTeams } from "@/lib/pro/teams";
 import { resolveSets, type AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { previewSets } from "@/lib/pro/sets-preview";
 import { applyTemplate, exportTemplate, type ProTemplate } from "@/lib/pro/template";
@@ -494,7 +495,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     const own = laneStaffing(roundId, group);
     if (!own || !settings.rounds.find(round => round.id === roundId)?.staffSetByHand) return own;
     // A round set by hand keeps its own scramblers and runners; stations and group sizes stay the stage's.
-    return own.stations === undefined && own.maxPerGroup === undefined ? undefined : { stations: own.stations, maxPerGroup: own.maxPerGroup };
+    return own.stations === undefined && own.judges === undefined && own.maxPerGroup === undefined ? undefined : { stations: own.stations, judges: own.judges, maxPerGroup: own.maxPerGroup };
   });
   const scoring = settings.pro?.scoring ?? DEFAULT_SCORING;
   const setScoring = (next: ScoringConfig) => updatePro(() => ({ scoring: next }));
@@ -559,6 +560,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
       return cache.get(key);
     };
   })();
+  const unavailableWithClusters = pro?.clusterBusy?.length ? [...unavailableInUse, ...clusterUnavailability(pro.clusterBusy, segmentId => membersOf(segmentId, ""))] : unavailableInUse;
   const assignmentSets = pro && sets.some(set => !set.off) ? (round: GenerationRound) => resolveSets(sets, round, slots?.get(round.id), membersOf) : undefined;
   const stationRules = pro && stationRuleList.some(rule => !rule.off) ? (round: GenerationRound) => resolveStationRules(stationRuleList, round, slots?.get(round.id), membersOf) : undefined;
   const segmentFilters = pro && (segments.length || teamClusters.length) ? (() => {
@@ -584,7 +586,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const delegatesWithoutDuties = options.assignDelegateDuties && !peopleInUse.delegateDutyIds.some(key => isDelegate(peopleInUse, key));
 
   /** Everything the generator needs except the rounds to generate. */
-  const generationInput = { competition, stations, zoneMode, seating, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: unavailableInUse, availabilitySlots, eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
+  const generationInput = { competition, stations, zoneMode, seating, people: peopleInUse, options, slots, eventWindows: pro ? eventBusyWindows(pro.schedule) : undefined, extraPeople: pro ? proPeople.volunteers.map(volunteerPerson) : [], unavailable: unavailableWithClusters, availabilitySlots, eligible, staffing: staffingFor, scoring: pro ? scoring : undefined, personProperties: pro ? proPeople.properties : undefined, laneTeams, assignmentSets, stationRules };
   // Mid-competition: enabled rounds with known competitors that the proposal does not have yet.
   const newRounds = proposal.length ? activeRounds.filter(round => round.competitorsKnown && !pastRoundIds.has(round.id) && !generatedRoundIds.has(round.id)) : [];
   const roundName = (round: { eventId: string; roundNumber: number }) => `${eventName(round.eventId)} R${round.roundNumber}`;
@@ -735,13 +737,14 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
               <h3 className="panel-subheading">{t("staffing.title")} <Hint align="start" text={t("staffing.hint")} /></h3>
               <p className="setup-note staffing-note">{t("staffing.note")}</p>
               <div className="round-table staffing-grid">
-                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span>{t("staffing.maxPerGroup")} <Hint text={t("staffing.maxPerGroupHint")} /></span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span>{t("staffing.team")} <Hint text={t("staffing.teamHint")} /></span></div>
+                <div className="round-table-head"><span>{t("staffing.lane")}</span><span>{t("zone.stations")}</span><span>{t("staffing.judges")} <Hint text={t("staffing.judgesHint")} /></span><span>{t("staffing.maxPerGroup")} <Hint text={t("staffing.maxPerGroupHint")} /></span><span><i className="cell-chip mini scrambler">{TASK_CODES.scrambler}</i> {t("rounds.columnScramblers")}</span><span><i className="cell-chip mini runner">{TASK_CODES.runner}</i> {t("rounds.columnRunners")}</span><span>{t("staffing.team")} <Hint text={t("staffing.teamHint")} /></span></div>
                 {scheduleLanes(pro.schedule).map(lane => {
                   const own = staffing[lane.key] ?? {};
                   const laneStations = own.stations ?? stations;
                   return <div key={lane.key} className="round-row">
                     <div><i className="lane-dot" style={{ background: lane.color }} /><div className="round-name"><strong>{lane.name}</strong>{lane.stageId !== undefined && <small>{lane.roomName}</small>}</div></div>
                     <Stepper label={t("zone.stations")} value={laneStations} min={1} big onChange={value => setStaffing(lane.key, { stations: value })} />
+                    <Stepper label={t("staffing.judges")} value={own.judges ?? laneStations} auto={own.judges === undefined} min={laneStations} onChange={value => setStaffing(lane.key, { judges: value > laneStations ? value : undefined })} />
                     {own.maxPerGroup === undefined
                       ? <button type="button" className="plain max-per-group-off" onClick={() => setStaffing(lane.key, { maxPerGroup: laneStations })} title={t("staffing.maxPerGroupSet")}>{t("staffing.noMax")}</button>
                       : <span className="max-per-group"><Stepper label={t("staffing.maxPerGroup")} value={own.maxPerGroup} min={1} onChange={value => setStaffing(lane.key, { maxPerGroup: value })} /><button type="button" className="rule-remove" onClick={() => setStaffing(lane.key, { maxPerGroup: undefined })} aria-label={t("staffing.clearMax", { lane: lane.name })}>×</button></span>}
@@ -815,6 +818,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         </>}
 
         {tab === "segments" && pro && <ProSegmentsPanel people={everyone(competition, proPeople)} eventIds={(competition.events ?? []).map(event => event.id)} settings={peopleInUse} proPeople={proPeople} segments={segments} onChange={setSegments} />}
+        {tab === "segments" && pro && <ClusterBusyPanel value={pro.clusterBusy ?? []} onChange={clusterBusy => updatePro(() => ({ clusterBusy }))} clusters={[...segments.map(segment => ({ id: segment.id, name: segment.name })), ...teamClusters.map(team => ({ id: team.id, name: team.name }))]} days={pro.schedule.days} />}
 
         {tab === "rounds" && <>
           {outdatedNote}
@@ -870,7 +874,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
             const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
             return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
-          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={unavailableInUse} availabilitySlots={availabilitySlots} segmentFilters={segmentFilters} />}
+          })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={unavailableWithClusters} availabilitySlots={availabilitySlots} segmentFilters={segmentFilters} />}
         </>}
 
         {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} outdated={proposalOutdated} userName={userName} offline={offline} lastPublished={remoteSavedAt} onPublished={afterPublish} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}

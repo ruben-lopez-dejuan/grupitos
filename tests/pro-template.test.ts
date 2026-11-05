@@ -8,6 +8,8 @@ import { groupSlots, targetKey, withScheduledGroups, type ProSchedule } from "@/
 import { resolveStationRules } from "@/lib/pro/station-rules";
 import { applyTemplate, exportTemplate, parseTemplate, templateFileName } from "@/lib/pro/template";
 import { SPANISH_CHAMPIONSHIP_2026 } from "@/lib/pro/templates/spanish-championship-2026";
+import { clusterUnavailability } from "@/lib/pro/teams";
+import { judgesNeeded } from "@/lib/rounds";
 import { initialRounds, personKey } from "@/lib/rounds";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
 import { DEFAULT_SEATING, normalizeSeating, stationOrder } from "@/lib/seating";
@@ -17,6 +19,11 @@ const competition = buildDemoCompetition({ id: "Tpl", name: "Tpl", people: 30, e
 // 3x3 has four rounds, as at the championship.
 const rounds333 = competition.events!.find(event => event.id === "333")!.rounds!;
 rounds333.push(...[3, 4].map(round => ({ ...rounds333[1], id: `333-r${round}` })));
+// So do the other events with a third round.
+for (const id of ["222", "444", "333oh", "333bf", "pyram", "skewb"]) {
+  const rounds = competition.events!.find(event => event.id === id)!.rounds!;
+  if (!rounds.some(round => round.id === `${id}-r3`)) rounds.push({ ...rounds[1], id: `${id}-r3` });
+}
 
 /** Rooms like the national championship's; ids differ on purpose. */
 function schedule(names = ["Araba", "Bizkaia", "Gipuzkoa"], days = ["2026-12-05", "2026-12-06", "2026-12-07"]): ProSchedule {
@@ -45,17 +52,26 @@ describe("PRO templates", () => {
     expect(pro.sets!.map(set => set.id)).toEqual([
       "sc26-finals26-bizkaia", "sc26-finals26-gipuzkoa", "sc26-333bf-r2-bizkaia", "sc26-333bf-r2-gipuzkoa",
       "sc26-final333-odd", "sc26-final333-even", "sc26-final333-rest", "sc26-semi333-bizkaia", "sc26-semi333-gipuzkoa", "sc26-semi333-araba", "sc26-finals-odd", "sc26-finals-even",
+      ...["sc26-parejas-minx", ...["clock-r1", "777-r1", "555-r1", "minx-r1", "444-r1", "222-r1", "skewb-r1", "333-r1"].map(round => `sc26-side-${round}`)].flatMap((id, index) => [`${id}-featured`, `${id}-top`, `${id}-rest`, ...(index === 0 ? ["sc26-side-crew-pyram"] : [])]),
       "sc26-featured", "sc26-top", "sc26-later-featured", "sc26-core",
-      "sc26-delegates-12-sábado", "sc26-delegates-3-sábado", "sc26-delegates-4-sábado", "sc26-delegates-12-domingo", "sc26-delegates-3-domingo", "sc26-delegates-4-domingo", "sc26-delegates-12-lunes", "sc26-delegates-3-lunes", "sc26-delegates-4-lunes",
-      "sc26-aes", "sc26-data", "sc26-streaming", "sc26-everyone", "sc26-later-everyone",
+      "sc26-delegates-12-sábado", "sc26-delegates-3-sábado", "sc26-delegates-4-sábado", "sc26-delegates-12-domingo", "sc26-delegates-3-domingo", "sc26-delegates-4-domingo", "sc26-delegates-12-lunes", "sc26-delegates-3-lunes", "sc26-delegates-4-lunes", "sc26-delegates-5", "sc26-delegates-6",
+      "sc26-aes", "sc26-data", "sc26-streaming", "sc26-streaming-gipuzkoa", "sc26-everyone", "sc26-later-everyone",
     ]);
     expect(pro.sets!.find(set => set.id === "sc26-featured")!.lanes).toEqual(["7:11"]);
     expect(pro.sets!.find(set => set.id === "sc26-finals-even")).toMatchObject({ rounds: "final", positions: "even", first: "sc26-spaniards", lanes: ["7:12"] });
     expect(pro.staffing).toEqual({
-      "7:10": { stations: 14, maxPerGroup: 28 }, "7:11": { stations: 14, maxPerGroup: 23 }, "7:12": { stations: 14, maxPerGroup: 28 },
+      "7:10": { stations: 14, judges: 16, maxPerGroup: 28, scramblers: 4, runners: 3 }, "7:11": { stations: 14, judges: 16, maxPerGroup: 21, scramblers: 4, runners: 3 }, "7:12": { stations: 14, judges: 16, maxPerGroup: 28, scramblers: 4, runners: 3 },
       "8:room": { stations: 20, scramblers: 2, runners: 2 },
     });
-    expect(pro.people!.teams!.setup["Side room"]).toEqual({ kind: "volunteer", lane: "8:room", busy: [{ day: "2026-12-06", start: "08:45", end: "09:15" }, { day: "2026-12-06", start: "12:15", end: "12:25" }] });
+    expect(pro.people!.teams!.setup["Side room"]).toMatchObject({ kind: "volunteer", lane: "8:room" });
+    expect(pro.clusterBusy).toContainEqual({ segment: "sc26-side-crew", day: "2026-12-06", start: "12:15", end: "12:25" });
+    expect(pro.clusterBusy).toContainEqual({ segment: "sc26-individual", day: "2026-12-05", start: "11:00", end: "13:30" });
+    // The numbers of 6_assign_main.cs, except Pyraminx: Bizkaia takes 21 at most.
+    expect(pro.sets!.find(set => set.id === "sc26-featured")).toMatchObject({ top: 5, perGroup: true, overfill: true });
+    expect(pro.sets!.find(set => set.id === "sc26-top")!.topByEvent).toMatchObject({ clock: 18, "666": 14, "333": 21, pyram: 21 });
+    expect(pro.sets!.find(set => set.id === "sc26-side-222-r1-top")).toMatchObject({ top: 76, segment: "sc26-side-333mbf", groups: [3, 4], lanes: ["7:11"] });
+    expect(pro.sets!.find(set => set.id === "sc26-side-222-r1-rest")).toMatchObject({ groups: [3, 4], lanes: ["7:10", "7:12"] });
+    expect(pro.sets!.find(set => set.id === "sc26-core")!.rounds).toBe("first");
     expect(after.rounds.find(round => round.id === "333mbf-r1")).toMatchObject({ scramblers: 0, runners: 0, staffSetByHand: true });
     expect(after.options).toMatchObject({ tasksForOwnEventsOnly: true, noTasksForNewcomers: true, sortingRule: "scrambler-safe", assignDataEntry: true });
     expect(pro.jobs).toEqual({ scrambler: "s7" });
@@ -80,7 +96,7 @@ describe("PRO templates", () => {
     expect(pro.sets!.find(set => set.id === "sc26-finals26-bizkaia")).toMatchObject({ top: 14, first: "sc26-spaniards", overfill: true, lanes: ["7:11"] });
     expect(pro.sets!.findIndex(set => set.id === "sc26-finals26-gipuzkoa")).toBeLessThan(pro.sets!.findIndex(set => set.id === "sc26-finals-odd"));
     // Nobody featured and no delegates' sets in 3BLD round 2.
-    expect(setsOf("333bf-r2").map(set => [set.id, set.top, set.lanes, set.featured])).toEqual([["sc26-333bf-r2-bizkaia", 25, ["7:11"], undefined], ["sc26-333bf-r2-gipuzkoa", undefined, ["7:12"], undefined]]);
+    expect(setsOf("333bf-r2").map(set => [set.id, set.top, set.lanes, set.featured])).toEqual([["sc26-333bf-r2-bizkaia", 21, ["7:11"], undefined], ["sc26-333bf-r2-gipuzkoa", undefined, ["7:12"], undefined]]);
     expect(after.rounds.find(round => round.id === "333bf-r2")).toMatchObject({ scramblers: 4, runners: 3, staffSetByHand: true });
     // SeedToStation in the scripts, with the default layout and 14 stations.
     const rule = pro.stationRules!.find(item => item.id === "sc26-finals26-bizkaia")!;
@@ -123,6 +139,11 @@ describe("PRO templates", () => {
     expect([...people.slice(16), ...people.slice(0, 2)].map(person => stationIn.get(personKey(person)))).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
+  it("count spare judges and keep busy clusters out of tasks", () => {
+    expect([judgesNeeded(21, 14, 16), judgesNeeded(14, 14, 16), judgesNeeded(6, 14, 16), judgesNeeded(21, 14), judgesNeeded(6, 14)]).toEqual([16, 16, 8, 14, 6]);
+    expect(clusterUnavailability([{ segment: "a", day: "2026-12-05", start: "11:00", end: "13:30" }, { segment: "gone", day: "2026-12-05", start: "11:00", end: "12:00" }], id => id === "a" ? new Set(["1", "2"]) : undefined).map(item => [item.personKey, item.start, item.end])).toEqual([["1", "2026-12-05T11:00", "2026-12-05T13:30"], ["2", "2026-12-05T11:00", "2026-12-05T13:30"]]);
+  });
+
   it("round-trip through a file in another competition, matching rooms by name", () => {
     const { settings: national } = applyTemplate(settings(schedule()), schedule(), SPANISH_CHAMPIONSHIP_2026);
     const file = JSON.stringify(exportTemplate(national, "Mi plantilla"));
@@ -136,7 +157,8 @@ describe("PRO templates", () => {
     const { settings: copy, warnings } = applyTemplate(settings(other), other, template);
     expect(warnings.lanes).toEqual(["Gipuzkoa"]);
     expect(copy.pro!.sets![0].lanes).toEqual(["3:11"]);
-    expect(copy.pro!.people!.teams!.setup["Side room"].busy![0].day).toBe("2027-03-02");
+    expect(copy.pro!.clusterBusy!.find(item => item.segment === "sc26-side-crew")!.day).toBe("2027-03-01");
+    expect(copy.pro!.clusterBusy!.filter(item => item.start === "12:15")[0].day).toBe("2027-03-02");
   });
 
   it("refuses other files and names exported files", () => {

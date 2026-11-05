@@ -319,7 +319,7 @@ function generateRounds({ competition, rounds: requestedRounds, stations, zoneMo
   /** PRO mode: who (keys) may judge, scramble or run, per event; absent means the usual rules. */
   eligible?: Partial<Record<"judge" | "scrambler" | "runner", Map<string, Set<string>>>>;
   /** PRO mode: stations and staff per group where a room or stage overrides the round's values. */
-  staffing?: (roundId: string, group: number) => { stations?: number; scramblers?: number; runners?: number; maxPerGroup?: number } | undefined;
+  staffing?: (roundId: string, group: number) => { stations?: number; judges?: number; scramblers?: number; runners?: number; maxPerGroup?: number } | undefined;
   /** PRO mode: weighted criteria; scramblers, runners and judges are then chosen per group by an integer program. */
   scoring?: ScoringConfig;
   /** PRO mode: person properties, for preference weights (`weight-judge`…). */
@@ -572,6 +572,7 @@ function generateRounds({ competition, rounds: requestedRounds, stations, zoneMo
     const busyDuring = (key: string, group: number, role?: TaskRole) => taskWindows(group, role).some(window => busyTimes.get(key)?.some(busy => overlaps(busy, window)));
     const rows = new Map<string, Row>();
     const stationsIn = (group: number) => staffing?.(round.id, group)?.stations ?? stations;
+    const judgesIn = (group: number, size: number) => judgesNeeded(size, stationsIn(group), staffing?.(round.id, group)?.judges);
     const attemptOfColumn = new Map(linkedColumns(round.id).map(slot => [slot.group, slot.attempt!]));
     const stationRule = fixed ? stationRules?.(round) : undefined;
     groups.forEach((members, groupIndex) => {
@@ -844,7 +845,7 @@ function generateRounds({ competition, rounds: requestedRounds, stations, zoneMo
       const doneGroups = new Set<number>();
       for (const group of groupOrder) {
         const size = groups[group - 1].length;
-        const needs: Partial<Record<TaskRole, number>> = { scrambler: scramblersNeeded(group), ...(options.assignJudges ? { runner: runnersNeeded(group), judge: judgesNeeded(size, stationsIn(group)) } : {}) };
+        const needs: Partial<Record<TaskRole, number>> = { scrambler: scramblersNeeded(group), ...(options.assignJudges ? { runner: runnersNeeded(group), judge: judgesIn(group, size) } : {}) };
         const candidates: Array<IlpCandidate & { person: WcifPerson; breakdown: Partial<Record<string, number>> }> = [];
         const counts: Partial<Record<TaskRole, number>> = {};
         let keptForScrambling = new Set<string>();
@@ -901,7 +902,7 @@ function generateRounds({ competition, rounds: requestedRounds, stations, zoneMo
         role === "judge" ? person.registration?.eventIds?.length ?? 0 : 0];
     };
     const runnerStep = () => fill("runner", runnersNeeded, poolFor("runner"), othersKey("runner"));
-    const judgeStep = () => fill("judge", (group, size) => judgesNeeded(size, stationsIn(group)), poolFor("judge"), othersKey("judge"));
+    const judgeStep = () => fill("judge", judgesIn, poolFor("judge"), othersKey("judge"));
 
     // Tasks in the chosen order. With scoring, scramblers, runners and judges of a group are solved
     // together where the first of them comes, and the order decides which seats are filled first.
@@ -1059,9 +1060,11 @@ export function splitWithSets(bestFirst: WcifPerson[], groupCount: number, sets:
     for (let pass = 0; queue.length && !set.ranked; pass += 1) {
       const open = eligible.filter(group => groups[group - 1].length < seatsOf(group));
       if (!open.length) break;
+      // Only the emptiest groups take someone, so a set evens out what earlier sets left uneven.
+      const fewest = Math.min(...open.map(group => groups[group - 1].length));
       // Alternating the tie order snakes the best people over the groups.
-      open.sort((a, b) => groups[a - 1].length - groups[b - 1].length || (pass % 2 ? b - a : a - b));
-      for (const group of open) {
+      const emptiest = open.filter(group => groups[group - 1].length === fewest).sort((a, b) => pass % 2 ? b - a : a - b);
+      for (const group of emptiest) {
         const person = queue.shift();
         if (!person) break;
         place(person, group);

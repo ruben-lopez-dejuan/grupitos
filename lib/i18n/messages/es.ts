@@ -421,6 +421,8 @@ export const es = {
     stepperRunners: "runners",
   },
   staffing: {
+    judges: "Jueces",
+    judgesHint: "Jueces por grupo cuando quieres más que estaciones, como reserva. Sin cambiarlo, uno por estación.",
     maxPerGroup: "Máx. por grupo",
     maxPerGroupHint: "Como mucho estas personas compiten en cada grupo de esta sala o escenario (por ejemplo, el escenario del medio, más pequeño); los demás escenarios se reparten el resto. Sin límite, todos los grupos de la ronda quedan iguales.",
     maxPerGroupSet: "Poner un máximo (empieza en las estaciones)",
@@ -593,6 +595,13 @@ export const es = {
     hint: "Modo PRO: elige un cluster por tarea (por ejemplo «Pueden mezclar 3x3»). Solo esas personas la recibirán y la revisión avisará si alguien fuera del cluster la tiene. El cluster de mezcladores sustituye a la regla de la mitad más rápida.",
     anyone: "Cualquiera (reglas normales)",
     noSegments: "Crea clusters en la pestaña Clusters para usarlos aquí.",
+  },
+  clusterBusy: {
+    title: "Horas ocupadas por cluster",
+    hint: "Quienes están en el cluster no reciben tareas a esas horas y, si pueden, compiten en otro grupo. La revisión avisa si alguien compite entonces.",
+    lead: "Ocupado:",
+    cluster: "Cluster ocupado",
+    remove: "Quitar la hora ocupada de {cluster}",
   },
   segments: {
     limitsTitle: "Límite por prueba (vacío: cualquiera con marca)",

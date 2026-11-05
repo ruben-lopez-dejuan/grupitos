@@ -79,6 +79,7 @@ export function generationSignature(settings: WorkspaceSettings) {
       // Segment rules decide who may do each job, so they shape the proposal too.
       jobs: settings.pro.jobs,
       staffing: settings.pro.staffing,
+      clusterBusy: settings.pro.clusterBusy,
       sets: settings.pro.sets?.filter(set => !set.off).map(({ name: _name, ...set }) => set),
       stationRules: settings.pro.stationRules?.filter(rule => !rule.off),
       // A station rule by property reads people's properties.

@@ -179,11 +179,12 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - una lista de personas concretas.
 - El recuento y la lista se actualizan en vivo.
 - Hay plantillas: pueden mezclar, mayores de edad, staff y voluntarios… Cada equipo aparece también como cluster.
+- **Horas ocupadas por cluster:** quienes están en un cluster no reciben tareas a esas horas y, si pueden, compiten en otro grupo (concursos paralelos, mezcla del multi…).
 
 ### Quién hace cada tarea y cuánta gente hace falta
 
 - **Quién puede hacer cada tarea:** un cluster para jueces, otro para mezcladores y otro para runners, evaluado **por prueba**. Por ejemplo, «puede mezclar 3BLD» si tiene marca de 3x3 por debajo de un límite.
-- **Personal por sala y escenario:** estaciones, mezcladores y runners predeterminados, además de:
+- **Personal por sala y escenario:** estaciones, jueces (más que estaciones, si quieres reserva), mezcladores y runners predeterminados, además de:
   - un **máximo de competidores por grupo** para ese escenario;
   - un **equipo propio**, que trabaja allí y en ningún otro sitio.
 - **Puntuación con pesos:**

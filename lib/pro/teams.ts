@@ -87,6 +87,16 @@ export function withTeams(settings: PeopleSettings, values: Map<string, string>,
   return { settings: { ...settings, roles }, fromTeam: new Map([...decided].map(([key, { team }]) => [key, team])) };
 }
 
+/** A busy time of everyone in a cluster (the Spanish Championship's puzzle contests). */
+export type ClusterBusy = TeamBusy & { segment: string };
+
+/** Busy times of cluster members, as unavailabilities. */
+export function clusterUnavailability(items: ClusterBusy[] | undefined, membersOf: (segmentId: string) => Set<string> | undefined): Unavailability[] {
+  return (items ?? []).flatMap((busy, index) => busy.day && busy.start && busy.end && busy.end > busy.start
+    ? [...(membersOf(busy.segment) ?? [])].map(key => ({ id: `cluster:${busy.segment}:${index}:${key}`, personKey: key, start: `${busy.day}T${busy.start}`, end: `${busy.day}T${busy.end}` }))
+    : []);
+}
+
 /** Busy times of team members, as unavailabilities. */
 export function teamUnavailability(values: Map<string, string>, setups: Map<string, TeamSetup>): Unavailability[] {
   const result: Unavailability[] = [];

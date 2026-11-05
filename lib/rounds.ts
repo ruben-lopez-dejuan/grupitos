@@ -111,8 +111,9 @@ export function suggestRunners(competitors: number, groups: number, stations: nu
 }
 
 /** One judge per occupied station. */
-export function judgesNeeded(groupSize: number, stations: number) {
-  return Math.min(groupSize, stations);
+/** One judge per station in use, plus the spare judges when a stage sets more judges than stations. */
+export function judgesNeeded(groupSize: number, stations: number, judges = stations) {
+  return Math.min(groupSize, stations) + Math.max(0, judges - stations);
 }
 
 const BLIND_EVENTS = ["333bf", "444bf", "555bf", "333mbf"];

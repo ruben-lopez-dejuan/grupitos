@@ -65,13 +65,13 @@ export type RoundRules = {
   /** PRO mode: who may do each job, from segments. */
   eligible?: Partial<Record<string, Set<string>>>;
   /** PRO mode: groups whose room or stage has its own stations or staff. */
-  byGroup?: Record<number, { stations?: number; scramblers?: number; runners?: number; maxPerGroup?: number }>;
+  byGroup?: Record<number, { stations?: number; judges?: number; scramblers?: number; runners?: number; maxPerGroup?: number }>;
 };
 
 /** Stations and staff needed in one group: the room or stage's values, else the round's. */
 export function groupLimits(rules: RoundRules, group: number) {
   const own = rules.byGroup?.[group];
-  return { stations: own?.stations ?? rules.stations, scramblers: own?.scramblers ?? rules.scramblers, runners: own?.runners ?? rules.runners, maxPerGroup: own?.maxPerGroup };
+  return { stations: own?.stations ?? rules.stations, judges: own?.judges, scramblers: own?.scramblers ?? rules.scramblers, runners: own?.runners ?? rules.runners, maxPerGroup: own?.maxPerGroup };
 }
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1 };
@@ -157,7 +157,7 @@ export function validateRound(roundId: string, roundAssignments: GeneratedAssign
       add({ severity: "warning", code: "missing-scramblers", group, params: { group, count: counts.scrambler, need: limits.scramblers } });
     }
     if (rules.checkJudges) {
-      const judges = judgesNeeded(counts.competitor, limits.stations);
+      const judges = judgesNeeded(counts.competitor, limits.stations, limits.judges);
       if (counts.judge < judges) add({ severity: "warning", code: "missing-judges", group, params: { group, count: counts.judge, need: judges } });
       if (counts.runner < limits.runners) add({ severity: "warning", code: "missing-runners", group, params: { group, count: counts.runner, need: limits.runners } });
     }

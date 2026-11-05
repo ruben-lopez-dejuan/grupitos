@@ -5,6 +5,7 @@
 import type { StoredCompetition, WcifActivity, WcifExtension, WcifRoom } from "@/lib/competition-store";
 import type { AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import type { StationRuleConfig } from "@/lib/pro/station-rules";
+import type { ClusterBusy } from "@/lib/pro/teams";
 import type { ProPeople } from "@/lib/pro/people";
 import type { ScoringConfig } from "@/lib/pro/scoring";
 import type { JobEligibility, Segment } from "@/lib/pro/segments";
@@ -50,6 +51,8 @@ export type ProSchedule = {
 /** Per room or stage (lane key): stations and staff per group; empty means the round's value. */
 export type LaneStaffing = {
   stations?: number;
+  /** Judges per group when there are more than stations (14 stations and 16 judges: 2 spare). */
+  judges?: number;
   /** Most competitors in one group of this room or stage; the others take the rest. */
   maxPerGroup?: number;
   scramblers?: number;
@@ -59,7 +62,7 @@ export type LaneStaffing = {
 };
 
 /** `sets`: ordered assignment sets for the competitor groups (lib/pro/assignment-sets.ts); `stations`: station rules (lib/pro/station-rules.ts). */
-export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig; sets?: AssignmentSetConfig[]; stationRules?: StationRuleConfig[] };
+export type ProConfig = { enabled: boolean; schedule: ProSchedule; people?: ProPeople; segments?: Segment[]; jobs?: JobEligibility; staffing?: Record<string, LaneStaffing>; scoring?: ScoringConfig; sets?: AssignmentSetConfig[]; stationRules?: StationRuleConfig[]; clusterBusy?: ClusterBusy[] };
 
 export type ScheduleLane = { key: string; roomId: number; stageId?: number; name: string; color: string; roomName: string };
 /**

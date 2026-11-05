@@ -419,6 +419,8 @@ export const en: Messages = {
     stepperRunners: "runners",
   },
   staffing: {
+    judges: "Judges",
+    judgesHint: "Judges per group when you want more than stations, as spares. Unchanged, one per station.",
     maxPerGroup: "Max per group",
     maxPerGroupHint: "At most this many people compete in each group of this room or stage (for example a smaller middle stage); the other stages share the rest. Without a limit, every group of the round is the same size.",
     maxPerGroupSet: "Set a maximum (starts at the stations)",
@@ -591,6 +593,13 @@ export const en: Messages = {
     hint: "PRO mode: pick a cluster per task (for example \"Can scramble 3x3\"). Only those people get it, and the review warns when someone outside the cluster has it. The scrambler cluster replaces the faster-half rule.",
     anyone: "Anyone (usual rules)",
     noSegments: "Create clusters in the Clusters tab to use them here.",
+  },
+  clusterBusy: {
+    title: "Busy times by cluster",
+    hint: "People in the cluster get no tasks at those times and, if they can, compete in another group. The review warns if someone competes then.",
+    lead: "Busy:",
+    cluster: "Busy cluster",
+    remove: "Remove the busy time of {cluster}",
   },
   segments: {
     limitsTitle: "Limit per event (empty: anyone with a result)",
