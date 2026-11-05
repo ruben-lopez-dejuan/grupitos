@@ -45,7 +45,7 @@ Son dos niveles distintos (como en el WCIF del Campeonato de España 2026):
 - **Grupo**: `childActivity` de la actividad de la ronda en la sala. Si pertenece a un escenario, lleva la extensión `org.cubingusa.natshelper.v1.Group` con `{ stageId }`; el `activityCode` (`333-r1-g1`) se repite en cada escenario y el nombre es «<Ronda> <Escenario> <n>».
 - Una sala sin escenarios se comporta como un único escenario implícito.
 
-El detalle de la estructura real y del cambio de modelo pendiente está en `HANDOFF.md`, secciones 6.2 y 6.3.
+El detalle de la estructura real está en `HANDOFF.md`, sección 6.1.
 
 ## Principios
 

@@ -1,6 +1,6 @@
 # Grupitos — relevo para el siguiente agente
 
-Fecha: 22/10/2026, actualizado el 23/10/2026. Sustituye a `CLAUDE_HANDOFF.md`, que es de cuando solo existía la primera matriz y queda como contexto histórico de producto (las reglas de dominio de su sección 3 siguen vigentes).
+Fecha: 22/10/2026, actualizado el 05/11/2026. Sustituye a `CLAUDE_HANDOFF.md`, que es de cuando solo existía la primera matriz y queda como contexto histórico de producto (las reglas de dominio de su sección 3 siguen vigentes).
 
 Orden de lectura recomendado:
 
@@ -46,7 +46,7 @@ Preferencias firmes del usuario:
 - Comandos:
   - `npm run dev`. El usuario suele tenerlo ya abierto en el puerto 3000, y un segundo `next dev` en la misma carpeta no arranca.
   - `npm run typecheck`.
-  - `npm test`: Vitest, con 212 tests en verde (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
+  - `npm test`: Vitest, con 325 tests en verde a 05/11/2026 (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
   - `npm run build`.
 - Demo sin login, solo en desarrollo:
   - `/demo?size=small`: 34 personas y una sala.
@@ -67,16 +67,16 @@ Preferencias firmes del usuario:
 
 ## 4. Estado actual
 
-Último commit al actualizar este documento: `d8c0723 Show per-stage staffing as defaults, in the rounds table's look`. Las fases 1, 2 y 3 del modo PRO están hechas (sección 6). Lo hecho sin aprobación expresa del usuario está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md).
+Último commit de código al actualizar este documento: `6c3e423 Keep the same tasks in both dual rounds`. Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 43.
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 
-No hay barra lateral: la barra superior lleva la marca, la competición con «Cambiar competición» al lado, el interruptor PRO y la cuenta. El pie lleva el botón «Siguiente: …» de cada paso; **los grupos solo se generan desde el paso Grupos**. Además, y las pestañas van numeradas (un ✓ en «Revisar» cuando hay propuesta, y el paso «Publicar» al final, aún no disponible). La pestaña activa se sincroniza con el hash de la URL. Con PRO apagado no aparecen Horario ni Clusters.
+No hay barra lateral: la barra superior lleva la marca, la competición con «Cambiar competición» al lado, el interruptor PRO y la cuenta. El pie lleva el botón «Siguiente: …» de cada paso; **los grupos solo se generan desde el paso Grupos**. Las pestañas van numeradas (un ✓ en «Revisar» cuando hay propuesta, y el paso «Publicar» al final, sección 6.13). La pestaña activa se sincroniza con el hash de la URL. Con PRO apagado no aparecen Horario ni Clusters.
 
 1. **Zona:** número de estaciones y modo de entrada (puestos fijos, sala de espera o mixto, que usa sala de espera en primeras rondas y puestos fijos después).
 2. **Horario** (solo PRO): ver sección 6.
 3. **Reglas** (opciones al estilo Groupifier; en PRO, además, «Quién puede hacer cada tarea»):
-   - Reparto de competidores en grupos: `scrambler-safe` (recomendado), `symmetric`, `balanced`, `ranks` y `name-optimised`.
+   - Reparto de competidores en grupos: `scrambler-safe` (recomendado), `symmetric` y `ranks` (`balanced` y `name-optimised` se convierten al abrir borradores antiguos; separar nombres repetidos es ahora una opción aparte). Sección 6.15.
    - Opciones de tareas: asignar jueces y runners, evitar trabajar justo antes del propio grupo, repartir delegados, permitir tareas normales a delegados y organizadores, tareas de delegado y data entry.
    - Otras opciones: sin tareas para newcomers, tareas solo en las propias pruebas, sin runners extranjeros.
 4. **Personas** (`components/people-panel.tsx`): roles (delegado, delegado en prácticas, organizador, staff, data entry), personal de confianza, quién hace tareas de delegado, fotos y marca de newcomer, y «No disponibles» (`components/unavailability-panel.tsx`, en los dos modos). En PRO, además, voluntarios, importación de hoja de cálculo y tabla de propiedades (sección 6).
@@ -144,7 +144,7 @@ Referencias. Clonarlas si hace falta; están fuera del repo.
   - `lib/_jobs.cs`, `lib/_scorers.cs`, `lib/_assignment_sets.cs` y `lib/_unavailabilities.cs`: trabajos, puntuaciones, conjuntos y disponibilidad.
   - `0_precomp/1_build_schedule.cs`: construcción del horario.
 
-## 6. Modo PRO: estado (23/10/2026)
+## 6. Modo PRO: estado (05/11/2026)
 
 Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segments?, jobs?, staffing?, scoring?, sets?, stationRules? }` (`lib/pro/*`), guardada con el borrador. `parseDraft()` normaliza borradores antiguos (incluido el de la fase 1, que guardaba salas como escenarios).
 
@@ -162,7 +162,7 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
   - **Propiedades** por persona: tabla con columnas libres; se importan las de natshelper del WCIF (`team`, `weight-judge`…). Valores como texto; las comparaciones leen números cuando ambos lados lo son.
   - **Voluntarios que no compiten** (`ProVolunteer`, clave `vol-N`; `WcifPerson.appKey` solo existe en la app). El generador los trata como staff.
   - **Indisponibilidades**: franja horaria o «mientras compite X». El generador no les da tareas entonces y la revisión avisa (`unavailable`). Desde el 30/10/2026 viven en `people.unavailable` (los dos modos); `withSharedUnavailability` mueve las antiguas de `pro.people.unavailable`. Sin PRO, `availabilitySlots` (horario de la WCA con los grupos de cada ronda) solo sirve para esto: se bloquean los grupos que tocan (`blockedHere`) y la revisión valida con esas horas.
-  - **Importación de hoja de cálculo** (`lib/pro/sheet-import.ts`, `components/sheet-import-panel.tsx`): Google Sheets por servidor (`app/api/sheets/route.ts`, `lib/google-sheets.ts`; hojas compartidas por enlace sin configuración, o cuenta de servicio; ver [`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md)) o CSV pegado o subido. Identifica por WCA ID, nº de inscripción, correo o nombre (sin tildes), elige columnas como propiedades y puede crear voluntarios con las filas sin inscripción. **La cuenta de servicio aún no existe**: hasta que el usuario la cree y ponga `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` en Vercel, la app lo dice y funciona con CSV.
+  - **Importación de hoja de cálculo** (`lib/pro/sheet-import.ts`, `components/sheet-import-panel.tsx`): Google Sheets por servidor (`app/api/sheets/route.ts`, `lib/google-sheets.ts`; hojas compartidas por enlace sin configuración, o cuenta de servicio; ver [`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md)) o CSV pegado o subido. Identifica por WCA ID, nº de inscripción, correo o nombre (sin tildes), elige columnas como propiedades y puede crear voluntarios con las filas sin inscripción. La cuenta de servicio es opcional (`GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`): si está, se prueba primero; si no, se lee por enlace o por CSV.
 - `lib/pro/segments.ts`, pestaña Segmentos (`components/pro-segments-panel.tsx`): segmentos con nombre que cumplen todas o alguna de una lista de condiciones (rol, propiedad, edad, inscrito en, marca personal por debajo de un tiempo, newcomer, país, otro segmento), cada una negable; recuento y lista en vivo; plantillas sacadas de los scripts (voluntarios elegibles, runners, mezcladores de 3x3). La revisión filtra por segmento.
 
 ### 6.3. Fase 3: motor de personal (hecha)
@@ -194,7 +194,7 @@ Configuración en `settings.pro: ProConfig { enabled, schedule, people?, segment
   - **Dónde**: salas o escenarios (una sala incluye sus escenarios) y números de grupo (cualquiera, el primero, el último o una lista «1, 3-4»), con el número que ve la gente.
   - **Destacado**: estrella en la revisión y en la hoja de tiempos (arriba a la derecha, como Groupifier; Roboto no tiene ★, así que es un SVG).
 - **Algoritmo** (`splitWithSets()` en `lib/group-generator.ts`): como `Assign` de CompScript, cada conjunto toma a su gente aún sin colocar, de mejor a peor, y la reparte una por grupo y pasada, el grupo más vacío primero (el desempate alterna para hacer serpiente), sin pasar del tamaño par `ceil(n / grupos)` salvo que todos sus grupos estén llenos. Los conjuntos posteriores no mueven a nadie. El resto rellena los huecos con la regla de orden (simétrica: de uno en uno desde el último grupo; por ranking: tramos consecutivos) de forma que los grupos quedan parejos. Si ningún conjunto coloca a nadie, se usa el reparto de siempre. El arreglo de solapes y el reparto de delegados solo mueven a la gente de un conjunto entre los grupos de ese conjunto.
-- Diferencias con CompScript: no hay scorers por grupo (`ByMatchingValue`, `RecentlyCompeted`…); el reparto dentro de un conjunto es determinista en vez de un ILP; el destacado no se escribe aún en `groupifier.ActivityConfig.featuredCompetitorWcaUserIds` (se hará con la publicación al WCIF).
+- Diferencias con CompScript: no hay scorers por grupo (`ByMatchingValue`, `RecentlyCompeted`…); el reparto dentro de un conjunto es determinista en vez de un ILP. El destacado se escribe en `featuredCompetitorWcaUserIds` de Groupifier al exportar y al publicar (`lib/wcif-export.ts`).
 - **Tope y vista previa** (24/10/2026): un conjunto nunca llena un grupo por encima del reparto par de la ronda; quien no cabe pasa a los siguientes (`SetStats` de `splitWithSets`). `lib/pro/sets-preview.ts` simula cada ronda con los inscritos y el panel avisa de las rondas donde no caben. «Solo los mejores» admite un número por prueba (`topByEvent`) y tres unidades: por grupo del conjunto, por grupo de toda la ronda, en total.
 - Plantillas: «Destacados (streaming)» (top 4 por grupo en el primer escenario, primeras rondas), «Organizadores» y «Delegados de servicio» (crean su cluster si no existe, reutilizándolo si ya hay uno con las mismas reglas) y «Un cluster».
 - Comprobado con el WCIF del Nacional: con «top 4 por grupo en Araba» salen 144 destacados en 13 primeras rondas, todos en Araba y sin ningún solape.
@@ -275,7 +275,7 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
   - **Exportar:** si el WCIF ya tiene a esa cuenta, se usa esa persona. Si no, y tiene tareas, se añade una persona nueva que no compite.
   - **Publicar:** solo a las personas nuevas se les manda `registration: { isCompeting: false }`, y la WCA crea la inscripción de staff (`update_persons_wcif!`).
   - **Volver a cargar:** `groupsFromWcif(…, aliases)` devuelve sus tareas al voluntario (`linkedVolunteers`). Esas inscripciones no llevan rol, así que `nonCompetingStaff` no las cuenta dos veces.
-- **Comprobado** en la demo con una WCA simulada en el navegador: publicar, comprobar, y cargar ajustes más nuevos de «otra persona». **Falta probarlo contra la WCA de verdad**: lo hará el usuario con una competición suya.
+- **Comprobado** en la demo con una WCA simulada en el navegador (publicar, comprobar y cargar ajustes más nuevos de «otra persona») y en uso real: el usuario publicó BasauriOpen2026 en la WCA, lo que destapó el problema del staff sin inscripción (6.3b, tandas 35 y 36 del informe).
 
 ### 6.12. Seguir en otro dispositivo (24/10/2026)
 
@@ -300,6 +300,22 @@ Rehecho tras revisar el mapeo con el usuario y los scripts del Nacional 2026 de 
 - **Logo de la WCA** (`public/wca-logo.svg`): es el `WCA Logo.svg` oficial del repositorio de la WCA, sin los metadatos de Inkscape. Se descargó con permiso del usuario y está anotado en `THIRD_PARTY_NOTICES.md`. Va en el panel de entrar y en el botón; en el botón va sobre un círculo blanco porque el arco azul se pierde en el azul del botón.
 - **README**: describe todas las funciones. Hay que actualizarlo cuando se añada algo visible.
 
+### 6.15. Lo añadido del 25/10 al 05/11/2026
+
+Resumen; el detalle está en las tandas 26 a 43 del informe.
+
+- **Tareas de toda la sala** (`Task.room`): los grupos de sala sin escenario del WCIF no son columnas; sus tareas van a la columna de esa sala y hora. El data entry en salas con escenarios es siempre de toda la sala.
+- **Reparto de competidores:** tres reglas (mezcladores garantizados, simétrico y ranking), «separar nombres repetidos» como opción, y «los N mejores juntos en el último grupo» con un número por prueba.
+- **Generador:** con horario, las rondas se cubren por hora en los dos motores. «Tareas solo los días que compite», activada por defecto. «Repartir también por minutos», apagada por defecto, y botón «Minutos» en Revisar.
+- **Mezcla con pesos:** va por turnos y mide la rapidez en la prueba mezclada. «Tareas solo en sus pruebas» es regla firme para mezclar (salvo 4BLD y 5BLD), y los mezcladores de cada hora se reservan antes de asignar jueces.
+- **Clusters:** condiciones «entre los más rápidos de la prueba», «propiedad que nombra la prueba» y «es una de estas personas», con plantillas sacadas de los scripts.
+- **Conjuntos:** tarjetas plegables que se reordenan arrastrando. Ámbitos finales y rondas siguientes, posiciones impares o pares, «contando primero a [cluster]» y reparto por ranking (cara a cara).
+- **Puestos fijos:** «Sentar a los mejores desde el centro de la fila», con mesas distintas por fila. Las reglas de estación añaden «primero [cluster]» y la colocación.
+- **Privacidad al publicar:** ver `publicSettings` en 6.13.
+- **Google Sheets:** hojas compartidas por enlace sin cuenta de servicio ([`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md)).
+- **Plantilla del Nacional 2026:** recoge la configuración exportada por el usuario, con rondas siguientes provisionales (6.7).
+- **Rondas duales:** sección 4.3.
+
 ### 6.4. Datos de referencia: WCIF del Campeonato de España 2026
 
 Archivo local del usuario (**no commitear: tiene datos personales**). Estructura:
@@ -311,21 +327,24 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 
 ## 7. Siguientes fases
 
-1. **Fase 4, reparto avanzado en grupos:** hechos los conjuntos ordenados, los destacados y las reglas de estación (6.5). Queda, si se quiere, añadir scorers por grupo (nombres parecidos, mismo país, «ha competido hace poco») y escribir la estrella en el WCIF al publicar.
+**Lo más urgente:** el Campeonato de España es del 5 al 7 de diciembre de 2026. Hay que sustituir las rondas siguientes provisionales de la plantilla por las de 2026 (6.7 y `docs/NACIONAL_2026_EN_LA_WEB.md`, 4 bis).
+
+1. **Fase 4, reparto avanzado en grupos:** hechos los conjuntos ordenados, los destacados y las reglas de estación (6.5). Queda, si se quiere, añadir scorers por grupo (mismo país, «ha competido hace poco»).
 2. **Fase 5, equipos:** rotación día × escenario y equipos equilibrados automáticamente.
 3. **Fase 6, publicación e informes:**
    - **WCIF v2**: la importación ya pide `GET /api/v0/competitions/{id}/wcif/version/2` (formato 2.2; con el token del organizador devuelve el WCIF privado). Para publicar, `PATCH /api/v0/competitions/{id}/wcif` y **hay que mandar siempre `formatVersion` e `id`** (recomendación de la WCA que trasladó el usuario).
    - Escribir actividades y `assignments` en el WCIF, conservando las extensiones desconocidas. *Hecho: descarga (6.9) y PATCH (6.13).*
-   - Escribir las extensiones natshelper de sala y grupo, con el número de grupo compartido en `-g{n}`.
    - Mostrar el diff, pedir confirmación explícita, hacer el PATCH y volver a leer el WCIF para comprobarlo. *Hecho (6.13).*
-   - Informes.
+   - Informes. *Pendiente.*
 
 Pendientes conocidos:
 
 - Leer `groupifier.CompetitionConfig` para rellenar las opciones de impresión.
+- Nacional 2026: una plaza de mezcla vacía en Megaminx (tanda 41) y 2 personas con choque real entre multi y 4x4 (6.6, comprobado el 24/10; hay que volver a mirarlo).
+- Ideas sin decidir: disponibilidad leída de una columna del formulario, como `attending`/`unavail` de CubingUSA (tanda 27).
 
 ## 8. Cómo comprobar el trabajo
 
-- `npm run typecheck` y `npm test` siempre. `npm run build` antes de hacer push.
+- `npm run typecheck` y `npm test` siempre. `npm run build` antes de hacer push. Hay que leer el resultado antes de hacer commit, sin encadenarlo a ciegas: así se subió `3bc497c` con dos tests rotos (tanda 27).
 - Comprobación visual en `/demo?size=large` y `/demo?size=small`, en tema claro y oscuro, a unos 1280 px y en móvil. Hay que confirmar que no hay desplazamiento horizontal de la página, que no hay textos cortados y que las cabeceras están alineadas con sus columnas.
 - Para probar con datos reales, importar una competición desde el dashboard con la cuenta WCA del usuario. Para el WCIF del Nacional, cargarlo en IndexedDB solo en local y no subirlo nunca al repositorio.
