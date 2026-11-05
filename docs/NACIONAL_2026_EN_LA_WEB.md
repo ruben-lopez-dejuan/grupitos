@@ -12,7 +12,7 @@ rondas siguientes del domingo y el lunes.
 - Como máximo 21 por grupo en Bizkaia (1,5 por estación) y 28 en Araba y Gipuzkoa (2 por estación). Pyraminx tiene 22 en el script; aquí, 21. 3BLD r2 tiene 25 en Bizkaia; aquí, 21.
 - Quien hace puzles individual no compite en Square-1, 6x6 ni 3BLD. El script lo mandaba a Square-1 grupo 1. La revisión avisa si sigue inscrito, y hay que quitarlo de esas pruebas en la WCA.
 - La final secundaria va en Gipuzkoa, a la derecha, como en el script.
-- Prepara la sala auxiliar el equipo Side room, con su delegado, también el sábado. El script solo tiene montaje el domingo; la hora del sábado (08:30–09:00) es provisional.
+- Prepara la sala auxiliar el equipo Side room, con su delegado, también el sábado. El script solo tiene montaje el domingo; el del sábado es de 08:30 a 09:00.
 - Solo los delegados tienen equipo fijo por escenario.
 
 Todo se hace con el **modo PRO** activado (interruptor arriba a la derecha). La configuración se
@@ -71,7 +71,7 @@ cluster no recibe tareas y, si puede, compite en otro grupo:
 
 | Cluster | Día | Horas | Motivo |
 | --- | --- | --- | --- |
-| Equipo de sala auxiliar (Side room y `delegate-cluster` 1) | Sábado 5 | 08:30–09:00 | montaje (provisional): antes del primer grupo, 4BLD empieza a las 09:40 |
+| Equipo de sala auxiliar (Side room y `delegate-cluster` 1) | Sábado 5 | 08:30–09:00 | montaje: antes del primer grupo, 4BLD empieza a las 09:40 |
 | Equipo de sala auxiliar | Sábado 5 | 11:40–12:35 | mezcla del multi |
 | Equipo de sala auxiliar | Domingo 6 | 08:45–09:50 | montaje y mezcla del multi |
 | Equipo de sala auxiliar | Domingo 6 | 12:15–12:25 | montaje |

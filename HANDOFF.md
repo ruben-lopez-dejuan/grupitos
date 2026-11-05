@@ -342,7 +342,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 Pendientes conocidos:
 
 - Leer `groupifier.CompetitionConfig` para rellenar las opciones de impresión.
-- Nacional 2026: una plaza de mezcla vacía en Megaminx (tanda 41). Pyraminx y 3x3 no caben con 21 y 28 por grupo (tanda 45). Falta comprobar si con los conjuntos de sala auxiliar desaparece el choque entre multi y 4x4 (2 personas el 24/10, 6.6). El montaje de sala auxiliar del sábado (08:30–09:00) tiene hora provisional.
+- Nacional 2026: una plaza de mezcla vacía en Megaminx (tanda 41). Pyraminx y 3x3 no caben con 21 y 28 por grupo (tanda 45). Falta comprobar si con los conjuntos de sala auxiliar desaparece el choque entre multi y 4x4 (2 personas el 24/10, 6.6).
 - Ideas sin decidir: disponibilidad leída de una columna del formulario, como `attending`/`unavail` de CubingUSA (tanda 27).
 
 ## 8. Cómo comprobar el trabajo
