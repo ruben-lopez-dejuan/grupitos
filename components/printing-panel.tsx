@@ -6,17 +6,18 @@ import { EventIcon } from "@/components/event-icon";
 import { Hint } from "@/components/hint";
 import { useEventName, useI18n } from "@/components/i18n";
 import { keyOf } from "@/lib/i18n";
-import type { GeneratedAssignment } from "@/lib/assignments";
+import { DUTY_ROLES, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import type { StoredCompetition } from "@/lib/competition-store";
 import { scheduleLanes, targetKey, type GroupSlot, type ProSchedule } from "@/lib/pro/schedule";
 import type { RoundConfig, ZoneMode } from "@/lib/rounds";
+import type { DocumentLabels } from "@/lib/scorecards/group-documents";
 import type { PrintingOptions } from "@/lib/scorecards/options";
 import { UNSUPPORTED_SCORECARD_LANGUAGES } from "@/lib/scorecards/scorecards";
 import { SCORECARD_LANGUAGES } from "@/lib/scorecards/translations";
 
 type OptionKey = Exclude<{ [K in keyof PrintingOptions]: PrintingOptions[K] extends boolean ? K : never }[keyof PrintingOptions], undefined>;
 
-const CONTENT_OPTIONS: OptionKey[] = ["coverSheets", "localNamesFirst", "printOneName", "registrantOnBack"];
+const CONTENT_OPTIONS: OptionKey[] = ["coverSheets", "localNamesFirst", "printOneName", "registrantOnBack", "competitorCardsEvenlySpaced"];
 /** Where the scramble checker box is printed. */
 const CHECKER_OPTIONS: OptionKey[] = ["scrambleCheckerTopRanked", "scrambleCheckerFinalRounds", "scrambleCheckerBlank", "scrambleCheckerBigCubes"];
 
@@ -45,11 +46,13 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   const [chosen, setChosen] = useState<string[]>(() => upcomingIds.length ? upcomingIds : generatedIds);
   /** Stages left out of the print, as "roundId|laneKey". */
   const [excluded, setExcluded] = useState<string[]>([]);
-  const [busy, setBusy] = useState<"rounds" | "blank">();
+  const [busy, setBusy] = useState<"rounds" | "blank" | "overview" | "cards">();
   const [message, setMessage] = useState("");
   const set = <K extends keyof PrintingOptions>(key: K, value: PrintingOptions[K]) => onChange({ ...printing, [key]: value });
   const source = { competition, assignments, rounds, stations, zoneMode, printing, schedule, slots };
   const selectedIds = chosen.filter(id => printable.some(round => round.id === id));
+  /** The overview and the task sheets need people: rounds still without a proposal have none. */
+  const selectedGenerated = selectedIds.some(id => withAssignments.has(id));
   const lanes = schedule ? scheduleLanes(schedule) : [];
   const stageLanes = lanes.filter(lane => lane.stageId !== undefined);
   /** Real stages a round's groups run in. A room without stages deliberately returns none. */
@@ -93,14 +96,37 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     return <label key={key}><input type="checkbox" checked={printing[key]} onChange={event => set(key, event.target.checked)} /><span><strong>{t(keyOf("printing.options", `${key}.label`))}{help && <Hint text={help} />}</strong></span></label>;
   };
 
-  async function download(kind: "rounds" | "blank") {
+  const documentLabels = (): DocumentLabels => {
+    const byRole = (prefix: string) => Object.fromEntries((["competitor", ...DUTY_ROLES] as TaskRole[]).map(role => [role, t(keyOf(prefix, role))])) as Record<TaskRole, string>;
+    return {
+      locale,
+      eventName,
+      round: number => t("printing.documents.round", { number }),
+      group: number => t("printing.documents.group", { number }),
+      attempt: number => t("printing.documents.attempt", { number }),
+      time: value => t("printing.documents.time", { value }),
+      room: value => t("printing.documents.room", { value }),
+      stage: value => t("printing.documents.stage", { value }),
+      page: (current, total) => t("printing.documents.page", { current, total }),
+      people: byRole("printing.documents.people"),
+      duty: byRole("printing.documents.duty"),
+      event: t("printing.documents.event"),
+      id: t("printing.documents.id"),
+      wcaId: t("printing.documents.wcaId"),
+    };
+  };
+
+  async function download(kind: "rounds" | "blank" | "overview" | "cards") {
     setBusy(kind);
     setMessage("");
     try {
-      const { downloadBlankScorecards, downloadRoundScorecards } = await import("@/lib/scorecards/download");
+      const { downloadBlankScorecards, downloadCompetitorCards, downloadGroupOverview, downloadRoundScorecards } = await import("@/lib/scorecards/download");
+      let printed = true;
       if (kind === "rounds") await downloadRoundScorecards(source, selectedIds, `${competition.id}-scorecards.pdf`, includeGroup);
-      else await downloadBlankScorecards(source, `${competition.id}-blank-scorecards.pdf`);
-      setMessage(t("printing.done"));
+      else if (kind === "blank") await downloadBlankScorecards(source, `${competition.id}-blank-scorecards.pdf`);
+      else if (kind === "overview") printed = await downloadGroupOverview(source, selectedIds, documentLabels(), `${competition.id}-group-overview.pdf`, includeGroup);
+      else printed = await downloadCompetitorCards(source, selectedIds, documentLabels(), `${competition.id}-competitor-cards.pdf`);
+      setMessage(printed ? t("printing.done") : t("printing.documents.nothing"));
     } catch (error) {
       setMessage(error instanceof Error ? t("printing.failedWith", { error: error.message }) : t("printing.failed"));
     } finally {
@@ -160,9 +186,20 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
     <div className="print-actions">
       <button className="button primary" type="button" disabled={!selectedIds.length || !!busy} onClick={() => download("rounds")}><ScorecardIcon filled />{busy === "rounds" ? t("printing.generating") : tp("printing.download", selectedIds.length)}</button>
       <button className="button secondary" type="button" disabled={!!busy} onClick={() => download("blank")}><ScorecardIcon />{busy === "blank" ? t("printing.generating") : t("printing.blank")}</button>
+      <button className="button secondary" type="button" disabled={!selectedGenerated || !!busy} onClick={() => download("overview")}><ListIcon />{busy === "overview" ? t("printing.generating") : t("printing.documents.overview")}</button>
+      <button className="button secondary" type="button" disabled={!selectedGenerated || !!busy} onClick={() => download("cards")}><ListIcon />{busy === "cards" ? t("printing.generating") : t("printing.documents.cards")}</button>
+      <Hint text={t("printing.documents.help")} />
       <span role="status">{message}</span>
     </div>
   </section>;
+}
+
+/** A sheet with a list of people. */
+function ListIcon() {
+  return <svg className="scorecard-icon" viewBox="0 0 16 20" width="14" height="18" aria-hidden="true" focusable="false">
+    <rect x="1" y="1" width="14" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    {[5, 9, 13].map(y => <g key={y}><circle cx="4.6" cy={y + 0.8} r="0.9" fill="currentColor" /><rect x="7" y={y} width="5.5" height="1.6" rx="0.8" fill="currentColor" /></g>)}
+  </svg>;
 }
 
 /** A small scorecard: name line and filled attempt rows, or an empty card. */

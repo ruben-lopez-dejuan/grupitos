@@ -390,6 +390,23 @@ export type ScorecardSource = {
 export type GroupFilter = (roundId: string, group: number) => boolean;
 
 /**
+ * As Groupifier: worst first, so the best gets number 1. First rounds by personal bests
+ * (average, then single; none first), later rounds by the place in the previous round.
+ */
+export function competitorCardOrder(competition: StoredCompetition, persons: Map<string, WcifPerson>, roundId: string) {
+  const eventId = roundId.split("-")[0];
+  const previous = previousRoundResults(competition, roundId);
+  const placeOf = (item: GeneratedAssignment) => previous.get(persons.get(item.personId)?.registrantId ?? -1)?.ranking ?? Number.MAX_SAFE_INTEGER;
+  const worstFirst = (x: number, y: number) => x === y ? 0 : x > y ? -1 : 1;
+  return (a: GeneratedAssignment, b: GeneratedAssignment) => {
+    if (previous.size) return worstFirst(placeOf(a), placeOf(b));
+    const [a1, a2] = bestAverageAndSingle(persons.get(a.personId) ?? { name: a.name }, eventId);
+    const [b1, b2] = bestAverageAndSingle(persons.get(b.personId) ?? { name: b.name }, eventId);
+    return worstFirst(a1, b1) || worstFirst(a2, b2);
+  };
+}
+
+/**
  * Scorecards for the chosen rounds. Rounds with assignments get one card per competitor,
  * grouped and numbered as in Groupifier; planned rounds without known competitors get
  * nameless cards sized from the expected number of competitors.
@@ -408,18 +425,7 @@ export function roundScorecards({ competition, assignments, rounds, stations, zo
     if (!config || !wcifRound) return [];
     const attemptCount = MAX_ATTEMPTS_BY_FORMAT[wcifRound.format ?? "a"] ?? 5;
     const rows = assignments.filter(item => item.roundId === roundId && competingGroup(item) !== undefined);
-    // As Groupifier: worst first, so the best gets number 1. First rounds by personal bests
-    // (average, then single; none first), later rounds by the place in the previous round.
-    const previous = previousRoundResults(competition, roundId);
-    const registrantOf = (item: GeneratedAssignment) => persons.get(item.personId)?.registrantId;
-    const placeOf = (item: GeneratedAssignment) => previous.get(registrantOf(item) ?? -1)?.ranking ?? Number.MAX_SAFE_INTEGER;
-    const worstFirst = (x: number, y: number) => x === y ? 0 : x > y ? -1 : 1;
-    const cardOrder = (a: GeneratedAssignment, b: GeneratedAssignment) => {
-      if (previous.size) return worstFirst(placeOf(a), placeOf(b));
-      const [a1, a2] = bestAverageAndSingle(persons.get(a.personId) ?? { name: a.name }, wcifRound.id.split("-")[0]);
-      const [b1, b2] = bestAverageAndSingle(persons.get(b.personId) ?? { name: b.name }, wcifRound.id.split("-")[0]);
-      return worstFirst(a1, b1) || worstFirst(a2, b2);
-    };
+    const cardOrder = competitorCardOrder(competition, persons, roundId);
     const fixed = usesFixedStations(isFirstRound(config), rows.length || config.competitors, stations, zoneMode);
 
     // Later multi-blind attempts are columns of their own with the same people: cards come from attempt 1.

@@ -36,7 +36,7 @@ Importas la competición desde la WCA, la app reparte a los competidores en grup
 | Clusters *(PRO)* | Grupos de personas definidos por condiciones. |
 | Grupos | Número de grupos, mezcladores y runners de cada ronda. Es el único paso que genera la propuesta. |
 | Revisar | La propuesta en una tabla editable, con validación en vivo. |
-| Hojas de tiempos | Scorecards en PDF. |
+| Hojas de tiempos | Scorecards, resumen de grupos y hojas de tareas en PDF. |
 | Publicar | Publicación en la WCA (grupos, tareas y ajustes) o descarga del WCIF. |
 
 Todo se guarda solo en el navegador mientras trabajas. Si cambias algo que afecta al reparto, la propuesta queda marcada como desactualizada hasta que vuelves a generarla.
@@ -122,6 +122,8 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
   - un día concreto del horario (PRO).
 - Mismo orden que Groupifier: dentro de cada grupo, de peor a mejor, así que el mejor de la ronda lleva el número 1. En rondas siguientes cuenta el puesto en la ronda anterior.
 - Mismo aspecto que Groupifier, también en euskera y los demás idiomas: las etiquetas salen enteras.
+- **Resumen de grupos** (el «group overview» de Groupifier): un PDF con cada grupo de las rondas marcadas, por orden de hora, con su hora, sala y escenario, y quién compite y quién hace cada tarea. Respeta los escenarios elegidos.
+- **Hojas de tareas** (las «competitor cards» de Groupifier): una tarjeta por persona con sus grupos y tareas en las rondas marcadas, en filas de tres o, con «Hojas de tareas separadas», cuatro por página para cortarlas. Incluyen siempre todos los escenarios. En rondas con varios escenarios, cada grupo lleva la inicial del suyo (1B: grupo 1 de Bizkaia), con la leyenda al pie.
 
 ## Modo PRO
 
@@ -322,7 +324,7 @@ Estructura:
 | `lib/group-generator.ts` | El generador: reparto en grupos, choques, conjuntos y personal. |
 | `lib/validation.ts` | Avisos y errores de la revisión. |
 | `lib/pro/` | Modo PRO: horario, personas, equipos, clusters, puntuación, ILP, conjuntos, reglas de estación, plantillas e importador de hojas. |
-| `lib/scorecards/` | Hojas de tiempos (portadas de Groupifier). |
+| `lib/scorecards/` | Hojas de tiempos, resumen de grupos y hojas de tareas (portados de Groupifier). |
 | `lib/wcif-groups.ts`, `lib/wcif-export.ts` | Leer y escribir grupos en el WCIF. |
 | `lib/i18n/` | Textos en español e inglés. |
 | `tests/` | Tests de Vitest y fixtures anonimizados. |

@@ -19,6 +19,8 @@ export type PrintingOptions = {
   stageInGroupCell: boolean;
   /** A back page after every page with each competitor's registrant id, mirrored for long-edge duplex. */
   registrantOnBack: boolean;
+  /** Task sheets: four evenly spaced cards a page, instead of rows of three. */
+  competitorCardsEvenlySpaced: boolean;
 };
 
 export const DEFAULT_PRINTING: PrintingOptions = {
@@ -35,4 +37,5 @@ export const DEFAULT_PRINTING: PrintingOptions = {
   language: "es",
   stageInGroupCell: true,
   registrantOnBack: false,
+  competitorCardsEvenlySpaced: false,
 };
