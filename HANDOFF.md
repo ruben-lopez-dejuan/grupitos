@@ -67,7 +67,7 @@ Preferencias firmes del usuario:
 
 ## 4. Estado actual
 
-Último trabajo: plantilla del Nacional al día con los scripts del 03/11/2026 y las decisiones de la organización (6.7, tanda 45). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 45.
+Último trabajo: plantilla del Nacional al día con los scripts del 03/11/2026 y las decisiones de la organización (6.7, tandas 45 y 46). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 46.
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 
@@ -342,7 +342,7 @@ Archivo local del usuario (**no commitear: tiene datos personales**). Estructura
 Pendientes conocidos:
 
 - Leer `groupifier.CompetitionConfig` para rellenar las opciones de impresión.
-- Nacional 2026: una plaza de mezcla vacía en Megaminx (tanda 41). Pyraminx y 3x3 no caben con 21 y 28 por grupo (tanda 45). Falta comprobar si con los conjuntos de sala auxiliar desaparece el choque entre multi y 4x4 (2 personas el 24/10, 6.6) y decidir si hay montaje de sala auxiliar el sábado.
+- Nacional 2026: una plaza de mezcla vacía en Megaminx (tanda 41). Pyraminx y 3x3 no caben con 21 y 28 por grupo (tanda 45). Falta comprobar si con los conjuntos de sala auxiliar desaparece el choque entre multi y 4x4 (2 personas el 24/10, 6.6). El montaje de sala auxiliar del sábado (08:30–09:00) tiene hora provisional.
 - Ideas sin decidir: disponibilidad leída de una columna del formulario, como `attending`/`unavail` de CubingUSA (tanda 27).
 
 ## 8. Cómo comprobar el trabajo

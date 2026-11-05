@@ -157,6 +157,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
     // Side room setup and multi scrambling (5_manual_assignments.cs and _unavailabilities.cs), and
     // the puzzle contests as the WCA schedule has them on 05/11/2026 (the scripts still say 11:30).
     clusterBusy: [
+      { segment: "sc26-side-crew", dayIndex: 0, start: "08:30", end: "09:00" },
       { segment: "sc26-side-crew", dayIndex: 0, start: "11:40", end: "12:35" },
       { segment: "sc26-side-crew", dayIndex: 1, start: "08:45", end: "09:50" },
       { segment: "sc26-side-crew", dayIndex: 1, start: "12:15", end: "12:25" },

@@ -64,6 +64,7 @@ describe("PRO templates", () => {
       "8:room": { stations: 20, scramblers: 2, runners: 2 },
     });
     expect(pro.people!.teams!.setup["Side room"]).toMatchObject({ kind: "volunteer", lane: "8:room" });
+    expect(pro.clusterBusy).toContainEqual({ segment: "sc26-side-crew", day: "2026-12-05", start: "08:30", end: "09:00" });
     expect(pro.clusterBusy).toContainEqual({ segment: "sc26-side-crew", day: "2026-12-06", start: "12:15", end: "12:25" });
     expect(pro.clusterBusy).toContainEqual({ segment: "sc26-individual", day: "2026-12-05", start: "11:00", end: "13:30" });
     // The numbers of 6_assign_main.cs, except Pyraminx: Bizkaia takes 21 at most.
