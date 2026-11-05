@@ -512,6 +512,9 @@ button.plain.danger{justify-self:start;color:var(--error)}
 .round-generated{color:var(--green);font-weight:650}
 .round-clear{padding:0;border:0;background:none;color:var(--muted);font:inherit;text-decoration:underline;cursor:pointer}
 .round-clear:hover{color:var(--error)}
+.dual-same{display:inline-flex;align-items:center;gap:4px;cursor:pointer}.dual-same input{margin:0}.dual-same.warn{color:var(--warning)}
+.dual-copy{display:flex;gap:6px}.dual-copy button{white-space:nowrap}
+@media(max-width:900px){.history-actions{flex-wrap:wrap}}
 
 /* Review: rounds already held, after a divider */
 .round-tabs-divider{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}

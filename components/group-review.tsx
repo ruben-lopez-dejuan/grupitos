@@ -7,6 +7,7 @@ import { PersonCard } from "@/components/person-card";
 import { NewcomerBadge, PersonAvatar } from "@/components/person-badges";
 import { whyOf, applyCells, cellValue, competingGroup, setStation, duties, DUTY_ROLES, type DutyRole, dutyLoads, groupTotals, normalizeAssignments, TASK_CODES, usedGroupCount, type CellRef, type CellValue, type GeneratedAssignment, type TaskRole } from "@/lib/assignments";
 import type { WcifPerson } from "@/lib/competition-store";
+import { copyRoundTasks } from "@/lib/dual-rounds";
 import { keyOf } from "@/lib/i18n";
 import { judgesNeeded, personKey, seedResult } from "@/lib/rounds";
 import type { Unavailability } from "@/lib/pro/people";
@@ -89,7 +90,7 @@ function attemptNumber(roundSlots: GroupSlot[], slot: GroupSlot) {
   return slot.attempt ?? (roundSlots.some(item => item.linkedTo === slot.group) ? 1 : undefined);
 }
 
-export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, availabilitySlots, rooms }: {
+export function GroupReview({ dualPartners, pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unavailable = NO_UNAVAILABILITY, segmentFilters = NO_SEGMENTS,  initialAssignments, rules, roomName, onChange, photos, showPhotos, onShowPhotosChange, roleLabels, slots, availabilitySlots, rooms }: {
   initialAssignments: GeneratedAssignment[];
   /** WCA profile thumbnails by person. */
   photos: Record<string, string | undefined>;
@@ -112,6 +113,8 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
   pastRounds?: Set<string>;
   /** Everyone who can be given a task (registered people, staff and volunteers): all are listed in every round. */
   everyone?: WcifPerson[];
+  /** Dual rounds: each round with the other of its pair, whose tasks can be copied across. */
+  dualPartners?: Map<string, string>;
   onChange: (assignments: GeneratedAssignment[]) => void;
 }) {
   const { t, tp } = useI18n();
@@ -256,6 +259,12 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
   }, [roundRows, issuesByRound, roundId, query, filter, sortBy, loads, minutes, withMinutes, segmentFilters]);
   const rowIndex = useMemo(() => new Map(visible.map((item, index) => [item.id, index])), [visible]);
   const currentRules = rules[roundId] ?? fallbackRules(visible);
+  // Dual rounds: copying needs the other round in the proposal with as many groups.
+  const partnerId = dualPartners?.get(roundId);
+  const partner = partnerId && rounds.some(round => round.id === partnerId) ? partnerId : undefined;
+  const groupsIn = (id: string) => rules[id]?.groups ?? usedGroupCount(assignments.filter(item => item.roundId === id));
+  const sameGroups = !!partner && groupsIn(partner) === groupsIn(roundId);
+  const roundTitle = (id: string) => `${eventName(id.split("-")[0])} R${id.split("-r").at(-1)}`;
   // Group totals count the whole round, whatever the filter or search shows.
   const groupCount = Math.max(currentRules.groups, usedGroupCount(roundRows), 1);
   const totals = groupTotals(roundRows, groupCount);
@@ -280,7 +289,8 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
   const selected = useMemo(() => new Set(selection), [selection]);
   const currentRound = rounds.find(round => round.id === roundId);
   /** Later rounds show the result in the previous round instead of the official personal best. */
-  const laterRound = !/-r1$/.test(roundId);
+  // The second of two dual rounds is a first round: seeds, not places in a previous round.
+  const laterRound = !/-r1$/.test(roundId) && !dualPartners?.has(roundId);
   const issues = issuesByRound.get(roundId) ?? [];
   const counts = countBySeverity(issues);
   const issueIndex = useMemo(() => {
@@ -361,6 +371,12 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
     dispatch({ type: "commit", next });
     const name = assignments.find(item => item.id === edit.id)?.name ?? "";
     setStatus(station ? t("review.statusStationSet", { station, name }) : t("review.statusStationCleared", { name }));
+  }
+
+  /** Dual rounds: the round on screen becomes, or makes the other one, an exact copy. */
+  function copyDual(fromId: string, toId: string) {
+    dispatch({ type: "commit", next: copyRoundTasks(assignments, fromId, toId) });
+    setStatus(t("review.statusDualCopied", { from: roundTitle(fromId), to: roundTitle(toId) }));
   }
 
   function undo() {
@@ -522,6 +538,10 @@ export function GroupReview({ pastRounds = NO_ROUNDS, everyone = NO_PEOPLE, unav
             <button type="button" className="plain" onClick={() => setShowHelp(false)}>{t("review.close")}</button>
           </div>}
         </span>
+        {partner && <span className="dual-copy">
+          <button type="button" onClick={() => copyDual(roundId, partner)} disabled={!sameGroups} title={sameGroups ? t("review.dualCopyHelp", { from: roundTitle(roundId), to: roundTitle(partner) }) : t("review.dualCopyGroups")}>{t("review.dualCopyTo", { round: roundTitle(partner) })}</button>
+          <button type="button" onClick={() => copyDual(partner, roundId)} disabled={!sameGroups} title={sameGroups ? t("review.dualCopyHelp", { from: roundTitle(partner), to: roundTitle(roundId) }) : t("review.dualCopyGroups")}>{t("review.dualCopyFrom", { round: roundTitle(partner) })}</button>
+        </span>}
         <button onClick={undo} disabled={!history.past.length} title={t("review.undoHelp")}>{t("review.undo")}</button><button onClick={redo} disabled={!history.future.length} title={t("review.redoHelp")}>{t("review.redo")}</button></div>
     </div>
 

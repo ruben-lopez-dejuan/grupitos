@@ -58,6 +58,8 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
 - Los delegados se reparten entre los grupos.
 - Primeras rondas y rondas siguientes por separado. En las siguientes se calcula cuánta gente pasa. Cualquier ronda se puede excluir o reactivar.
 - **Rondas duales** (Reglamento 9v): si la WCA enlaza las rondas 1 y 2 de una prueba, las dos son de todos los inscritos y se generan desde el principio, como primeras rondas, con la etiqueta «dual». La ronda siguiente clasifica por el mejor resultado de las dos.
+  - **Igual que R1:** en la fila de la ronda 2 dual. La genera como copia exacta de la ronda 1 (mismos grupos, estaciones y tareas), sin que nadie reciba nada que choque con ninguna de las dos. Necesita el mismo número de grupos.
+  - **Copiar a / Copiar de:** en Revisión, en una ronda dual, copia grupos, estaciones y tareas de una ronda a la otra. Se puede deshacer.
 
 ### Personal
 

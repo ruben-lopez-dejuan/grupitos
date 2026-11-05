@@ -14,6 +14,7 @@ import { scoreBreakdown, type ScoringConfig, type ScoringFacts } from "@/lib/pro
 import { solveGroupStaff, type IlpCandidate } from "@/lib/pro/staff-ilp";
 import { COMPETING_OVERLAP_TOLERANCE, overlapMinutes, overlaps, slotsOverlap, toMinutes, windowsForTask, type GroupSlot, type TimeWindow } from "@/lib/pro/schedule";
 import { ageOf, competitionCountry, hasWcaJob, isNewcomer, nonCompetingStaff, type PeopleSettings } from "@/lib/people";
+import { copyRoundTasks, dualPartners, withPartnerTimes } from "@/lib/dual-rounds";
 import { acceptedPeople, bestAverageAndSingle, isFirstRound, normalizeSortingRule, registrationRoundIds, SCRAMBLE_EVENT, judgesNeeded, personKey, previousRoundResults, roundCompetitors, roundStanding, seedResult, usesFixedStations, type GenerationRound, type SortingRule, type ZoneMode } from "@/lib/rounds";
 
 export type AssignmentOptions = {
@@ -258,8 +259,42 @@ export function resolveCompetitorOverlaps(plans: CompetitorPlan[], slots: Map<st
   }
 }
 
+/**
+ * Generates the rounds given. The second of two dual rounds marked `sameAsFirst` is not generated
+ * on its own but copied from round 1, when both have the same number of groups: round 1 is
+ * generated with the times of both, so nobody is given anything that clashes with either.
+ */
+export function generateAssignments(input: Parameters<typeof generateRounds>[0]): GeneratedAssignment[] {
+  const partners = dualPartners(input.competition);
+  const groupsOf = (roundId: string) => input.rounds.find(round => round.id === roundId)?.groups;
+  const fixed = input.fixedAssignments ?? [];
+  const copies = input.rounds.flatMap(round => {
+    const firstId = partners.get(round.id);
+    if (!round.sameAsFirst || !round.enabled || round.roundNumber === 1 || !firstId) return [];
+    const generated = input.rounds.some(item => item.id === firstId && item.enabled);
+    if (generated ? groupsOf(firstId) !== round.groups : !fixed.some(item => item.roundId === firstId)) return [];
+    return [{ firstId, secondId: round.id, generated }];
+  });
+  if (!copies.length) return generateRounds(input);
+  // Round 1 already kept: its copy counts for the rest like any kept round.
+  const kept = copies.filter(copy => !copy.generated).reduce((rows, copy) => copyRoundTasks(rows, copy.firstId, copy.secondId), fixed);
+  const keptCopies = kept.filter(item => copies.some(copy => !copy.generated && copy.secondId === item.roundId));
+  const together = copies.filter(copy => copy.generated);
+  const merge = (slots: typeof input.slots) => together.reduce((all, copy) => withPartnerTimes(all, copy.firstId, copy.secondId), slots);
+  const output = generateRounds({
+    ...input,
+    rounds: input.rounds.filter(round => !copies.some(copy => copy.secondId === round.id)),
+    slots: merge(input.slots),
+    availabilitySlots: merge(input.availabilitySlots),
+    fixedAssignments: kept,
+  });
+  const withCopies = together.reduce((rows, copy) => copyRoundTasks(rows, copy.firstId, copy.secondId), output);
+  // Keep the order of the rounds asked for.
+  const order = new Map(input.rounds.map((round, index) => [round.id, index]));
+  return [...withCopies, ...keptCopies].sort((a, b) => (order.get(a.roundId) ?? 0) - (order.get(b.roundId) ?? 0));
+}
 
-export function generateAssignments({ competition, rounds: requestedRounds, stations, zoneMode, seating, people, options, slots, availabilitySlots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
+function generateRounds({ competition, rounds: requestedRounds, stations, zoneMode, seating, people, options, slots, availabilitySlots, eventWindows, extraPeople = [], unavailable = [], eligible = {}, staffing, scoring, personProperties = {}, laneTeams, assignmentSets, stationRules, fixedAssignments = [] }: {
   competition: StoredCompetition;
   rounds: GenerationRound[];
   stations: number;

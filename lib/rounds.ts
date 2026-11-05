@@ -36,6 +36,8 @@ export type GenerationRound = {
    * rounds (Regulation 9v). Stamped from the WCIF, like `final`.
    */
   fromRegistrations?: boolean;
+  /** The second of two dual rounds, generated as an exact copy of round 1 (same groups and tasks). */
+  sameAsFirst?: boolean;
 };
 
 /** Ids of the last round of each event. */

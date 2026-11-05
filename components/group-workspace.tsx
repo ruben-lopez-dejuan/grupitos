@@ -41,6 +41,7 @@ import { JOB_ROLES, newSegmentId, SEGMENT_TEMPLATES, segmentMembers, type JobEli
 import { staffingOf, type LaneStaffing, type ProConfig } from "@/lib/pro/schedule";
 import { DEFAULT_SCORING, type ScoringConfig } from "@/lib/pro/scoring";
 import { eventBusyWindows, groupSlots, importSchedule, minScheduledGroups, scheduleLanes, setRoundGroups, targetKey, withScheduledGroups, type ProSchedule } from "@/lib/pro/schedule";
+import { dualPartners } from "@/lib/dual-rounds";
 import { finalRoundIds, isFirstRound, registrationRoundIds, withRegistrationRounds, acceptedPeople, personKey, initialRounds, roundHasResults, shapeRound, SORTING_RULES, type GenerationRound, resuggestRounds, suggestRunners, suggestScramblers, usesFixedStations, type RoundConfig, type SortingRule, type ZoneMode } from "@/lib/rounds";
 import { normalizeSeating, seatingStations, stationOrder, tablesInRow, type Seating } from "@/lib/seating";
 import { DEFAULT_PRINTING } from "@/lib/scorecards/options";
@@ -316,6 +317,8 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const wcaSchedule = useMemo(() => !pro && competition && settings ? importSchedule(competition, roundId => settings.rounds.find(round => round.id === roundId)?.groups ?? 1) : undefined, [pro, competition, settings]);
   const unavailableInUse = useMemo(() => [...(settings?.people.unavailable ?? []), ...(teamState?.unavailable ?? [])], [settings?.people.unavailable, teamState]);
   const availabilitySlots = useMemo(() => wcaSchedule && settings?.people.unavailable?.length ? groupSlots(wcaSchedule) : undefined, [wcaSchedule, settings?.people.unavailable]);
+  /** Dual rounds, each with the other of its pair. */
+  const dualPairs = useMemo(() => competition ? dualPartners(competition) : undefined, [competition]);
   /** Rounds as generated: in PRO mode, scheduled rounds take their groups from the schedule. */
   const effectiveRounds = useMemo(() => {
     if (!settings || !competition) return [];
@@ -831,7 +834,11 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
                 return <Fragment key={round.id}>
                   {firstExcluded && <div className="round-divider">{t("rounds.excluded")}</div>}
                   <div className={`round-row ${excluded ? "excluded" : ""}`}>
-                    <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })}{(round.fromRegistrations || (round.roundNumber === 1 && rounds.some(other => other.eventId === round.eventId && other.fromRegistrations))) && <> · <span title={t("rounds.dualHelp")}>{t("rounds.dual")}</span></>} · {round.eventId}{generatedRoundIds.has(round.id) && <> · <span className="round-generated">{t("rounds.generated")}</span> <button type="button" className="round-clear" onClick={() => clearRound(round)} title={t("rounds.clearHelp")}>{t("rounds.clear")}</button></>}</small></div></div>
+                    <div><EventIcon eventId={round.eventId} label={eventName(round.eventId)} /><div className="round-name"><strong>{eventName(round.eventId)}</strong><small>{t("rounds.roundNumber", { number: round.roundNumber })}{(round.fromRegistrations || (round.roundNumber === 1 && rounds.some(other => other.eventId === round.eventId && other.fromRegistrations))) && <> · <span title={t("rounds.dualHelp")}>{t("rounds.dual")}</span></>}{round.fromRegistrations && canGenerate && !excluded && (() => {
+                      const first = rounds.find(other => other.id === `${round.eventId}-r1`);
+                      const mismatch = round.sameAsFirst && first && first.groups !== round.groups;
+                      return <> · <label className={`dual-same ${mismatch ? "warn" : ""}`} title={mismatch ? t("rounds.sameAsFirstGroups") : t("rounds.sameAsFirstHelp")}><input type="checkbox" checked={!!round.sameAsFirst} onChange={event => updateRound(round.id, { sameAsFirst: event.target.checked || undefined })} /> {t("rounds.sameAsFirst")}{mismatch && " ⚠"}</label></>;
+                    })()} · {round.eventId}{generatedRoundIds.has(round.id) && <> · <span className="round-generated">{t("rounds.generated")}</span> <button type="button" className="round-clear" onClick={() => clearRound(round)} title={t("rounds.clearHelp")}>{t("rounds.clear")}</button></>}</small></div></div>
                     <span className="round-number" data-label={t("rounds.columnCompetitors")}>{round.competitorsKnown ? round.competitors : `≈ ${round.competitors}`}</span>
                     <span data-label={t("rounds.columnEntry")}>{fixed ? t("rounds.fixed") : t("rounds.waiting")}</span>
                     <div className="group-cell">{pro && slots?.has(round.id)
@@ -859,7 +866,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
         {tab === "review" && <>
           {wcifNote && <p className="setup-note wcif-note" role="status">{t("workspace.wcifGroups", { count: wcifNote.count })}{wcifNote.unplaced > 0 && ` ${t("workspace.wcifUnplaced", { count: wcifNote.unplaced })}`}</p>}
           {outdatedNote}
-          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} pastRounds={pastRoundIds} everyone={reviewPeople} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
+          {proposal.length > 0 && <GroupReview key={proposalVersion} initialAssignments={proposal} pastRounds={pastRoundIds} dualPartners={dualPairs} everyone={reviewPeople} rules={pro ? Object.fromEntries(Object.entries(roundRules).map(([id, rules]) => {
             const eventId = rounds.find(round => round.id === id)?.eventId ?? "";
             const byGroup = staffingFor ? Object.fromEntries((slots?.get(id) ?? []).flatMap(slot => staffingFor(id, slot.group) ? [[slot.group, staffingFor(id, slot.group)!]] : [])) : undefined;
             return [id, { ...rules, byGroup, eligible: Object.fromEntries(JOB_ROLES.flatMap(role => eligible[role]?.get(eventId) ? [[role, eligible[role]!.get(eventId)!]] : [])) }];
