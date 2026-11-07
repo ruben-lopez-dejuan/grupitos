@@ -46,7 +46,7 @@ Preferencias firmes del usuario:
 - Comandos:
   - `npm run dev`. El usuario suele tenerlo ya abierto en el puerto 3000, y un segundo `next dev` en la misma carpeta no arranca.
   - `npm run typecheck`.
-  - `npm test`: Vitest, con 339 tests en verde a 05/11/2026 (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
+  - `npm test`: Vitest, con 340 tests en verde a 07/11/2026 (límite de 20 s por test: la demo de 260 personas tarda unos segundos).
   - `npm run build`.
 - Demo sin login, solo en desarrollo:
   - `/demo?size=small`: 34 personas y una sala.
@@ -67,7 +67,7 @@ Preferencias firmes del usuario:
 
 ## 4. Estado actual
 
-Último trabajo: resumen de grupos y hojas de tareas en Hojas de tiempos (tanda 47); antes, plantilla del Nacional al día con los scripts del 03/11/2026 y las decisiones de la organización (6.7, tandas 45 y 46). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 47.
+Último trabajo: jueces de rondas siguientes entre los clasificados (tanda 48) y resumen de grupos y hojas de tareas (tanda 47); antes, plantilla del Nacional al día con los scripts del 03/11/2026 y las decisiones de la organización (6.7, tandas 45 y 46). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 48.
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 
@@ -109,7 +109,7 @@ Parte de Groupifier, con mejoras propias:
 - Las tareas se rellenan por turnos entre grupos, para que G1 no se quede con los mejores candidatos. El candidato se elige por claves ordenadas, la primera diferencia decide (`best()` y `compareKeys()`).
 - `scrambler-safe` toma los scramblers del personal de confianza o de la mitad más rápida de la ronda. Todos los del pool mezclan una vez antes de que nadie repita.
 - El staff tiene prioridad mientras no supere el doble de la carga media de los demás (`STAFF_LOAD_FACTOR`).
-- La carga cuenta en bloques (`floor(load/4)`) antes que estar en la ronda, para que quien está en muchas pruebas no cargue con la mayor parte del trabajo.
+- La carga cuenta en bloques (`floor(load/4)`) antes que estar en la ronda en las primeras rondas, para que quien está en muchas pruebas no cargue con la mayor parte del trabajo. En las rondas siguientes, jueces y runners salen primero de los competidores de la ronda, después de los eliminados y por último del resto (`nearness`), y la carga se reparte dentro de cada nivel (tanda 48). Antes, la gente de fuera de la prueba con menos tareas ganaba a los clasificados.
 - En PRO no asigna tareas a nadie que esté ocupado a la misma hora (sección 6).
 - **Rondas duales** (Reglamento 9v, WCIF 2): la WCA escribe `linkedRounds: ["333-r1", "333-r2"]` en las dos rondas, ambas con `participationSource` de inscripciones, y la ronda siguiente con fuente `linkedRounds`. En `lib/rounds.ts`, `registrationRoundIds()` las detecta y la ronda 2 lleva `fromRegistrations` (se estampa como `final`); `isFirstRound()` la trata como primera ronda en el generador, los conjuntos («Primeras rondas»), las estaciones, la impresión y la forma sugerida. `withRegistrationRounds()` abre o cierra la ronda en borradores guardados antes de enlazarlas. `previousRoundResults()` clasifica la ronda siguiente por el mejor resultado de las dos (media y luego single, empates comparten puesto).
 - **Mismas tareas en las dos rondas duales:** `lib/dual-rounds.ts` tiene `dualPartners()`, `copyRoundTasks()` (copia una ronda sobre otra en su sitio) y `withPartnerTimes()`. `generateAssignments()` envuelve al generador (`generateRounds`): una ronda 2 con `sameAsFirst` (interruptor «Igual que R1», entra en `generationSignature`) no se genera; la ronda 1 se genera con las horas de los dos grupos y luego se copia. Si la ronda 1 ya estaba fijada, la copia entra en `fixedAssignments`. Con distinto número de grupos se genera aparte. En Revisión, «Copiar a / Copiar de» usa `copyRoundTasks` con deshacer, y la ronda 2 dual muestra el seed, no la ronda anterior.

@@ -881,18 +881,23 @@ function generateRounds({ competition, rounds: requestedRounds, stations, zoneMo
       }
     };
 
+    const laterRound = !isFirstRound(round);
     const staffPreferred = (key: string) => staff.has(key) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
     const othersKey = (role: "runner" | "judge") => (person: WcifPerson, group: number) => {
       const key = personKey(person);
       // staff-judge / staff-runner (WCA roles) come first for their job, then the rest of the staff.
       const wcaJob = hasWcaJob(person, role) && load(key) < STAFF_LOAD_FACTOR * (othersTotalLoad / othersCount) + 2;
       if (wcaJob || staffPreferred(key)) return [0, wcaJob ? 0 : 1, load(key), beforeOwn(key, group)];
+      // Later rounds: the round's competitors (in the groups they do not compete in), then the
+      // eliminated, then anyone else, whatever they worked before. Load is balanced within each.
+      const near = laterRound ? nearness(key) : 0;
       return [1,
         role === "runner" && options.noRunningForForeigners && country && person.countryIso2 && person.countryIso2 !== country ? 1 : 0,
         options.noTasksForNewcomers && isNewcomer(person) ? 1 : 0,
         options.tasksForOwnEventsOnly && !registeredForEvent(person) ? 1 : 0,
         youngerThan10(person),
         busyRoles(key),
+        near,
         loadInEvent(key) >= 2 ? 1 : 0,
         // Coarse load first, so people in many events do not end up with most of the work.
         Math.floor(balance(key) / 4),

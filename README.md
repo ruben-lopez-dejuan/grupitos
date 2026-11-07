@@ -82,7 +82,7 @@ Pensado para cualquier competición, con las reglas de [Groupifier](https://gith
 - **Orden de las tareas:** se puede elegir qué se cubre antes cuando falta gente (delegado, mezcladores, data entry, runners y jueces).
 - **Rondas siguientes:**
   - **Ayudan y mezclan** primero los competidores de la ronda, en los grupos en los que no compiten. Mezclan solo los de la mitad rápida de la ronda.
-  - **Los eliminados** en la ronda anterior juzgan y hacen de runner después de ellos y antes que nadie de fuera de la prueba. Salen en la revisión justo después de los competidores, con su puesto en la ronda anterior.
+  - **Los eliminados** en la ronda anterior juzgan y hacen de runner después de ellos y antes que nadie de fuera de la prueba, aunque lleven más tareas: la carga se reparte dentro de cada nivel. Salen en la revisión justo después de los competidores, con su puesto en la ronda anterior.
 - **Minutos:** en Revisar, el botón «Minutos» enseña los minutos que trabaja cada persona junto a su total de tareas. Con la opción «Repartir también por minutos», el reparto cuenta tareas y minutos.
 - **Carga repartida:** quien está en muchas pruebas no carga con la mayor parte del trabajo. Además, cada tarea guarda un «¿por qué esta persona?», con las personas libres que había y los motivos de la elección.
 

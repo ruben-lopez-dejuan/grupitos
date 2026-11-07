@@ -262,6 +262,31 @@ describe("later rounds and the people who did not advance", () => {
 
   const inRound = new Set(registered.slice(0, 8).map(personKey));
 
+  it("judges with the round's competitors first, even when they already worked more", () => {
+    // Every event with a round 2, all generated at once: the people who advance reach it with more
+    // tasks than people outside the event, who used to judge before them.
+    const all = structuredClone(demoCompetition("small"));
+    for (const person of all.persons!) person.roles = [];
+    const accepted = acceptedPeople(all);
+    const advanced = new Map<string, { inRound: Set<string>; registered: Set<string> }>();
+    for (const item of all.events!.filter(event => (event.rounds?.length ?? 0) > 1)) {
+      const people = accepted.filter(person => person.registration?.eventIds?.includes(item.id)).sort(compareBySeed(item.id));
+      const count = Math.min(16, Math.floor(people.length * 0.6));
+      item.rounds![0].results = people.map((person, index) => ({ personId: person.registrantId!, ranking: index + 1, average: 1000 + index, best: 900 + index }));
+      item.rounds![1].results = people.slice(0, count).map(person => ({ personId: person.registrantId!, ranking: null }));
+      advanced.set(item.id, { inRound: new Set(people.slice(0, count).map(personKey)), registered: new Set(people.map(personKey)) });
+    }
+    const allRounds = initialRounds(all, 12, "waiting").map(round => round.roundNumber === 2 ? { ...round, enabled: true, groups: 2 } : { ...round, enabled: round.roundNumber === 1 });
+    const rows = generateAssignments({ competition: all, rounds: allRounds, stations: 12, zoneMode: "waiting", people: peopleFromWcif(all), options: DEFAULT_OPTIONS });
+    for (const [eventId, { inRound: theirs, registered: inEvent }] of advanced) {
+      const roundRows = rows.filter(item => item.roundId === `${eventId}-r2`);
+      // Nobody from outside the event judges or runs while the round's competitors are free...
+      expect(roundRows.filter(item => duties(item).length && !inEvent.has(item.personId))).toEqual([]);
+      // ...and every one of them helps in the group they do not compete in.
+      expect(roundRows.filter(item => theirs.has(item.personId)).every(item => duties(item).length > 0)).toBe(true);
+    }
+  });
+
   for (const scoring of [false, true]) it(`lets the round's competitors help and scramble first, then them${scoring ? " (weighted)" : ""}, and lists them all`, () => {
     const rows = generateAssignments({ competition, rounds, stations: 12, zoneMode: "waiting", people: peopleFromWcif(competition), options: DEFAULT_OPTIONS, ...(scoring ? { scoring: { enabled: true, weights: { ...PROFILE_WEIGHTS.balanced } } } : {}) });
     const doing = (role: string) => rows.filter(item => duties(item).some(duty => duty.role === role));
