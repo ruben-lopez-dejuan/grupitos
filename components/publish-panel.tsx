@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Hint } from "@/components/hint";
 import { useI18n } from "@/components/i18n";
 import type { GeneratedAssignment } from "@/lib/assignments";
@@ -19,12 +19,7 @@ type Outcome =
   | { kind: "published"; at: string; onlySettings: boolean; sent: number; missing: number; groups: number; settingsSaved: boolean }
   | { kind: "error"; text: string };
 
-/**
- * Last step: publish to the WCA (groups, assignments and the app's settings), or download the WCIF
- * as a file. Publishing always starts from the WCIF just downloaded, shows what changes, asks, sends
- * and reads the WCIF back to check it.
- */
-export function PublishPanel({ competition, draft, assignments, rounds, slots, schedule, people, outdated, userName, offline, lastPublished, onPublished }: {
+type PublishProps = {
   competition: StoredCompetition;
   /** The whole draft goes in the file too, so another device can carry on from it. */
   draft: Draft;
@@ -42,15 +37,16 @@ export function PublishPanel({ competition, draft, assignments, rounds, slots, s
   lastPublished?: string;
   /** The WCIF as the WCA has it after publishing, and when the settings were saved. */
   onPublished: (fresh: StoredCompetition, savedAt: string) => void;
-}) {
-  const { t, tp, locale } = useI18n();
+};
+
+/**
+ * Last step: publish to the WCA (groups, assignments and the app's settings), or download the WCIF
+ * as a file.
+ */
+export function PublishPanel(props: PublishProps) {
+  const { competition, draft, assignments, rounds, slots, schedule, people } = props;
+  const { t, tp } = useI18n();
   const [report, setReport] = useState<WcifExportReport>();
-  const [prepared, setPrepared] = useState<Prepared>();
-  const [busy, setBusy] = useState<"prepare" | "send">();
-  const [outcome, setOutcome] = useState<Outcome>();
-  /** The publish button asks once more, in the page, before writing to the WCA. */
-  const [confirming, setConfirming] = useState<"all" | "settings">();
-  const when = (iso: string) => savedAtText(iso, locale);
 
   function download() {
     const result = exportWcif({ competition, assignments, rounds, slots, schedule, people });
@@ -62,6 +58,54 @@ export function PublishPanel({ competition, draft, assignments, rounds, slots, s
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setReport(result.report);
   }
+
+  return <>
+    <section className="setup-panel publish-panel">
+      <div className="setup-heading"><h2>{t("sync.title")} <Hint align="start" text={t("sync.hint")} /></h2></div>
+      <WcaPublish {...props} />
+    </section>
+    <section className="setup-panel publish-panel">
+      <div className="setup-heading"><h2>{t("publish.title")} <Hint align="start" text={t("publish.hint")} /></h2></div>
+      <p className="setup-note">{t("publish.resume")}</p>
+      <div className="volunteer-form"><button className="button secondary" type="button" onClick={download}>{t("publish.download")}</button></div>
+      {report && <div className="publish-report" role="status">
+        <p>{t("publish.summary", { people: report.people, assignments: report.assignments })}</p>
+        <p>{t("publish.groups", { reused: report.groupsReused, created: report.groupsCreated, removed: report.groupsRemoved })}</p>
+        {report.skipped.length > 0 && <p className="warning-note">{tp("publish.skipped", report.skipped.length)}: {report.skipped.slice(0, 12).join(", ")}{report.skipped.length > 12 ? "…" : ""}</p>}
+      </div>}
+    </section>
+  </>;
+}
+
+/**
+ * «Save to the WCA», on every screen: the same publishing as the last step, in a dialog that
+ * starts by reviewing the changes.
+ */
+export function SaveToWcaDialog({ onClose, ...props }: PublishProps & { onClose: () => void }) {
+  const { t } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current;
+    if (element && !element.open) element.showModal();
+  }, []);
+  return <dialog ref={dialog} className="save-dialog" aria-labelledby="save-dialog-title" onClose={onClose} onClick={event => { if (event.target === dialog.current) dialog.current?.close(); }}>
+    <div className="save-dialog-head"><h2 id="save-dialog-title">{t("sync.title")} <Hint align="start" text={t("sync.hint")} /></h2><button type="button" className="save-dialog-close" aria-label={t("sync.close")} onClick={() => dialog.current?.close()}>×</button></div>
+    <WcaPublish {...props} autoStart />
+  </dialog>;
+}
+
+/**
+ * Publishing always starts from the WCIF just downloaded, shows what changes, asks, sends and
+ * reads the WCIF back to check it. `autoStart` reviews the changes at once.
+ */
+function WcaPublish({ competition, draft, assignments, rounds, slots, schedule, people, outdated, userName, offline, lastPublished, onPublished, autoStart = false }: PublishProps & { autoStart?: boolean }) {
+  const { t, tp, locale } = useI18n();
+  const [prepared, setPrepared] = useState<Prepared>();
+  const [busy, setBusy] = useState<"prepare" | "send">();
+  const [outcome, setOutcome] = useState<Outcome>();
+  /** The publish button asks once more, in the page, before writing to the WCA. */
+  const [confirming, setConfirming] = useState<"all" | "settings">();
+  const when = (iso: string) => savedAtText(iso, locale);
 
   const failure = async (response: Response) => {
     const body = await response.json().catch(() => ({})) as { error?: string; status?: number; detail?: string };
@@ -127,10 +171,15 @@ export function PublishPanel({ competition, draft, assignments, rounds, slots, s
   const signed = (value: number, sign: string) => value ? `${sign}${value}` : "0";
   const stat = (label: string, value: number | string, warn = false) => <div className={warn ? "warn" : undefined}><small>{label}</small><strong>{value}</strong></div>;
   const succeeded = outcome?.kind === "published" && outcome.missing === 0 && outcome.settingsSaved;
+  const started = useRef(false);
+  useEffect(() => {
+    if (!autoStart || offline || started.current || !draft.settings) return;
+    started.current = true;
+    void prepare();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the dialog opens
+  }, []);
 
   return <>
-    <section className="setup-panel publish-panel">
-      <div className="setup-heading"><h2>{t("sync.title")} <Hint align="start" text={t("sync.hint")} /></h2></div>
       {offline ? <p className="setup-note">{t("sync.offline")}</p> : <div className="publish-body">
         <p className="publish-intro">{t("sync.public")}{lastPublished && <> <span className="publish-last">{t("sync.lastPublished", { date: when(lastPublished) })}</span></>}</p>
 
@@ -193,16 +242,5 @@ export function PublishPanel({ competition, draft, assignments, rounds, slots, s
           </div>}
         </>}
       </div>}
-    </section>
-    <section className="setup-panel publish-panel">
-      <div className="setup-heading"><h2>{t("publish.title")} <Hint align="start" text={t("publish.hint")} /></h2></div>
-      <p className="setup-note">{t("publish.resume")}</p>
-      <div className="volunteer-form"><button className="button secondary" type="button" onClick={download}>{t("publish.download")}</button></div>
-      {report && <div className="publish-report" role="status">
-        <p>{t("publish.summary", { people: report.people, assignments: report.assignments })}</p>
-        <p>{t("publish.groups", { reused: report.groupsReused, created: report.groupsCreated, removed: report.groupsRemoved })}</p>
-        {report.skipped.length > 0 && <p className="warning-note">{tp("publish.skipped", report.skipped.length)}: {report.skipped.slice(0, 12).join(", ")}{report.skipped.length > 12 ? "…" : ""}</p>}
-      </div>}
-    </section>
   </>;
 }

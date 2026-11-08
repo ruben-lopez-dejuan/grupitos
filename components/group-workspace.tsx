@@ -14,7 +14,7 @@ import { Hint } from "@/components/hint";
 import { PeoplePanel } from "@/components/people-panel";
 import { UnavailabilityPanel } from "@/components/unavailability-panel";
 import { PrintingPanel } from "@/components/printing-panel";
-import { PublishPanel } from "@/components/publish-panel";
+import { PublishPanel, SaveToWcaDialog } from "@/components/publish-panel";
 import { ProTemplatePanel } from "@/components/pro-template-panel";
 import { ProPeoplePanel } from "@/components/pro-people-panel";
 import { ProSchedulePanel } from "@/components/pro-schedule-panel";
@@ -125,6 +125,9 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
   const [remoteSavedAt, setRemoteSavedAt] = useState<string>();
   /** Settings at the WCA newer than this browser's, offered with a button. */
   const [remoteNewer, setRemoteNewer] = useState<{ data: StoredCompetition; saved: SavedSettings }>();
+  /** Rounds made by the last generation («Just generated» when printing). */
+  const [lastGenerated, setLastGenerated] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
   /** Opens the WCIF's own groups in the review. */
   const openWcifGroups = useCallback((data: StoredCompetition, base: WorkspaceSettings) => {
@@ -150,6 +153,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     setProposal(draft?.assignments ?? []);
     setGeneratedWith(draft?.generatedWith);
     setRemoteSavedAt(draft?.remoteSavedAt);
+    setLastGenerated(draft?.lastGenerated ?? []);
   }, [openWcifGroups]);
 
   /**
@@ -242,13 +246,13 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
 
   useEffect(() => {
     if (!competition || !settings) return;
-    const draft: Draft = { version: 3, settings, generatedWith, assignments: proposal, ...(remoteSavedAt ? { remoteSavedAt } : {}) };
+    const draft: Draft = { version: 3, settings, generatedWith, assignments: proposal, ...(remoteSavedAt ? { remoteSavedAt } : {}), ...(lastGenerated.length ? { lastGenerated } : {}) };
     try {
       localStorage.setItem(draftStorageKey(competition.id), JSON.stringify(draft));
     } catch {
       // Storage can be full or blocked; the work stays in memory for this session.
     }
-  }, [competition, settings, generatedWith, proposal, remoteSavedAt]);
+  }, [competition, settings, generatedWith, proposal, remoteSavedAt, lastGenerated]);
 
   /** "Saved on 24 Oct, 18:40 by Ana" for settings at the WCA. */
   function remoteText(key: "sync.remoteLoaded" | "sync.remoteNewer", saved: SavedSettings) {
@@ -596,6 +600,7 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     if (!newRounds.length) return;
     const added = generateAssignments({ ...generationInput, rounds: newRounds, fixedAssignments: proposal });
     setProposal([...proposal, ...added]);
+    setLastGenerated(newRounds.map(round => round.id));
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     setRefreshNote(t("workspace.newRoundsDone", { rounds: newRounds.map(roundName).join(", ") }));
@@ -660,7 +665,9 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     // Rounds already held keep their assignments, and count for the rest as fixed ones.
     const kept = proposal.filter(item => pastRoundIds.has(item.roundId));
     const keptIds = new Set(kept.map(item => item.roundId));
-    setProposal([...kept, ...generateAssignments({ ...generationInput, rounds: activeRounds.filter(round => !keptIds.has(round.id)), fixedAssignments: kept })]);
+    const generated = generateAssignments({ ...generationInput, rounds: activeRounds.filter(round => !keptIds.has(round.id)), fixedAssignments: kept });
+    setProposal([...kept, ...generated]);
+    setLastGenerated([...new Set(generated.map(item => item.roundId))]);
     setGeneratedWith(signature);
     setProposalVersion(version => version + 1);
     changeTab("review");
@@ -686,13 +693,14 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
     ...(id === "review" ? { done: proposal.length > 0, disabled: proposal.length === 0 } : {}),
     ...(id === "publish" ? { disabled: proposal.length === 0 } : {}),
   }));
+  const publishProps = { competition, draft: { version: 3 as const, settings, generatedWith, assignments: proposal }, outdated: proposalOutdated, userName, offline, lastPublished: remoteSavedAt, onPublished: afterPublish, assignments: proposal, rounds, slots, schedule: pro?.schedule, people: pro ? proPeople : undefined };
   const outdatedNote = proposalOutdated && <div className="outdated-note" role="status"><p><strong>{t("workspace.outdatedTitle")}</strong> {t("workspace.outdatedText")}</p></div>;
 
   return <main className="workspace-shell">
 
     <section className="workspace-main">
       {/* No sidebar: the mark, the competition and the steps all live in these two bars. */}
-      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><AppMark /></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link><button type="button" className="change-competition refresh" disabled={refreshing} onClick={refreshFromWca} title={t("workspace.refreshHelp")}>{refreshing ? t("workspace.refreshing") : t("workspace.refresh")}</button><button type="button" className="change-competition restart" disabled={restarting} onClick={startFromScratch} title={t("workspace.restartHelp")}>{restarting ? t("workspace.restarting") : t("workspace.restart")}</button></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
+      <header className="workspace-topbar"><div><Link className="product-mark compact" href="/dashboard" title={t("workspace.breadcrumb")}><AppMark /></Link><strong title={competition.id}>{competition.name}</strong><Link className="change-competition" href="/dashboard">{t("workspace.changeCompetition")}</Link><button type="button" className="change-competition refresh" disabled={refreshing} onClick={refreshFromWca} title={t("workspace.refreshHelp")}>{refreshing ? t("workspace.refreshing") : t("workspace.refresh")}</button><button type="button" className="change-competition restart" disabled={restarting} onClick={startFromScratch} title={t("workspace.restartHelp")}>{restarting ? t("workspace.restarting") : t("workspace.restart")}</button></div><div className="workspace-topbar-actions"><label className={`pro-switch ${pro ? "on" : ""}`} title={t("pro.toggleHelp")}><input type="checkbox" role="switch" checked={!!pro} onChange={event => setPro(event.target.checked)} /><span>{t("pro.toggle")}</span></label><div className="sync-state"><i /> {t("workspace.savedHere")}</div><button type="button" className="button secondary save-wca" onClick={() => setSaving(true)} title={t("workspace.saveWcaHelp")}>{t("workspace.saveWca")}</button><LanguageSwitcher compact /><ThemeToggle compact /><span className="user-badge" title={`${userName} · ${t("auth.wcaAccount")}`}>{userName.slice(0, 1).toUpperCase()}</span></div></header>
       <nav className="workspace-tabs" role="tablist" aria-label={t("workspace.sections")}>
         {tabs.map((item, index) => <button key={item.id} role="tab" type="button" aria-selected={tab === item.id} className={[tab === item.id && "active", item.done && "done"].filter(Boolean).join(" ")} disabled={item.disabled} title={item.disabled ? t("workspace.generateFirst") : undefined} onClick={() => changeTab(item.id)}><span className="step-number">{item.done && tab !== item.id ? "✓" : index + 1}</span>{item.label}</button>)}
       </nav>
@@ -877,8 +885,9 @@ export function GroupWorkspace({ competitionId, userName, offline = false }: { c
           })) : roundRules} roomName={competition.schedule?.venues?.[0]?.rooms?.[0]?.name} onChange={handleReviewChange} photos={photos} showPhotos={showPhotos} onShowPhotosChange={changeShowPhotos} roleLabels={roleLabels} slots={slots} rooms={pro?.schedule.rooms} unavailable={unavailableWithClusters} availabilitySlots={availabilitySlots} segmentFilters={segmentFilters} />}
         </>}
 
-        {tab === "publish" && <PublishPanel competition={competition} draft={{ version: 3, settings, generatedWith, assignments: proposal }} outdated={proposalOutdated} userName={userName} offline={offline} lastPublished={remoteSavedAt} onPublished={afterPublish} assignments={proposal} rounds={rounds} slots={slots} schedule={pro?.schedule} people={pro ? proPeople : undefined} />}
-        {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} onChange={printing => update({ printing })} />}
+        {tab === "publish" && <PublishPanel {...publishProps} />}
+        {saving && <SaveToWcaDialog {...publishProps} onClose={() => setSaving(false)} />}
+        {tab === "print" && <PrintingPanel key={proposalVersion} competition={competition} rounds={rounds} assignments={proposal} stations={stations} zoneMode={zoneMode} printing={settings.printing} schedule={pro?.schedule} slots={slots} recentIds={lastGenerated} onChange={printing => update({ printing })} />}
       </div>
       <footer className="workspace-actions"><div><strong>{tp("workspace.activeRounds", activeRounds.length)}</strong><span> · {tp("workspace.plannedGroups", totalGroups)}</span></div><div>{(() => {
         // Groups are only generated from the Groups step; every other step leads to the next one.

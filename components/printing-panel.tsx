@@ -21,7 +21,7 @@ const CONTENT_OPTIONS: OptionKey[] = ["coverSheets", "localNamesFirst", "printOn
 /** Where the scramble checker box is printed. */
 const CHECKER_OPTIONS: OptionKey[] = ["scrambleCheckerTopRanked", "scrambleCheckerFinalRounds", "scrambleCheckerBlank", "scrambleCheckerBigCubes"];
 
-export function PrintingPanel({ competition, rounds, assignments, stations, zoneMode, printing, schedule, slots, onChange }: {
+export function PrintingPanel({ competition, rounds, assignments, stations, zoneMode, printing, schedule, slots, recentIds = [], onChange }: {
   competition: StoredCompetition;
   rounds: RoundConfig[];
   assignments: GeneratedAssignment[];
@@ -31,6 +31,8 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   /** PRO mode: groups can be printed by stage. */
   schedule?: ProSchedule;
   slots?: Map<string, GroupSlot[]>;
+  /** Rounds made by the last generation: during a competition, the ones to print now. */
+  recentIds?: string[];
   onChange: (printing: PrintingOptions) => void;
 }) {
   const { t, tp, locale } = useI18n();
@@ -42,8 +44,10 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   /** Rounds already held (with results): their cards are only reprinted. */
   const held = new Set(printable.filter(round => roundHasResults(competition, round.id)).map(round => round.id));
   const upcomingIds = generatedIds.filter(id => !held.has(id));
-  // What usually gets printed: the generated rounds still to be held.
-  const [chosen, setChosen] = useState<string[]>(() => upcomingIds.length ? upcomingIds : generatedIds);
+  /** Just generated and not held yet: what to print during a competition. */
+  const recent = upcomingIds.filter(id => recentIds.includes(id));
+  // What usually gets printed: the rounds just generated, else the generated rounds still to be held.
+  const [chosen, setChosen] = useState<string[]>(() => recent.length ? recent : upcomingIds.length ? upcomingIds : generatedIds);
   /** Stages left out of the print, as "roundId|laneKey". */
   const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState<"rounds" | "blank" | "overview" | "cards">();
@@ -75,6 +79,8 @@ export function PrintingPanel({ competition, rounds, assignments, stations, zone
   };
   /** Quick selections: each ticks a set of rounds that is often printed together. */
   const presets = [
+    // Only worth a button when it is not every round still to be held.
+    ...(recent.length < upcomingIds.length ? [{ id: "recent", label: t("printing.presets.recent"), help: t("printing.presets.recentHelp"), ids: recent }] : []),
     { id: "upcoming", label: t("printing.presets.upcoming"), help: t("printing.presets.upcomingHelp"), ids: upcomingIds },
     { id: "generated", label: t("printing.presets.generated"), help: t("printing.presets.generatedHelp"), ids: generatedIds },
     { id: "held", label: t("printing.presets.held"), help: t("printing.presets.heldHelp"), ids: generatedIds.filter(id => held.has(id)) },

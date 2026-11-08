@@ -30,6 +30,8 @@ export type Draft = {
   assignments: GeneratedAssignment[];
   /** When the settings saved at the WCA that this draft last loaded or published were saved. */
   remoteSavedAt?: string;
+  /** Rounds made by the last generation, to print just their scorecards. */
+  lastGenerated?: string[];
 };
 
 /**

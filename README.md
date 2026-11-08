@@ -224,6 +224,8 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
   - **Por generar:** rondas con competidores conocidos y sin resultados.
   - **Sin competidores todavía:** rondas cuyos competidores aún no se conocen.
 - **Borrar asignaciones** de una ronda ya generada, para generarla otra vez.
+- **Guardar en la WCA**, en la barra superior de todas las pantallas: abre lo mismo que Publicar en un cuadro de diálogo. Descarga el WCIF actual, enseña qué cambia y pide confirmación antes de enviar; después lo vuelve a leer para comprobarlo.
+- **Recién generadas**, en Hojas de tiempos: selecciona solo las rondas de la última generación que aún no se han celebrado, y viene marcada al abrir la pestaña. Así, después de «Generar rondas nuevas», se imprimen solo esas hojas.
 - **En Revisar**, las rondas ya celebradas van arriba, ocultas tras «▸ Ya celebradas (N)», que las muestra u oculta. Debajo van las que quedan por celebrar, y se abre en la primera de ellas.
 
 ### WCIF de entrada y de salida
