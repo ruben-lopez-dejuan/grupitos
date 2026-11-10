@@ -566,7 +566,7 @@ export const en: Messages = {
     apply: "Apply",
     import: "Import JSON…",
     export: "Export JSON",
-    confirm: "Apply \"{name}\"? It replaces clusters, assignment sets, station rules, staff per room, teams and options. The schedule, properties, volunteers and unavailability stay.",
+    confirm: "Apply \"{name}\"? It replaces clusters, assignment sets, station rules, staff per room, teams and options. If the template has stages (the Spanish Championship one, for the Pabellón), it creates them and puts that room's rounds on them, so the room has no tasks of its own. The rest of the schedule, properties, volunteers and unavailability stay.",
     applied: "Template \"{name}\" applied",
     missingLanes: "rooms or stages not found here: {names}",
     missingRounds: "rounds not found here: {names}",

@@ -10,7 +10,7 @@ import type { AssignmentSetConfig } from "@/lib/pro/assignment-sets";
 import { EMPTY_PRO_PEOPLE } from "@/lib/pro/people";
 import { normalizeScoring, type ScoringConfig } from "@/lib/pro/scoring";
 import { normalizeJobs, normalizeSegments, type JobEligibility, type Segment } from "@/lib/pro/segments";
-import { scheduleLanes, type LaneStaffing, type ProSchedule } from "@/lib/pro/schedule";
+import { newStageId, roundIdOf, scheduleLanes, type LaneStaffing, type ProRoundBlock, type ProSchedule } from "@/lib/pro/schedule";
 import type { StationRuleConfig } from "@/lib/pro/station-rules";
 import { normalizeTeams, type ClusterBusy, type TeamBusy, type TeamSetup } from "@/lib/pro/teams";
 import type { PrintingOptions } from "@/lib/scorecards/options";
@@ -21,6 +21,17 @@ const OLD_TEMPLATE_FORMAT = "wca-easy-groups/pro-template";
 
 /** A team busy time on the competition's n-th day. */
 export type TemplateBusy = Omit<TeamBusy, "day"> & { dayIndex: number };
+
+/**
+ * A room's stages by name, and which of them each round uses. Applying it adds the missing stages
+ * and moves the room's rounds onto them, so the room itself is no longer a column with tasks.
+ */
+export type TemplateStageLayout = {
+  room: string;
+  stages: Array<{ name: string; color: string }>;
+  /** By round id: its stages (all by default) and groups per stage (when it has no exact groups). */
+  rounds?: Record<string, { stages?: string[]; groups?: number }>;
+};
 
 export type ProTemplate = {
   format: typeof TEMPLATE_FORMAT;
@@ -33,6 +44,7 @@ export type ProTemplate = {
   /** Scramblers and runners per round id, set by hand (`staffSetByHand`). */
   rounds?: Record<string, { scramblers?: number; runners?: number }>;
   pro: {
+    stages?: TemplateStageLayout[];
     segments?: Segment[];
     jobs?: JobEligibility;
     scoring?: ScoringConfig;
@@ -85,6 +97,51 @@ export function exportTemplate(settings: WorkspaceSettings, name: string): ProTe
   };
 }
 
+/**
+ * The schedule with a template's stages: missing stages are added by name; each round of the room
+ * goes on its stages (all by default), so blocks of the whole room become one block per stage and
+ * blocks on other stages go. `groups` sets the groups per stage of blocks without exact groups.
+ */
+export function applyStageLayout(schedule: ProSchedule, layout: TemplateStageLayout[], warnings: TemplateWarnings): ProSchedule {
+  let rooms = schedule.rooms;
+  let blocks = schedule.blocks;
+  for (const item of layout) {
+    const room = rooms.find(own => plain(own.name) === plain(item.room));
+    if (!room) {
+      if (!warnings.lanes.includes(item.room)) warnings.lanes.push(item.room);
+      continue;
+    }
+    const stages = [...room.stages];
+    for (const { name, color } of item.stages) {
+      if (stages.some(stage => plain(stage.name) === plain(name))) continue;
+      stages.push({ id: newStageId(rooms.map(own => own.id === room.id ? { ...own, stages } : own)), name, color });
+    }
+    rooms = rooms.map(own => own.id === room.id ? { ...own, stages } : own);
+    const stageId = (name: string) => {
+      const id = stages.find(stage => plain(stage.name) === plain(name))?.id;
+      if (id === undefined && !warnings.lanes.includes(name)) warnings.lanes.push(name);
+      return id;
+    };
+    const roundStages = new Map(Object.entries(item.rounds ?? {}).map(([roundId, own]) => [roundId, {
+      ids: own.stages ? own.stages.map(stageId).filter((id): id is number => id !== undefined) : stages.map(stage => stage.id),
+      groups: own.groups,
+    }]));
+    blocks = blocks.flatMap((block): ProRoundBlock[] => {
+      const roundId = roundIdOf(block.activityCode);
+      if (block.roomId !== room.id || !roundId) return [block];
+      const own = roundStages.get(roundId);
+      const ids = own?.ids ?? stages.map(stage => stage.id);
+      const groups = (current: number) => block.groupWindows ? current : own?.groups ?? current;
+      if (block.stageId !== undefined) return ids.includes(block.stageId) ? [{ ...block, groups: groups(block.groups) }] : [];
+      // The whole room's groups: the same window on each stage, its groups shared out.
+      const { groupWindows: _, ...rest } = block;
+      const perStage = own?.groups ?? Math.max(1, Math.ceil(block.groups / Math.max(1, ids.length)));
+      return ids.map(id => ({ ...rest, id: `${block.id}-s${id}`, stageId: id, groups: perStage }));
+    });
+  }
+  return { ...schedule, rooms, blocks };
+}
+
 /** A template from a file; undefined when it is not one. */
 export function parseTemplate(text: string): ProTemplate | undefined {
   try {
@@ -99,13 +156,14 @@ export function parseTemplate(text: string): ProTemplate | undefined {
 export type TemplateWarnings = { lanes: string[]; rounds: string[]; days: number[] };
 
 /**
- * Applies a template: every section it has replaces the current one; the schedule, people's
- * properties, volunteers and unavailabilities stay. Names that match no room or stage, and rounds
+ * Applies a template: every section it has replaces the current one; the schedule (but for the
+ * stages the template lays out), people's properties, volunteers and unavailabilities stay. Names that match no room or stage, and rounds
  * the competition does not have, are left out and reported.
  */
-export function applyTemplate(settings: WorkspaceSettings, schedule: ProSchedule, template: ProTemplate): { settings: WorkspaceSettings; warnings: TemplateWarnings } {
-  const lanes = scheduleLanes(schedule);
+export function applyTemplate(settings: WorkspaceSettings, original: ProSchedule, template: ProTemplate): { settings: WorkspaceSettings; warnings: TemplateWarnings } {
   const warnings: TemplateWarnings = { lanes: [], rounds: [], days: [] };
+  const schedule = template.pro.stages ? applyStageLayout(original, template.pro.stages, warnings) : original;
+  const lanes = scheduleLanes(schedule);
   const keyOf = (name: string) => {
     const key = lanes.find(lane => plain(lane.name) === plain(name))?.key;
     if (!key && !warnings.lanes.includes(name)) warnings.lanes.push(name);
@@ -154,6 +212,7 @@ export function applyTemplate(settings: WorkspaceSettings, schedule: ProSchedule
     return own ? { ...round, ...own, staffSetByHand: true } : round;
   }) : settings.rounds;
   if (template.rounds) knownRounds(Object.keys(template.rounds));
+  for (const item of pro.stages ?? []) knownRounds(Object.keys(item.rounds ?? {}));
   return {
     settings: {
       ...settings,

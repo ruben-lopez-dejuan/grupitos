@@ -213,6 +213,7 @@ Se activa con el interruptor PRO de la barra superior. Está inspirado en CompSc
 
 - La configuración PRO (clusters, conjuntos, reglas, personal por sala, equipos, puntuación y opciones) se exporta e importa como JSON, sin datos personales.
 - Las salas se guardan por nombre y las horas por número de día, así que sirven de un año al siguiente.
+- Una plantilla puede traer los escenarios de una sala (`pro.stages`, `lib/pro/template.ts`): al aplicarla los crea si faltan y pone las rondas de la sala en sus escenarios (todos, o los que diga cada ronda, con sus grupos por escenario). La sala deja de ser una columna con tareas propias.
 - Incluye la plantilla **Campeonato de España 2026** de un clic. Ver [`docs/NACIONAL_2026_EN_LA_WEB.md`](docs/NACIONAL_2026_EN_LA_WEB.md).
 
 ### Durante la competición

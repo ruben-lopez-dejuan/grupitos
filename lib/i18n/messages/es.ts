@@ -568,7 +568,7 @@ export const es = {
     apply: "Aplicar",
     import: "Importar JSON…",
     export: "Exportar JSON",
-    confirm: "¿Aplicar «{name}»? Sustituye clusters, conjuntos, reglas de estación, personal por sala, equipos y opciones. Se mantienen el horario, las propiedades, los voluntarios y los no disponibles.",
+    confirm: "¿Aplicar «{name}»? Sustituye clusters, conjuntos, reglas de estación, personal por sala, equipos y opciones. Si la plantilla trae escenarios (la del Nacional, los del Pabellón), los crea y reparte en ellos las rondas de esa sala, que deja de tener tareas propias. Se mantienen el resto del horario, las propiedades, los voluntarios y los no disponibles.",
     applied: "Plantilla «{name}» aplicada",
     missingLanes: "salas o escenarios que no hay aquí: {names}",
     missingRounds: "rondas que no hay aquí: {names}",

@@ -24,11 +24,16 @@ const ARABA = "Araba";
 const BIZKAIA = "Bizkaia";
 const GIPUZKOA = "Gipuzkoa";
 const SIDE = "Sala Auxiliar";
+const MAIN_ROOM = "Pabellón";
 
 /** First rounds of each day with delegates' sets, on the three stages (the side room rounds have their own). */
 const SATURDAY = ["clock-r1", "sq1-r1", "666-r1", "555-r1", "minx-r1"];
 /** The first rounds on two stages: delegates go by delegate-cluster-extra (5 and 6). */
 const TWO_STAGES = ["777-r1", "333bf-r1"];
+/** Groups per stage of the first rounds, as the 2026 scripts create them. */
+const FIRST_ROUND_GROUPS: Record<string, number> = { "clock-r1": 2, "777-r1": 2, "sq1-r1": 2, "666-r1": 2, "333bf-r1": 2, "555-r1": 2, "minx-r1": 2, "pyram-r1": 3, "444-r1": 4, "222-r1": 4, "skewb-r1": 3, "333-r1": 4, "333oh-r1": 4 };
+/** The first rounds on Bizkaia and Gipuzkoa only (the organizers put clock there too). */
+const FIRST_ROUNDS_ON_TWO = ["clock-r1", ...TWO_STAGES];
 const SUNDAY = ["pyram-r1", "444-r1", "222-r1", "skewb-r1", "333-r1", "333oh-r1"];
 /** FinalAssignGroups in the 2026 scripts. The other finals are not in them yet. */
 const FINALS_2026 = ["clock-r2", "777-r2", "sq1-r2", "666-r2"];
@@ -39,6 +44,23 @@ const SUNDAY_LATER = ["pyram-r2"];
 const MONDAY_LATER = ["333-r2", "444-r2", "222-r2", "333oh-r2", "skewb-r2"];
 /** 3x3 final: group 1 on Gipuzkoa alone, then 6 on Bizkaia and Gipuzkoa at once. */
 const FINAL_333_PAIRS = [2, 3, 4, 5, 6, 7];
+
+/**
+ * The stages of the Pabellón, which is not a stage itself: no tasks there. First rounds on all three
+ * (but those above) with their groups; finals and 3BLD round 2 on Bizkaia and Gipuzkoa, one group
+ * each (the 3x3 final shares its groups out: it needs adjusting by hand); other rounds on all three.
+ */
+const STAGES = {
+  room: MAIN_ROOM,
+  stages: [{ name: ARABA, color: "#F39200" }, { name: BIZKAIA, color: "#008B3B" }, { name: GIPUZKOA, color: "#25346C" }],
+  rounds: {
+    ...Object.fromEntries(Object.entries(FIRST_ROUND_GROUPS).map(([id, groups]) => [id, FIRST_ROUNDS_ON_TWO.includes(id) ? { stages: [BIZKAIA, GIPUZKOA], groups } : { groups }])),
+    ...Object.fromEntries(["333bf-r2", ...FINALS_2026, "555-r2", "minx-r2", "333bf-r3", "222-r3", "444-r3", "333oh-r3", "pyram-r3", "skewb-r3"].map(id => [id, { stages: [BIZKAIA, GIPUZKOA], groups: 1 }])),
+    // The semifinal: one group per stage.
+    "333-r3": { groups: 1 },
+    "333-r4": { stages: [BIZKAIA, GIPUZKOA] },
+  },
+};
 
 /** 5 featured per group of Bizkaia, like the third argument of FirstRoundAssignGroups. */
 const FEATURED = 5;
@@ -139,6 +161,7 @@ export const SPANISH_CHAMPIONSHIP_2026: ProTemplate = {
     ...Object.fromEntries(ALL_FINALS.map(id => [id, { scramblers: 3, runners: 3 }])),
   },
   pro: {
+    stages: [STAGES],
     segments,
     jobs: { scrambler: "s7" },
     scoring: {

@@ -67,7 +67,7 @@ Preferencias firmes del usuario:
 
 ## 4. Estado actual
 
-Último trabajo: botón «Guardar en la WCA» en todas las pantallas y selección «Recién generadas» al imprimir (tanda 49); jueces de rondas siguientes entre los clasificados (tanda 48) y resumen de grupos y hojas de tareas (tanda 47); antes, plantilla del Nacional al día con los scripts del 03/11/2026 y las decisiones de la organización (6.7, tandas 45 y 46). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 49.
+Último trabajo: la plantilla del Nacional pone Araba, Bizkaia y Gipuzkoa en el Pabellón y reparte en ellos sus rondas, sin tareas para el Pabellón; reloj y 7x7 r1 solo en Bizkaia y Gipuzkoa (tanda 50); botón «Guardar en la WCA» en todas las pantallas y selección «Recién generadas» al imprimir (tanda 49); jueces de rondas siguientes entre los clasificados (tanda 48) y resumen de grupos y hojas de tareas (tanda 47); antes, plantilla del Nacional al día con los scripts del 03/11/2026 y las decisiones de la organización (6.7, tandas 45 y 46). Las fases 1, 2 y 3 del modo PRO están hechas, la 4 casi y la 6 en buena parte (secciones 6 y 7). El historial por tandas, con lo hecho sin aprobación expresa del usuario, está en [`docs/INFORME_2026-10-23.md`](docs/INFORME_2026-10-23.md); la última es la 50.
 
 ### 4.1. Flujo y pestañas (`components/group-workspace.tsx`)
 

@@ -140,6 +140,40 @@ describe("PRO templates", () => {
     expect([...people.slice(16), ...people.slice(0, 2)].map(person => stationIn.get(personKey(person)))).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
+  it("lay out the Pabellón's stages, with no tasks for the room itself", () => {
+    // The WCIF as it is now: the Pabellón without stages and rounds without groups.
+    const pro = schedule([]);
+    const block = (activityCode: string, groups: number, start: string, end: string) => ({ id: `b-${activityCode}`, activityCode, roomId: 7, groups, start: `2026-12-05T${start}`, end: `2026-12-05T${end}` });
+    pro.blocks = [block("clock-r1", 6, "09:00", "10:00"), block("333-r1", 12, "10:00", "12:00"), block("clock-r2", 1, "17:40", "18:05"), block("333-r2", 6, "18:10", "19:00"), { ...block("444bf-r1", 1, "09:00", "10:00"), roomId: 8 }];
+    const { settings: after, warnings } = applyTemplate(settings(pro), pro, SPANISH_CHAMPIONSHIP_2026);
+    expect(warnings).toEqual({ lanes: [], rounds: [], days: [] });
+    const laid = after.pro!.schedule;
+    expect(laid.rooms[0].stages.map(stage => [stage.name, stage.color])).toEqual([["Araba", "#F39200"], ["Bizkaia", "#008B3B"], ["Gipuzkoa", "#25346C"]]);
+    const [araba, bizkaia, gipuzkoa] = laid.rooms[0].stages.map(stage => stage.id);
+    const lanes = (roundId: string) => laid.blocks.filter(item => item.activityCode === roundId).map(item => [item.stageId, item.groups]);
+    expect(lanes("clock-r1")).toEqual([[bizkaia, 2], [gipuzkoa, 2]]);
+    expect(lanes("333-r1")).toEqual([[araba, 4], [bizkaia, 4], [gipuzkoa, 4]]);
+    expect(lanes("clock-r2")).toEqual([[bizkaia, 1], [gipuzkoa, 1]]);
+    expect(lanes("333-r2")).toEqual([[araba, 2], [bizkaia, 2], [gipuzkoa, 2]]);
+    expect(laid.blocks.filter(item => item.activityCode === "444bf-r1").map(item => [item.roomId, item.stageId])).toEqual([[8, undefined]]);
+    // No column, staffing or set for the Pabellón itself.
+    expect([...groupSlots(laid).values()].flat().every(slot => slot.roomId === 8 || slot.stageId !== undefined)).toBe(true);
+    expect(Object.keys(after.pro!.staffing!).sort()).toEqual([`7:${araba}`, `7:${bizkaia}`, `7:${gipuzkoa}`, "8:room"].sort());
+    expect(after.pro!.sets!.find(set => set.id === "sc26-featured")!.lanes).toEqual([`7:${bizkaia}`]);
+  });
+
+  it("keep a WCIF's stages and exact groups, dropping those on stages a round does not use", () => {
+    const pro = schedule();
+    const windows = [{ start: "2026-12-05T09:00", end: "2026-12-05T09:30" }, { start: "2026-12-05T09:30", end: "2026-12-05T10:00" }];
+    pro.blocks = [10, 11, 12].map(stageId => ({ id: `b${stageId}`, activityCode: "clock-r1", roomId: 7, stageId, groups: 2, groupWindows: windows, start: "2026-12-05T09:00", end: "2026-12-05T10:00" }));
+    // A whole-room block next to stages (stages added by hand to a WCIF without them).
+    pro.blocks.push({ id: "b-sq1", activityCode: "sq1-r1", roomId: 7, groups: 6, start: "2026-12-05T10:00", end: "2026-12-05T11:00" });
+    const laid = applyTemplate(settings(pro), pro, SPANISH_CHAMPIONSHIP_2026).settings.pro!.schedule;
+    expect(laid.rooms[0].stages.map(stage => stage.id)).toEqual([10, 11, 12]);
+    expect(laid.blocks.filter(item => item.activityCode === "clock-r1").map(item => [item.stageId, item.groupWindows])).toEqual([[11, windows], [12, windows]]);
+    expect(laid.blocks.filter(item => item.activityCode === "sq1-r1").map(item => [item.stageId, item.groups])).toEqual([[10, 2], [11, 2], [12, 2]]);
+  });
+
   it("count spare judges and keep busy clusters out of tasks", () => {
     expect([judgesNeeded(21, 14, 16), judgesNeeded(14, 14, 16), judgesNeeded(6, 14, 16), judgesNeeded(21, 14), judgesNeeded(6, 14)]).toEqual([16, 16, 8, 14, 6]);
     expect(clusterUnavailability([{ segment: "a", day: "2026-12-05", start: "11:00", end: "13:30" }, { segment: "gone", day: "2026-12-05", start: "11:00", end: "12:00" }], id => id === "a" ? new Set(["1", "2"]) : undefined).map(item => [item.personKey, item.start, item.end])).toEqual([["1", "2026-12-05T11:00", "2026-12-05T13:30"], ["2", "2026-12-05T11:00", "2026-12-05T13:30"]]);

@@ -46,10 +46,21 @@ El resto de la guía explica qué hace cada parte, por si quieres hacerlo a mano
 
 ## 1. Horario (`2_remove_schedule.cs`, `3_build_schedule.cs`)
 
-Viene del WCIF: sala Pabellón con Araba, Bizkaia y Gipuzkoa, y Sala Auxiliar sin escenarios.
-Comprueba en **Horario** que cada ronda tiene los grupos del script (por ejemplo clock 3 por
-escenario, 333-r4 con 7 en Gipuzkoa y 6 en Bizkaia) y que el multi tiene sus dos intentos.
-Nada más que hacer.
+Viene del WCIF: sala Pabellón y Sala Auxiliar. El Pabellón no es un escenario: la plantilla le pone
+Araba, Bizkaia y Gipuzkoa si el WCIF no los trae, y reparte en ellos sus rondas, así que no hay
+tareas «del Pabellón».
+
+- Primeras rondas en los tres escenarios, salvo **reloj, 7x7 y 3BLD**, solo en Bizkaia y Gipuzkoa.
+  Grupos por escenario como en los scripts: 2 (reloj, 7x7, Square-1, 6x6, 3BLD, 5x5, Megaminx),
+  3 (Pyraminx, Skewb) o 4 (4x4, 2x2, 3x3, OH). Si el WCIF ya trae grupos de natshelper, se quedan
+  los suyos y solo se quitan los de escenarios que la ronda no usa.
+- Finales y 3BLD ronda 2: Bizkaia y Gipuzkoa, un grupo en cada uno. La final de 3x3 también va en
+  esos dos, pero reparte los grupos a partes iguales: hay que dejarla a mano con 1 en Gipuzkoa y
+  luego 6 a la vez en los dos.
+- Semifinal de 3x3: un grupo en cada escenario. Las demás rondas siguientes, en los tres, con los
+  grupos de la ronda repartidos.
+
+Comprueba en **Horario** los grupos y que el multi tiene sus dos intentos.
 
 ## 2. Equipos (`_constants.cs`, `_volunteers.cs`: `InTeam`, `Volunteers`)
 
